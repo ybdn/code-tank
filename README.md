@@ -16,7 +16,7 @@ pnpm test         # construit le site et vérifie les pages et les en-têtes
 pnpm build
 ```
 
-Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Les polices sont auto-hébergées
+Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Ils ne contiennent que le texte publiable : la source complète, avec notes de rédaction, reste hors de ce dépôt. Les polices sont auto-hébergées
 (Space Mono et Plus Jakarta Sans, licence OFL) : le site n'appelle aucun service tiers.
 
 ## Licence

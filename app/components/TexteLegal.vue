@@ -19,9 +19,7 @@ const marked = new Marked({
   },
 })
 
-// Les notes de rédaction sont du travail interne, jamais publiées.
-const texte = props.source.split(/^## Notes de rédaction/m)[0] ?? ''
-const tokens = marked.lexer(texte)
+const tokens = marked.lexer(props.source)
 const titre = marked.parser(tokens.slice(0, 1))
 const html = marked.parser(tokens.slice(1))
 const sommaire = tokens

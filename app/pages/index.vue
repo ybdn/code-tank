@@ -10,7 +10,7 @@ const jures: { nom: string; couleur?: 'bleu' | 'or' | 'gris' | 'rose'; boss?: bo
   { nom: 'Sudo', couleur: 'bleu', role: 'Sécurité, gestion des erreurs et cas limites', points: '25 points' },
   { nom: 'Refacto', couleur: 'or', role: 'Structure, découpage, lisibilité et nommage', points: '25 points' },
   { nom: 'Le Boss', boss: true, role: 'Le juré humain : il lit ton code, ta présentation et ton README, et note sans voir les notes des quatre autres.', points: 'Un tiers du score' },
-  { nom: 'Lint', couleur: 'gris', role: 'Tests, outillage et documentation', points: '25 points' },
+  { nom: 'Lint', couleur: 'gris', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par Claude ; Lint la commente sans la modifier.", points: '25 points' },
   { nom: 'Pitch', couleur: 'rose', role: 'Réponse au brief, originalité et finition', points: '25 points' },
 ]
 </script>
