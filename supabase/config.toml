@@ -1,0 +1,15 @@
+# Configuration locale uniquement. Aucun projet distant, aucun secret.
+project_id = "code-tank-site"
+
+[db]
+# Ports décalés : 54322 est pris par un autre projet local.
+port = 54422
+shadow_port = 54420
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
