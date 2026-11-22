@@ -3,7 +3,7 @@
     <a class="skip" href="#contenu">Aller au contenu</a>
     <header class="nav">
       <div class="wrap nav__bar">
-        <NuxtLink class="logo" to="/"><MascottePixel couleur="bleu" />Code Tank</NuxtLink>
+        <NuxtLink class="logo" to="/"><MascottePixel jure="sudo" />Code Tank</NuxtLink>
         <nav aria-label="Principal" class="nav__links">
           <a href="/#campagnes">Campagnes</a>
           <a href="/#jury">Jury</a>
