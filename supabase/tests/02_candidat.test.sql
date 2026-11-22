@@ -1,7 +1,7 @@
 -- Candidat : alice (A) face à bob (B). Identité simulée par le rôle et request.jwt.claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(40);
+select plan(41);
 
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-00000000000a","role":"authenticated"}';
@@ -17,18 +17,20 @@ select is_empty(
 select is_empty($$select 1 from public.participation where compte_id = '10000000-0000-4000-8000-00000000000b'$$,
   'A ne voit pas la participation de B');
 select is((select count(*) from public.participation), 2::bigint, 'A lit ses deux participations');
-select is((select presentation from public.depot where participation_id = '30000000-0000-4000-8000-00000000004a'),
-  'Présentation fictive.', 'A lit son dépôt (campagne publiée)');
+select is((select presentation from public.mon_depot where participation_id = '30000000-0000-4000-8000-00000000004a'),
+  'Présentation fictive.', 'A lit son reçu de dépôt (campagne publiée)');
 select is_empty(
-  $$select 1 from public.depot where participation_id in
+  $$select 1 from public.mon_depot where participation_id in
     ('30000000-0000-4000-8000-00000000004b', '30000000-0000-4000-8000-00000000003b')$$,
-  'A ne lit le dépôt de B ni en campagne publiée ni en délibération');
-select is_empty($$select 1 from public.depot where participation_id = '30000000-0000-4000-8000-00000000003a'$$,
-  'A ne lit pas son propre dépôt pendant la délibération');
+  'A ne lit le reçu de B ni en campagne publiée ni en délibération');
+select is((select count(*) from public.mon_depot where participation_id = '30000000-0000-4000-8000-00000000003a'), 1::bigint,
+  'A lit son reçu pendant la délibération (ni note ni alerte)');
 select throws_ok($$select contact_reutilisation from public.depot$$, '42501', null,
   'contact_reutilisation n''est pas lisible directement');
-select is((select count(*) from public.contact_reutilisation_lisible), 2::bigint,
-  'A lit la case de ses propres dépôts par la vue, et d''aucun autre');
+select is((select count(*) from public.contact_reutilisation_lisible), 0::bigint,
+  'A ne lit rien par la vue de l''organisateur');
+select is((select count(contact_reutilisation) from public.mon_depot), 2::bigint,
+  'A lit la case de ses propres dépôts par mon_depot, et d''aucun autre');
 select is((select count(*) from public.campagne where slug = 'seed-brouillon'), 0::bigint,
   'A ne voit pas le brouillon');
 
@@ -48,8 +50,8 @@ select is((select resultat ? 'replique' from public.rapport where jure = 'sudo')
   'une réplique masquée n''est pas renvoyée au candidat');
 select is((select resultat ? 'replique' from public.rapport where jure = 'pitch'), true,
   'les autres répliques le sont');
-select is_empty($$select 1 from public.depot where participation_id = '30000000-0000-4000-8000-00000000003a'$$,
-  'campagne prête : A ne lit toujours pas son dépôt');
+select is((select count(*) from public.mon_depot where participation_id = '30000000-0000-4000-8000-00000000003a'), 1::bigint,
+  'campagne prête : A lit toujours son reçu');
 
 -- Écriture de son profil ----------------------------------------------------------------------
 select lives_ok($$update public.compte set motivation = 'Nouvelle motivation fictive.' where id = '10000000-0000-4000-8000-00000000000a'$$,
@@ -58,10 +60,12 @@ select is((select motivation from public.compte where id = '10000000-0000-4000-8
   'Nouvelle motivation fictive.', 'la modification est bien enregistrée');
 select is_empty($$update public.compte set motivation = 'piraté' where id = '10000000-0000-4000-8000-00000000000b' returning 1$$,
   'A ne modifie pas le profil de B');
-select throws_ok($$update public.compte set pseudo = 'SEED_BOB' where id = '10000000-0000-4000-8000-00000000000a'$$,
+set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+select throws_ok($$update public.compte set pseudo = 'SEED_BOB' where id = '10000000-0000-4000-8000-0000000000a1'$$,
   '23505', null, 'le pseudo est unique, sans tenir compte de la casse');
-select throws_ok($$update public.compte set pseudo = 'Candidat supprimé' where id = '10000000-0000-4000-8000-00000000000a'$$,
+select throws_ok($$update public.compte set pseudo = 'Candidat supprimé' where id = '10000000-0000-4000-8000-0000000000a1'$$,
   '23514', null, 'le pseudo « candidat supprimé » est réservé');
+set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-00000000000a","role":"authenticated"}';
 select throws_ok($$update public.compte set depot_cite_url = 'javascript:alert(1)' where id = '10000000-0000-4000-8000-00000000000a'$$,
   '23514', null, 'le dépôt cité doit être une adresse https');
 select lives_ok($$update public.compte set email_contact = 'alice.nouvelle@example.invalid' where id = '10000000-0000-4000-8000-00000000000a'$$,

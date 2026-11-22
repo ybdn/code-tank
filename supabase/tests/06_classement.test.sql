@@ -3,6 +3,11 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(16);
 
+-- Vote d'eve (40) rendu non verrouillé : le déclencheur de publication l'interdit désormais, la vue
+-- reste pourtant défensive.
+alter table public.vote_boss disable trigger vote_boss_fige;
+update public.vote_boss set verrouille_le = null where participation_id = '30000000-0000-4000-8000-000000000040';
+alter table public.vote_boss enable trigger vote_boss_fige;
 set local role anon;
 set local request.jwt.claims = '{"role":"anon"}';
 

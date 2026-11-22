@@ -97,10 +97,10 @@ join seed_notes s on ('30000000-0000-4000-8000-0000000000' || s.n)::uuid = p.id
 cross join (values ('sudo'), ('refacto'), ('lint'), ('pitch')) j(jure)
 where not (s.n = '4f' and j.jure = 'pitch');
 
--- Votes du Boss : tous verrouillés sauf celui d'alice en délibération (3a, brouillon) et celui d'eve (40).
+-- Votes du Boss : tous verrouillés sauf celui d'alice en délibération (3a, brouillon).
 insert into public.vote_boss (participation_id, note, verrouille_le)
 select ('30000000-0000-4000-8000-0000000000' || v.n)::uuid, v.note,
-       case when v.n in ('3a', '40') then null else now() end
+       case when v.n = '3a' then null else now() end
 from (values ('3a', 5), ('4a', 4), ('4b', 9), ('4c', 9), ('4d', 5), ('4f', 7), ('40', 5)) v(n, note);
 
 insert into public.decision (campagne_id, participation_id, type, justification)

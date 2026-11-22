@@ -1,7 +1,7 @@
 -- Accès anonyme et inventaire des droits. Les données viennent de seed.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(22);
 
 -- Inventaire (superutilisateur) : RLS partout, et aucun privilège sans politique.
 select is_empty(
@@ -22,8 +22,8 @@ select is(
   (select array_agg(proname::text order by proname) from pg_proc
    where pronamespace = 'public'::regnamespace and has_function_privilege('authenticated', oid, 'execute')),
   array['ajouter_participant','changer_statut_campagne','decider_compte','enregistrer_decision',
-        'est_organisateur','masquer_replique','se_desinscrire','sinscrire','verrouiller_vote'],
-  'authenticated exécute exactement les neuf fonctions prévues');
+        'est_organisateur','masquer_replique','retirer_depot','se_desinscrire','sinscrire','verrouiller_vote'],
+  'authenticated exécute exactement les dix fonctions prévues');
 
 set local role anon;
 set local request.jwt.claims = '{"role":"anon"}';
@@ -35,6 +35,7 @@ select throws_ok('select 1 from public.depot', '42501', null, 'anon ne lit pas d
 select throws_ok('select 1 from public.audit', '42501', null, 'anon ne lit pas audit');
 select throws_ok('select 1 from public.vote_boss', '42501', null, 'anon ne lit pas vote_boss');
 select throws_ok('select 1 from public.decision', '42501', null, 'anon ne lit pas decision');
+select throws_ok('select 1 from public.mon_depot', '42501', null, 'anon ne lit pas mon_depot');
 select throws_ok('select 1 from public.rapport', '42501', null, 'anon ne lit pas rapport');
 select throws_ok('select 1 from public.contact_reutilisation_lisible', '42501', null, 'anon ne lit pas contact_reutilisation_lisible');
 
@@ -57,7 +58,8 @@ select is_empty(
   $$select 1 from public.classement where campagne_id <> '20000000-0000-4000-8000-000000000004'$$,
   'anon ne voit rien du classement des campagnes non publiées');
 select columns_are('public', 'classement',
-  array['campagne_id', 'pseudo', 'score_claude', 'note_boss', 'score_final', 'justification'],
+  array['campagne_id', 'pseudo', 'score_claude', 'note_boss', 'score_final', 'justification',
+    'notes', 'disqualifie', 'justification_departage', 'rang'],
   'le classement n''expose ni vrai nom ni identifiant de compte');
 
 -- Une campagne publiée repassée en délibération (impossible) n'est pas testable ; on vérifie
