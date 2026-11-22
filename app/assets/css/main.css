@@ -81,13 +81,11 @@ main:focus { outline: none; }
 .siege__dos .mascotte { width: 92%; max-width: 108px; height: auto; }
 .siege__table { width: min(80px, 90%); height: 12px; border-radius: 50%; background: #e9dcc6; }
 
-/* Les mascottes respirent d'un pixel de leur grille (1/16 de la hauteur), en deux images. */
-@keyframes respire { to { transform: translateY(-6.25%); } }
-@keyframes clignote { 50% { opacity: 0; } }
+/* Les mascottes respirent d'un pixel de leur grille (1/14 de la hauteur), en deux images. */
+@keyframes respire { to { transform: translateY(-7.1429%); } }
 @keyframes fondu { from { opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) {
-  .siege .mascotte { animation: respire 1.6s steps(2, jump-none) infinite; }
-  .curseur { animation: clignote 1.1s steps(1, end) infinite; }
+  .siege .mascotte { overflow: visible; animation: respire 1.6s steps(2, jump-none) infinite; }
   .siege:nth-child(2) .mascotte { animation-delay: 120ms; }
   .siege:nth-child(3) .mascotte { animation-delay: 240ms; }
   .siege:nth-child(4) .mascotte { animation-delay: 360ms; }

@@ -8,10 +8,10 @@ useSeoMeta({
 })
 
 // Critères par défaut du jury (SPECS § 5) ; l'organisateur peut les changer par campagne.
-const jures: { nom: string; jure?: Jure; boss?: boolean; role: string; points: string }[] = [
+const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
   { nom: 'Sudo', jure: 'sudo', role: 'Sécurité, gestion des erreurs et cas limites', points: '25 points' },
   { nom: 'Refacto', jure: 'refacto', role: 'Structure, découpage, lisibilité et nommage', points: '25 points' },
-  { nom: 'Le Boss', boss: true, role: 'Le juré humain : il lit ton code, ta présentation et ton README, et note sans voir les notes des quatre autres.', points: 'Un tiers du score' },
+  { nom: 'Le Boss', jure: 'boss', role: 'Le juré humain : il lit ton code, ta présentation et ton README, et note sans voir les notes des quatre autres.', points: 'Un tiers du score' },
   { nom: 'Lint', jure: 'lint', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par Claude ; Lint la commente sans la modifier.", points: '25 points' },
   { nom: 'Pitch', jure: 'pitch', role: 'Réponse au brief, originalité et finition', points: '25 points' },
 ]
@@ -73,10 +73,10 @@ const jures: { nom: string; jure?: Jure; boss?: boolean; role: string; points: s
           </ul>
           <p class="note">Critères et poids par défaut ; ils sont publiés à l'ouverture de chaque campagne.</p>
         </div>
-        <div class="plateau" role="img" aria-label="Les cinq jurés assis sur le plateau : Sudo, Refacto, Lint et Pitch, quatre signes de code devenus personnages, et, au centre, Le Boss en casquette">
+        <div class="plateau" role="img" aria-label="Les cinq jurés assis sur le plateau : Sudo, Refacto, Lint et Pitch, quatre créatures coiffées chacune de leur chapeau, et, au centre, Le Boss, le juré humain en casquette">
           <span class="lampes" aria-hidden="true"><i v-for="j in jures" :key="j.nom" /></span>
           <div v-for="j in jures" :key="j.nom" class="siege">
-            <div class="siege__dos"><MascottePixel :jure="j.jure" :boss="j.boss" /></div>
+            <div class="siege__dos"><MascottePixel :jure="j.jure" /></div>
             <div class="siege__table" />
           </div>
         </div>
