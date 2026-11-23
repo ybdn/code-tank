@@ -161,8 +161,8 @@ describe('tâches', () => {
   })
 
   it('liste d\'attente : e-mail de confirmation, confirmation par le candidat, effacement sans réponse', async () => {
-    const aRelancer = await compte('liste_attente', { etat_le: mois(13) })
-    const recent = await compte('liste_attente', { etat_le: mois(6) })
+    const aRelancer = await compte('liste_attente', { etat_le: mois(13), email_verifie_le: jours(900) })
+    const recent = await compte('liste_attente', { etat_le: mois(6), email_verifie_le: jours(900) })
     const sansReponse = await compte('liste_attente', { etat_le: mois(14), attente_demandee_le: jours(31) })
     const dansLeDelai = await compte('liste_attente', { etat_le: mois(14), attente_demandee_le: jours(29) })
     const b = await lancer()
@@ -189,9 +189,30 @@ describe('tâches', () => {
     expect((await autorise.client.rpc('confirmer_attente')).error?.message).toContain('pas en liste d\'attente')
   })
 
+  it('comptes sans adresse vérifiée : jamais avertis, supprimés ; liste d\'attente sans adresse utilisable effacée sans e-mail', async () => {
+    const jamais31 = await compte('email_a_verifier', { cree_le: jours(31) })
+    const jamais29 = await compte('email_a_verifier', { cree_le: jours(29) })
+    const inactifNonVerifie = await compte('autorise', { derniere_connexion_le: mois(25) })
+    const attenteNonVerifiee = await compte('liste_attente', { etat_le: mois(13) })
+    const attenteJetable = await compte('liste_attente', { etat_le: mois(13), email_verifie_le: jours(900), email_contact: 'a@example.org,b@example.org' })
+    const attenteJoignable = await compte('liste_attente', { etat_le: mois(13), email_verifie_le: jours(900) })
+    const b = await lancer()
+    expect(Number(b.non_verifies!.supprimes)).toBeGreaterThanOrEqual(2)
+    expect(Number(b.attente!.sans_adresse)).toBeGreaterThanOrEqual(2)
+    expect(await existe(jamais31.id)).toBe(false)
+    expect(await existe(jamais29.id)).toBe(true)
+    expect(await existe(inactifNonVerifie.id)).toBe(false)
+    expect(await existe(attenteNonVerifiee.id)).toBe(false)
+    expect(await existe(attenteJetable.id)).toBe(false)
+    expect(await existe(attenteJoignable.id)).toBe(true)
+    expect((await ligne(attenteJoignable.id)).attente_demandee_le).not.toBeNull()
+    for (const u of [jamais31, jamais29, inactifNonVerifie, attenteNonVerifiee]) expect(await recus(u.email, 1)).toHaveLength(0)
+    expect(await recus(attenteJoignable.email, 1)).toHaveLength(1)
+  })
+
   it('inactivité : avertissement après 24 mois, une connexion l\'annule, sinon suppression avec la ligne du classement conservée', async () => {
     const aPrevenir = await compte('autorise', { derniere_connexion_le: mois(25), email_verifie_le: jours(900) })
-    const nonVerifie = await compte('autorise', { derniere_connexion_le: mois(25) })
+    const nonVerifie = await compte('autorise', { derniere_connexion_le: mois(25) }) // adresse jamais vérifiée : suppression sans avertissement
     const revenu = await compte('autorise', { derniere_connexion_le: mois(25), email_verifie_le: jours(900), prevenu_inactivite_le: jours(10) })
     const actif = await compte('autorise', { email_verifie_le: jours(900) })
     const abandonne = await compte('autorise', { derniere_connexion_le: mois(25), email_verifie_le: jours(900), prevenu_inactivite_le: jours(31) })
@@ -203,7 +224,7 @@ describe('tâches', () => {
     const [mail] = await recus(aPrevenir.email, 1)
     expect(mail.Text).toContain(`${serveur.url}/compte`)
     expect(mail.Text).not.toMatch(/score|classement : \d/i)
-    expect((await ligne(nonVerifie.id)).prevenu_inactivite_le).toBeNull()
+    expect(await existe(nonVerifie.id)).toBe(false)
     expect(await recus(nonVerifie.email, 1)).toHaveLength(0)
     expect((await ligne(actif.id)).prevenu_inactivite_le).toBeNull()
     expect(await recus(actif.email, 1)).toHaveLength(0)
@@ -250,20 +271,21 @@ describe('tâches', () => {
     const trois = await lancer()
     expect(trois).toEqual({
       debit: { supprimes: 0 }, envois: { supprimes: 0 }, archives: { campagnes: 0, objets: 0 }, refuses: { supprimes: 0, echecs: 0 },
-      attente: { demandes: 0, echecs_envoi: 0, supprimes: 0, echecs_suppression: 0 }, inactivite: { avertis: 0, echecs_envoi: 0, supprimes: 0, echecs_suppression: 0 },
+      attente: { demandes: 0, echecs_envoi: 0, sans_adresse: 0, supprimes: 0, echecs_suppression: 0 }, non_verifies: { supprimes: 0, echecs: 0 }, inactivite: { avertis: 0, echecs_envoi: 0, supprimes: 0, echecs_suppression: 0 },
     })
   }, 240_000)
 
   it('SMTP en panne : personne n\'est marqué prévenu, les suppressions se font quand même', async () => {
     const enPanne = await demarrer(3423, { NUXT_SMTP_HOST: '127.0.0.1', NUXT_SMTP_PORT: '1', CRON_SECRET: SECRET })
     try {
-      const attente = await compte('liste_attente', { etat_le: mois(13) })
+      const attente = await compte('liste_attente', { etat_le: mois(13), email_verifie_le: jours(900) })
       const inactif = await compte('autorise', { derniere_connexion_le: mois(25), email_verifie_le: jours(900) })
       const refuse = await compte('refuse', { etat_le: jours(31) })
       const b = await lancer(enPanne.url)
       expect(b.attente).toMatchObject({ demandes: 0 })
       expect(b.inactivite).toMatchObject({ avertis: 0 })
       expect((await ligne(attente.id)).attente_demandee_le).toBeNull()
+      expect(await existe(attente.id)).toBe(true)
       expect((await ligne(inactif.id)).prevenu_inactivite_le).toBeNull()
       expect(await existe(refuse.id)).toBe(false)
       for (const s of sensibles) expect(enPanne.sortie()).not.toContain(s)

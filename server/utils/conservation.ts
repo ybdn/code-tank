@@ -4,7 +4,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 import { SECRET_MIN } from './jeton'
 
 // Durées et bornes de la conservation (SPECS § 9), à un seul endroit.
-// À CONFIRMER PAR LE PORTEUR : attenteReponseJours et avertissementJours, que la spec ne fixe pas.
+// À CONFIRMER PAR LE PORTEUR : attenteReponseJours, avertissementJours et nonVerifieJours, que la spec ne fixe pas.
 export const DELAIS = {
   debitHeures: 24,
   envoiAbandonneHeures: 24,
@@ -12,6 +12,7 @@ export const DELAIS = {
   refusJours: 30, // après la décision
   attenteMois: 12, // entre deux confirmations de la liste d'attente
   attenteReponseJours: 30, // pour répondre à la demande de confirmation
+  nonVerifieJours: 30, // compte qui n'a jamais vérifié son adresse, depuis sa création
   inactiviteMois: 24,
   avertissementJours: 30, // entre l'e-mail d'inactivité et la suppression
 }
@@ -48,7 +49,7 @@ const AVIS_ATTENTE = {
 }
 const AVIS_INACTIVITE = {
   sujet: 'Code Tank : ton compte sera supprimé',
-  texte: `Tu ne t'es pas connecté à Code Tank depuis plus de ${DELAIS.inactiviteMois} mois. Sans connexion de ta part sous ${DELAIS.avertissementJours} jours, ton compte sera supprimé avec tes résultats ; si une campagne est publiée, sa ligne du classement restera sous « candidat supprimé ». Pour le garder, ouvre simplement ton compte :`,
+  texte: `Tu ne t'es pas connecté à Code Tank depuis plus de ${DELAIS.inactiviteMois} mois. Sans connexion de ta part sous ${DELAIS.avertissementJours} jours, tes données seront supprimées ; si tu as participé à une campagne publiée, ta ligne du classement restera, sous « candidat supprimé ». Pour le garder, ouvre simplement ton compte :`,
 }
 
 type Compte = { id: string; email_contact: string }
@@ -143,17 +144,33 @@ export async function conserver(event: H3Event) {
     refuses: async () =>
       supprimer(lu(await db.from('compte').select('id').eq('role', 'candidat').eq('etat', 'refuse').lt('etat_le', avant(DELAIS.refusJours)).limit(BORNES.comptes))),
 
-    // e. Liste d'attente : demande de confirmation tous les 12 mois, effacement sans réponse.
+    // e. Liste d'attente : demande de confirmation tous les 12 mois, effacement sans réponse. Sans adresse utilisable
+    // (non vérifiée ou refusée), la demande est impossible : le compte est effacé directement. Un échec d'envoi, lui, se retente demain.
     attente: async () => {
       const limite = avantMois(DELAIS.attenteMois)
-      const aRelancer = lu(await db.from('compte').select('id, email_contact').eq('role', 'candidat').eq('etat', 'liste_attente')
+      const dues = lu(await db.from('compte').select('id, email_contact, email_verifie_le').eq('role', 'candidat').eq('etat', 'liste_attente')
         .is('attente_demandee_le', null).lt('etat_le', limite).or(`confirme_attente_le.is.null,confirme_attente_le.lt.${limite}`).limit(BORNES.comptes))
-      const relance = await prevenir(aRelancer, AVIS_ATTENTE, (id) =>
+      const joignable = (c: { email_contact: string; email_verifie_le: string | null }) => c.email_verifie_le !== null && adresseUtilisable(c.email_contact)
+      const relance = await prevenir(dues.filter(joignable), AVIS_ATTENTE, (id) =>
         db.from('compte').update({ attente_demandee_le: new Date().toISOString() }).eq('id', id).is('attente_demandee_le', null))
+      const sansAdresse = await supprimer(dues.filter((c) => !joignable(c)))
       const sansReponse = lu(await db.from('compte').select('id').eq('role', 'candidat').eq('etat', 'liste_attente')
         .lt('attente_demandee_le', avant(DELAIS.attenteReponseJours)).limit(BORNES.comptes))
       const efface = await supprimer(sansReponse)
-      return { demandes: relance.envoyes, echecs_envoi: relance.echecs, supprimes: efface.supprimes, echecs_suppression: efface.echecs }
+      return {
+        demandes: relance.envoyes, echecs_envoi: relance.echecs, sans_adresse: sansAdresse.supprimes,
+        supprimes: efface.supprimes, echecs_suppression: efface.echecs + sansAdresse.echecs,
+      }
+    },
+
+    // Comptes dont l'adresse n'est pas prouvée : impossible de les avertir (elle peut être à un tiers), donc supprimés sans
+    // avertissement, après 30 jours pour une candidature qui n'a jamais vérifié, après 24 mois sans connexion pour les autres.
+    non_verifies: async () => {
+      const jamais = lu(await db.from('compte').select('id').eq('role', 'candidat').eq('etat', 'email_a_verifier').lt('cree_le', avant(DELAIS.nonVerifieJours)).limit(BORNES.comptes))
+      const a = await supprimer(jamais)
+      const inactifs = lu(await db.from('compte').select('id').eq('role', 'candidat').is('email_verifie_le', null).lt('derniere_connexion_le', avantMois(DELAIS.inactiviteMois)).limit(BORNES.comptes))
+      const b = await supprimer(inactifs)
+      return { supprimes: a.supprimes + b.supprimes, echecs: a.echecs + b.echecs }
     },
 
     // f. Inactivité : avertissement après 24 mois, suppression 30 jours plus tard sans connexion.

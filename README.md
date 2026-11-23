@@ -127,18 +127,20 @@ les suivantes. Réponse et journal : des compteurs et des codes, jamais de pseud
 | `envois` | efface les objets du bucket `depots` de plus de 24 h que ni `depot` ni `reception` ne référencent (`objets_abandonnes`) | 500 |
 | `archives` | campagne `publiee` depuis 30 jours (`campagne.publiee_le`) : efface toutes les archives de ses participations, met `depot.chemin_stockage` à nul, supprime ses lignes `reception`, passe à `archivee`. Une campagne dont les archives dépassent la borne finit au passage suivant | 500 objets |
 | `refuses` | supprime les comptes `refuse` depuis 30 jours | 50 |
-| `attente` | compte en liste d'attente sans confirmation depuis 12 mois : e-mail de demande (`attente_demandee_le`) ; sans réponse sous 30 jours : suppression. Le candidat confirme par un bouton sur `/compte` (`confirmer_attente`) | 50 + 50 |
-| `inactivite` | compte sans connexion depuis 24 mois et adresse vérifiée : e-mail d'avertissement (`prevenu_inactivite_le`) ; 30 jours plus tard, toujours sans connexion : suppression | 50 + 50 |
+| `attente` | compte en liste d'attente sans confirmation depuis 12 mois : e-mail de demande (`attente_demandee_le`) ; sans réponse sous 30 jours : suppression. Sans adresse utilisable (non vérifiée ou refusée), la relance est impossible : le compte est supprimé directement, sans e-mail. Le candidat confirme par un bouton sur `/compte` (`confirmer_attente`) | 50 + 50 + 50 |
+| `non_verifies` | supprime, **sans avertissement** (l'adresse n'est pas prouvée, elle peut être à un tiers) : les comptes `email_a_verifier` créés depuis plus de 30 jours, et les comptes sans adresse vérifiée sans connexion depuis 24 mois | 50 + 50 |
+| `inactivite` | compte à adresse vérifiée sans connexion depuis 24 mois : e-mail d'avertissement (`prevenu_inactivite_le`) ; 30 jours plus tard, toujours sans connexion : suppression | 50 + 50 |
 
 - **Suppression d'un compte** : une seule routine (`supprimerCompte`, `server/utils/compte.ts`), partagée avec `DELETE /api/compte` :
   archives du stockage, puis utilisateur Auth ; le déclencheur `participation_apres_depart` garde la ligne anonyme du classement.
   Elle refuse le compte de l'organisateur, que les requêtes des tâches excluent d'ailleurs déjà.
 - **Délais que la spec ne fixe pas, à confirmer par le porteur** : 30 jours pour répondre à la demande de la liste d'attente
-  (`attenteReponseJours`) et 30 jours entre l'e-mail d'inactivité et la suppression (`avertissementJours`).
+  (`attenteReponseJours`), 30 jours entre l'e-mail d'inactivité et la suppression (`avertissementJours`), 30 jours pour une
+  candidature qui n'a jamais vérifié son adresse (`nonVerifieJours`).
 - **Dernière connexion** : `/compte` appelle `noter_connexion` (au plus une écriture par jour) quand le candidat lit son compte ;
   elle annule l'avertissement d'inactivité.
 - **E-mails** : texte seul, lien vers `/compte`, envoyés seulement à une adresse utilisable ; un échec d'envoi ne marque personne,
-  et une panne du SMTP arrête la boucle. Un compte dont l'adresse n'est pas vérifiée n'est jamais averti, donc jamais supprimé pour inactivité.
+  et une panne du SMTP arrête la boucle. Un échec d'envoi se retente le lendemain.
 - **Le planificateur ne règle rien chez Vercel** : définir `CRON_SECRET` dans le projet, puis déployer `vercel.json`.
 
 ## Droits du candidat
