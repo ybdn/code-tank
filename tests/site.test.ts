@@ -2,7 +2,7 @@ import { readdirSync, readFileSync, statSync } from 'node:fs'
 import { join } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { describe, expect, it } from 'vitest'
-import { $fetch, fetch, setup } from '@nuxt/test-utils/e2e'
+import { $fetch, fetch, setup, useTestContext } from '@nuxt/test-utils/e2e'
 
 const racine = fileURLToPath(new URL('..', import.meta.url))
 
@@ -60,7 +60,9 @@ describe('aucune note interne publiée', () => {
   })
 
   it('le build public ne contient ni notes de rédaction ni « À COMPLÉTER »', () => {
-    const sortie = join(racine, '.output/public')
+    // `setup()` construit hors de `.output` (dans `.nuxt/test/<id>/output`) : lire ce build-là, pas un ancien `pnpm build`.
+    const sortie = join(useTestContext().options.nuxtConfig.nitro!.output!.dir!, 'public')
+    expect(statSync(sortie).isDirectory()).toBe(true)
     for (const f of fichiers(sortie)) {
       expect(readFileSync(f, 'utf8'), f).not.toMatch(/Notes de rédaction|À COMPLÉTER/)
     }
