@@ -6,6 +6,10 @@ import { $fetch, fetch, setup } from '@nuxt/test-utils/e2e'
 
 const racine = fileURLToPath(new URL('..', import.meta.url))
 
+// Le module Supabase exige une URL et une clé publique pour rendre les pages ; valeurs factices, aucun appel réseau.
+process.env.NUXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:54421'
+process.env.NUXT_PUBLIC_SUPABASE_KEY = 'cle-publique-factice'
+
 // Lance le serveur de rendu côté serveur sur le build.
 await setup({ rootDir: racine, server: true })
 
@@ -18,7 +22,7 @@ describe('pages publiques', () => {
     ['/charte', 'Charte'],
     ['/confidentialite', 'confidentialité'],
     ['/mentions-legales', 'Mentions légales'],
-    ['/compte', 'Bientôt'],
+    ['/compte', 'Se connecter avec GitHub'],
   ])('%s répond avec son contenu rendu côté serveur', async (chemin, texte) => {
     expect(await $fetch<string>(chemin)).toContain(texte)
   })
@@ -46,6 +50,8 @@ describe('en-têtes de sécurité', () => {
     expect(csp).toMatch(/script-src [^;]*'nonce-/)
     expect(csp).not.toContain('unsafe-inline')
     expect(csp).toContain("frame-ancestors 'none'")
+    // Origine exacte de Supabase, sans joker.
+    expect(csp).toMatch(/connect-src 'self' http:\/\/127\.0\.0\.1:54421(;|$)/)
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('strict-transport-security')).toBeTruthy()
   })

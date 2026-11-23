@@ -2,9 +2,9 @@
 
 Site public du concours de code Code Tank, jugé par Claude. Nuxt 4, TypeScript, rendu côté serveur, pnpm.
 
-Ce lot contient le socle : accueil, charte, politique de confidentialité, mentions légales, page `/compte` « bientôt »,
-en-têtes de sécurité, et le schéma de la base (`supabase/`, voir plus bas). Pas encore d'authentification
-ni de dépôt de code : le site ne se connecte pas encore à la base.
+Ce lot contient le socle (accueil, charte, politique de confidentialité, mentions légales, en-têtes de sécurité),
+le schéma de la base (`supabase/`, voir plus bas) et les comptes : connexion GitHub par Supabase Auth, création du
+compte, vérification de l'e-mail de contact, page `/compte`. Pas encore de dépôt de code ni d'administration.
 
 ## Commandes
 
@@ -17,10 +17,47 @@ pnpm test         # construit le site et vérifie les pages et les en-têtes
 pnpm build
 ```
 
+## Comptes
+
+Seule `/compte` (partie connectée) demande une session ; les pages publiques n'en ont pas besoin. La connexion
+GitHub ne demande que l'identité et l'e-mail (aucun scope ajouté). Le compte (table `compte`) est créé par la route
+serveur `POST /api/compte`, qui vérifie la session auprès d'Auth, exige `app_metadata.provider = 'github'`, lit
+l'identité GitHub dans l'identité vérifiée (jamais dans le corps ni dans `user_metadata`) et écrit avec la clé de
+service. Le profil se lit directement par la session de l'utilisateur (RLS) et se modifie par `PATCH /api/compte`
+(session de l'utilisateur, RLS). La vérification de l'e-mail passe par un jeton signé HMAC-SHA-256, valable 24 h,
+lié à l'adresse (`GET /api/compte/verifier`).
+
+### Pile locale et tests d'intégration
+
+```sh
+pnpm stack:start   # base, Auth, PostgREST, passerelle, boîte mail (http://127.0.0.1:54424), relais SMTP 54425
+pnpm test:stack    # construit le site, le lance contre la pile, GitHub simulé
+pnpm stack:stop
+```
+
+La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, storage, etc.). Le port SMTP de la boîte mail n'est
+pas publié par la CLI : `scripts/stack.sh` lance un relais minimal sur 54425. Ports décalés : API 54421, base 54422.
+`pnpm db:types` régénère `app/types/database.types.ts` depuis la base locale. Fournisseur GitHub en local : renseigner
+`SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID` et `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` pour une vraie connexion ; les
+tests créent leurs utilisateurs par l'API d'administration et n'en ont pas besoin.
+
+### Variables d'environnement (noms seulement, aucune valeur dans le dépôt)
+
+| Variable | Rôle |
+|---|---|
+| `NUXT_PUBLIC_SUPABASE_URL` | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
+| `NUXT_PUBLIC_SUPABASE_KEY` | Clé publique (anon / publishable) |
+| `NUXT_SUPABASE_SECRET_KEY` | Clé de service, serveur seulement |
+| `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification |
+| `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
+| `NUXT_SITE_URL` | URL publique du site, pour les liens des e-mails |
+| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, le relais 54425 sans identifiant) |
+| `NUXT_GITHUB_API` | Facultatif : base de l'API GitHub (`https://api.github.com` par défaut), changée par les tests |
+
 ## Base de données
 
-Postgres local via la CLI Supabase (dépendance de développement), Docker requis. Seule la base démarre,
-pas la pile complète (ni Auth, ni Storage, ni API). Rien n'est lié à un projet distant.
+Postgres local via la CLI Supabase (dépendance de développement), Docker requis. `db:start` ne démarre que la base ;
+la pile réduite avec Auth et API est `stack:start` (voir plus haut). Rien n'est lié à un projet distant.
 
 ```sh
 pnpm db:start     # démarre Postgres (port 54422)

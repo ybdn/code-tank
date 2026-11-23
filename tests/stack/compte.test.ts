@@ -1,0 +1,342 @@
+// Tests d'intégration contre la pile Supabase locale (pnpm stack:start) et le serveur Nuxt construit.
+// GitHub est simulé par un petit serveur local : aucun appel réseau réel.
+import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
+import { randomBytes, randomInt } from 'node:crypto'
+import { createServer, type Server } from 'node:http'
+import type { AddressInfo } from 'node:net'
+import { fileURLToPath } from 'node:url'
+import { createClient } from '@supabase/supabase-js'
+import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+
+const racine = fileURLToPath(new URL('../..', import.meta.url))
+const statut = JSON.parse(execFileSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { cwd: racine, stdio: ['ignore', 'pipe', 'ignore'] }).toString())
+const API = statut.API_URL as string
+const MAIL = statut.MAILPIT_URL as string
+const admin = createClient(API, statut.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+
+// --- GitHub simulé ---
+let githubEnPanne = false
+const appelsGithub: string[] = []
+const github: Server = createServer((req, res) => {
+  appelsGithub.push(req.url ?? '')
+  res.setHeader('content-type', 'application/json')
+  if (githubEnPanne) return void res.writeHead(500).end('{}')
+  if (req.url?.startsWith('/user/')) {
+    return void res.end(JSON.stringify({ login: `gh-${req.url.slice(6)}`, created_at: '2015-03-01T10:00:00Z', public_repos: 12 }))
+  }
+  res.end(JSON.stringify([{ created_at: '2026-11-20T08:00:00Z' }, { created_at: '2026-11-19T08:00:00Z' }]))
+})
+
+// --- Serveur Nuxt ---
+type Serveur = { url: string; arreter: () => void }
+async function demarrer(port: number, env: Record<string, string>): Promise<Serveur> {
+  const proc: ChildProcess = spawn('node', ['.output/server/index.mjs'], {
+    cwd: racine,
+    env: {
+      PATH: process.env.PATH,
+      NITRO_PORT: String(port),
+      NITRO_HOST: '127.0.0.1',
+      NUXT_PUBLIC_SUPABASE_URL: API,
+      NUXT_PUBLIC_SUPABASE_KEY: statut.ANON_KEY,
+      NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
+      NUXT_SECRET_VERIFICATION: 'secret-de-test-' + randomBytes(8).toString('hex'),
+      NUXT_SITE_URL: `http://127.0.0.1:${port}`,
+      NUXT_SMTP_HOST: '127.0.0.1',
+      NUXT_SMTP_PORT: '54425',
+      NUXT_GITHUB_API: `http://127.0.0.1:${(github.address() as AddressInfo).port}`,
+      ...env,
+    },
+    stdio: 'ignore',
+  })
+  const url = `http://127.0.0.1:${port}`
+  for (let i = 0; i < 100; i++) {
+    try {
+      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill() }
+    } catch { /* pas encore prêt */ }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  proc.kill()
+  throw new Error('Le serveur Nuxt ne démarre pas (pnpm build fait ?)')
+}
+
+let serveur: Serveur
+let serveurSansCharte: Serveur
+const crees: string[] = []
+
+beforeAll(async () => {
+  await new Promise<void>((ok) => github.listen(0, '127.0.0.1', ok))
+  serveur = await demarrer(3411, { NUXT_VERSION_CHARTE: '2026-12-01' })
+  serveurSansCharte = await demarrer(3412, { NUXT_VERSION_CHARTE: '' })
+})
+afterAll(async () => {
+  serveur?.arreter()
+  serveurSansCharte?.arreter()
+  github.close()
+  for (const id of crees) await admin.auth.admin.deleteUser(id) // supprime aussi la ligne compte (cascade)
+})
+
+// --- Utilisateurs simulés ---
+type Utilisateur = { id: string; email: string; cookie: string; client: ReturnType<typeof createClient>; githubId: string }
+async function utilisateur(options: { provider?: string; githubId?: string } = {}): Promise<Utilisateur> {
+  const provider = options.provider ?? 'github'
+  const githubId = options.githubId ?? String(randomInt(1e6, 1e9))
+  const email = `ada-${randomBytes(5).toString('hex')}@example.org`
+  const { data, error } = await admin.auth.admin.createUser({
+    email,
+    password: 'mot-de-passe-de-test-1',
+    email_confirm: true,
+    app_metadata: { provider, providers: [provider], ...(provider === 'github' ? { github_id: githubId } : {}) },
+    // Comme une vraie connexion, mais modifiable par l'utilisateur : le serveur ne doit pas s'y fier.
+    user_metadata: { provider_id: 'faux-id-modifiable' },
+  })
+  if (error) throw error
+  crees.push(data.user.id)
+  const client = createClient(API, statut.ANON_KEY, { auth: { persistSession: false } })
+  const { data: connexion, error: e2 } = await client.auth.signInWithPassword({ email, password: 'mot-de-passe-de-test-1' })
+  if (e2) throw e2
+  // Cookie de session tel que l'écrit @supabase/ssr : base64url préfixé, découpé en morceaux de 3180 caractères.
+  const valeur = 'base64-' + Buffer.from(JSON.stringify(connexion.session)).toString('base64url')
+  const morceaux = valeur.match(/.{1,3180}/g)!
+  const cookie = morceaux.length === 1 ? `sb-code-tank=${valeur}` : morceaux.map((m, i) => `sb-code-tank.${i}=${m}`).join('; ')
+  return { id: data.user.id, email, cookie, client, githubId }
+}
+
+const formulaire = (surcharge: Record<string, unknown> = {}) => ({
+  vrai_nom: 'Ada Lovelace',
+  pseudo: 'ada' + randomBytes(4).toString('hex'),
+  email_contact: `contact-${randomBytes(5).toString('hex')}@example.org`,
+  motivation: 'Je code des outils.\nJe candidate pour progresser.',
+  depot_cite_url: 'https://github.com/ada/moteur',
+  charte: true,
+  majeur: true,
+  ...surcharge,
+})
+
+async function api(methode: string, chemin: string, u?: Utilisateur, corps?: unknown, base = serveur.url) {
+  const r = await fetch(base + chemin, {
+    method: methode,
+    redirect: 'manual',
+    headers: { ...(u ? { cookie: u.cookie } : {}), ...(corps ? { 'content-type': 'application/json' } : {}) },
+    body: corps ? JSON.stringify(corps) : undefined,
+  })
+  const texte = await r.text()
+  let json: { courrielEnvoye?: boolean; statusMessage?: string; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
+  try { json = JSON.parse(texte) } catch { /* pas du JSON */ }
+  return { statut: r.status, json, location: r.headers.get('location') }
+}
+
+const ligne = async (id: string) => (await admin.from('compte').select('*').eq('id', id).maybeSingle()).data
+
+// Dernier e-mail reçu à cette adresse dans la boîte locale, une fois `n` messages arrivés.
+async function courriel(adresse: string, n = 1) {
+  for (let i = 0; i < 50; i++) {
+    const { messages } = await (await fetch(`${MAIL}/api/v1/search?query=${encodeURIComponent(`to:${adresse}`)}`)).json()
+    if (messages.length >= n) {
+      const m = await (await fetch(`${MAIL}/api/v1/message/${messages[0].ID}`)).json()
+      return { from: m.From.Address as string, sujet: m.Subject as string, texte: m.Text as string, lien: /http\S+jeton=\S+/.exec(m.Text)?.[0] ?? '' }
+    }
+    await new Promise((r) => setTimeout(r, 200))
+  }
+  throw new Error(`Aucun e-mail pour ${adresse}`)
+}
+
+describe('création du compte', () => {
+  it('crée le compte d\'un utilisateur GitHub : profil, charte, majorité, données GitHub lues côté serveur', async () => {
+    const u = await utilisateur()
+    const f = formulaire()
+    const r = await api('POST', '/api/compte', u, f)
+    expect(r.statut).toBe(200)
+    expect(r.json.courrielEnvoye).toBe(true)
+    const c = await ligne(u.id)
+    expect(c).toMatchObject({
+      github_id: u.githubId,
+      vrai_nom: f.vrai_nom,
+      pseudo: f.pseudo,
+      email_contact: f.email_contact,
+      etat: 'email_a_verifier',
+      role: 'candidat',
+      version_charte: '2026-12-01',
+    })
+    expect(c!.majeur_declare_le).toBeTruthy()
+    expect(c!.charte_acceptee_le).toBeTruthy()
+    expect(c!.github_donnees).toMatchObject({ login: `gh-${u.githubId}`, depots_publics: 12, compte_cree_le: '2015-03-01T10:00:00Z', derniere_activite: '2026-11-20T08:00:00Z' })
+    expect(appelsGithub).toContain(`/user/${u.githubId}`)
+  })
+
+  it('ignore github_id, état et rôle envoyés dans le corps, et ne lit pas user_metadata', async () => {
+    const u = await utilisateur()
+    const r = await api('POST', '/api/compte', u, { ...formulaire(), github_id: '424242', etat: 'autorise', role: 'organisateur', id: crypto.randomUUID() })
+    expect(r.statut).toBe(200)
+    const c = await ligne(u.id)
+    expect(c).toMatchObject({ github_id: u.githubId, etat: 'email_a_verifier', role: 'candidat' })
+    expect(c!.github_id).not.toBe('faux-id-modifiable')
+  })
+
+  it('refuse sans session', async () => {
+    expect((await api('POST', '/api/compte', undefined, formulaire())).statut).toBe(401)
+  })
+
+  it('refuse un utilisateur dont le fournisseur n\'est pas GitHub', async () => {
+    const u = await utilisateur({ provider: 'email' })
+    const r = await api('POST', '/api/compte', u, formulaire())
+    expect(r.statut).toBe(403)
+    expect(await ligne(u.id)).toBeNull()
+  })
+
+  it('refuse un second compte pour la même identité GitHub, et un second compte du même utilisateur', async () => {
+    const a = await utilisateur()
+    expect((await api('POST', '/api/compte', a, formulaire())).statut).toBe(200)
+    const b = await utilisateur({ githubId: a.githubId })
+    const doublon = await api('POST', '/api/compte', b, formulaire())
+    expect(doublon.statut).toBe(409)
+    expect(await ligne(b.id)).toBeNull()
+    expect((await api('POST', '/api/compte', a, formulaire())).statut).toBe(409)
+  })
+
+  it('refuse un pseudo déjà pris (sans tenir compte de la casse)', async () => {
+    const a = await utilisateur()
+    const f = formulaire()
+    await api('POST', '/api/compte', a, f)
+    const b = await utilisateur()
+    const r = await api('POST', '/api/compte', b, formulaire({ pseudo: f.pseudo.toUpperCase() }))
+    expect(r.statut).toBe(409)
+    expect(r.json.data.erreurs).toHaveProperty('pseudo')
+  })
+
+  it('valide le formulaire côté serveur : cases, adresse jetable', async () => {
+    const u = await utilisateur()
+    const sansCases = await api('POST', '/api/compte', u, formulaire({ charte: false, majeur: false }))
+    expect(sansCases.statut).toBe(422)
+    expect(Object.keys(sansCases.json.data.erreurs).sort()).toEqual(['charte', 'majeur'])
+    const jetable = await api('POST', '/api/compte', u, formulaire({ email_contact: 'x@mailinator.com' }))
+    expect(jetable.statut).toBe(422)
+    expect(jetable.json.data.erreurs).toHaveProperty('email_contact')
+    expect(await ligne(u.id)).toBeNull()
+  })
+
+  it('un échec de GitHub ne bloque pas la création', async () => {
+    githubEnPanne = true
+    try {
+      const u = await utilisateur()
+      expect((await api('POST', '/api/compte', u, formulaire())).statut).toBe(200)
+      expect((await ligne(u.id))!.github_donnees).toBeNull()
+    } finally {
+      githubEnPanne = false
+    }
+  })
+
+  it('répond par une erreur claire si la version de la charte n\'est pas configurée', async () => {
+    const u = await utilisateur()
+    const r = await api('POST', '/api/compte', u, formulaire(), serveurSansCharte.url)
+    expect(r.statut).toBe(503)
+    expect(r.json.statusMessage).toContain('NUXT_VERSION_CHARTE')
+    expect(await ligne(u.id)).toBeNull()
+  })
+})
+
+describe('vérification de l\'e-mail', () => {
+  it('envoie le lien depuis l\'expéditeur de Code Tank, puis le clic vérifie l\'adresse', async () => {
+    const u = await utilisateur()
+    const f = formulaire()
+    await api('POST', '/api/compte', u, f)
+    const mail = await courriel(f.email_contact)
+    expect(mail.from).toBe('code-tank@ybdn.io')
+    expect(mail.texte).toContain('24 heures')
+    expect(mail.lien).toContain(serveur.url)
+    const clic = await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)
+    expect(clic.statut).toBe(302)
+    expect(clic.location).toBe('/compte?verification=ok')
+    const c = await ligne(u.id)
+    expect(c!.etat).toBe('verifie')
+    expect(c!.email_verifie_le).toBeTruthy()
+    // Second clic : toujours « ok », l'état ne bouge pas.
+    expect((await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)).location).toBe('/compte?verification=ok')
+  })
+
+  it('refuse un jeton falsifié ou absent', async () => {
+    expect((await api('GET', '/api/compte/verifier?jeton=abc.def')).location).toBe('/compte?verification=invalide')
+    expect((await api('GET', '/api/compte/verifier')).location).toBe('/compte?verification=invalide')
+  })
+
+  it('changer d\'adresse annule la vérification, renvoie un lien, et rend l\'ancien lien caduc', async () => {
+    const u = await utilisateur()
+    const f = formulaire()
+    await api('POST', '/api/compte', u, f)
+    const ancien = await courriel(f.email_contact)
+    await api('GET', new URL(ancien.lien).pathname + new URL(ancien.lien).search)
+    expect((await ligne(u.id))!.email_verifie_le).toBeTruthy()
+
+    const nouvelle = `nouvelle-${randomBytes(5).toString('hex')}@example.org`
+    const r = await api('PATCH', '/api/compte', u, { email_contact: nouvelle })
+    expect(r.statut).toBe(200)
+    expect(r.json.courrielEnvoye).toBe(true)
+    const apres = await ligne(u.id)
+    expect(apres).toMatchObject({ email_contact: nouvelle, email_verifie_le: null, etat: 'verifie' })
+
+    expect((await api('GET', new URL(ancien.lien).pathname + new URL(ancien.lien).search)).location).toBe('/compte?verification=invalide')
+    expect((await ligne(u.id))!.email_verifie_le).toBeNull()
+    const mail = await courriel(nouvelle)
+    expect((await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)).location).toBe('/compte?verification=ok')
+    expect((await ligne(u.id))!.email_verifie_le).toBeTruthy()
+  })
+
+  it('refuse une adresse jetable à la modification', async () => {
+    const u = await utilisateur()
+    await api('POST', '/api/compte', u, formulaire())
+    const r = await api('PATCH', '/api/compte', u, { email_contact: 'x@mailinator.com' })
+    expect(r.statut).toBe(422)
+  })
+
+  it('renvoie le lien tant que l\'adresse n\'est pas vérifiée, puis refuse', async () => {
+    const u = await utilisateur()
+    const f = formulaire()
+    await api('POST', '/api/compte', u, f)
+    expect((await api('POST', '/api/compte/verification', u)).statut).toBe(200)
+    const mail = await courriel(f.email_contact, 2)
+    await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)
+    expect((await api('POST', '/api/compte/verification', u)).statut).toBe(409)
+    expect((await api('POST', '/api/compte/verification')).statut).toBe(401)
+  })
+})
+
+describe('droits sur le compte, par l\'API et la session de l\'utilisateur', () => {
+  it('un candidat ne lit ni ne modifie le compte d\'un autre, et n\'écrit ni état ni rôle', async () => {
+    const a = await utilisateur()
+    const b = await utilisateur()
+    const fa = formulaire()
+    await api('POST', '/api/compte', a, fa)
+    await api('POST', '/api/compte', b, formulaire())
+
+    const lu = await b.client.from('compte').select('id, vrai_nom')
+    expect(lu.data).toEqual([expect.objectContaining({ id: b.id })])
+    expect((await b.client.from('compte').select('vrai_nom').eq('id', a.id)).data).toEqual([])
+
+    const maj = await b.client.from('compte').update({ vrai_nom: 'Pirate' }).eq('id', a.id).select()
+    expect(maj.data).toEqual([])
+    expect((await ligne(a.id))!.vrai_nom).toBe(fa.vrai_nom)
+
+    expect((await b.client.from('compte').update({ etat: 'autorise' }).eq('id', b.id)).error).not.toBeNull()
+    expect((await b.client.from('compte').update({ role: 'organisateur' }).eq('id', b.id)).error).not.toBeNull()
+    expect((await b.client.from('compte').update({ github_id: '1' }).eq('id', b.id)).error).not.toBeNull()
+    expect((await ligne(b.id))).toMatchObject({ etat: 'email_a_verifier', role: 'candidat' })
+  })
+
+  it('le pseudo est figé une fois le compte autorisé, les autres champs restent modifiables', async () => {
+    const u = await utilisateur()
+    const f = formulaire()
+    await api('POST', '/api/compte', u, f)
+    // Décision de l'organisateur simulée par l'administrateur de la base.
+    await admin.from('compte').update({ etat: 'autorise' }).eq('id', u.id)
+
+    const pseudo = await api('PATCH', '/api/compte', u, { pseudo: 'autre-pseudo' })
+    expect(pseudo.statut).toBe(409)
+    expect(pseudo.json.data.erreurs).toHaveProperty('pseudo')
+    expect((await ligne(u.id))!.pseudo).toBe(f.pseudo)
+
+    const direct = await u.client.from('compte').update({ pseudo: 'autre-pseudo' }).eq('id', u.id)
+    expect(direct.error?.message).toContain('pseudo ne se modifie plus')
+
+    expect((await api('PATCH', '/api/compte', u, { motivation: 'Nouvelle motivation' })).statut).toBe(200)
+    expect((await ligne(u.id))!.motivation).toBe('Nouvelle motivation')
+  })
+})

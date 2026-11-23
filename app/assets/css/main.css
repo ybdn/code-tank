@@ -118,3 +118,24 @@ main:focus { outline: none; }
 .footer__bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 32px; }
 .footer p { margin: 0; align-self: center; }
 .legal-links { display: flex; flex-wrap: wrap; gap: 4px 20px; }
+
+/* Formulaires et état du compte. */
+.form { display: grid; gap: 24px; max-width: 40rem; }
+.form__resume p { margin: 0; color: var(--accent); font-weight: 600; }
+.champ { display: grid; gap: 6px; }
+.champ label { font-weight: 600; }
+.champ__aide { margin: 0; color: var(--muted); font-size: .9rem; }
+.champ__erreur { margin: 0; color: #ff9a85; font-weight: 600; }
+.champ :is(input:not([type=checkbox]), textarea) { width: 100%; min-height: 44px; padding: 10px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
+.champ [aria-invalid="true"] { border-color: #ff9a85; border-width: 2px; }
+.champ [readonly] { color: var(--muted); border-style: dashed; }
+.champ--case { grid-template-columns: 24px 1fr; align-items: center; column-gap: 12px; min-height: 44px; }
+.champ--case input { width: 24px; height: 24px; accent-color: var(--accent); }
+.champ--case .champ__erreur { grid-column: 2; }
+button.btn { cursor: pointer; background: transparent; color: inherit; font: inherit; font-weight: 500; }
+button.btn--primary { background: var(--accent); color: var(--accent-ink); }
+.btn:disabled { opacity: .6; cursor: default; }
+.avis { margin: 0; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--surface); max-width: 40rem; }
+.avis--erreur { border-color: #ff9a85; }
+.etat { font-weight: 600; max-width: 40rem; }
+.note-claire { color: var(--muted); font-size: .9rem; }
