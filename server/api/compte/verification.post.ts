@@ -7,6 +7,7 @@ export default defineEventHandler(async (event) => {
   if (!adresseUtilisable(compte.email_contact)) {
     throw createError({ statusCode: 422, statusMessage: 'Cette adresse n\'est pas acceptée : corrige-la dans ton profil.' })
   }
+  await limiter(event, 'verification')
   try {
     await envoyerLienVerification(useRuntimeConfig(event), user.id, compte.email_contact)
   } catch (e) {

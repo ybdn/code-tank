@@ -3,6 +3,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 // Confirmation faite par un clic sur la page /compte/verifier : seul ce POST modifie la base, un GET n'y suffit pas
 // (un aperçu de lien ou un antivirus de messagerie ouvre les URL). Pas de session : le jeton signé fait preuve.
 export default defineEventHandler(async (event) => {
+  await limiter(event, 'confirmation')
   const { jeton } = (await readBody(event)) ?? {}
   const r = verifierJeton(typeof jeton === 'string' ? jeton : '', useRuntimeConfig(event).secretVerification)
   if (!r.ok) return { resultat: r.raison }

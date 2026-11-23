@@ -17,6 +17,7 @@ const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
 ]
 
 // Lue par le serveur (les brouillons sont cachés par la RLS) ; en cas d'erreur, `campagnes` reste vide.
+const compteSupprime = useRoute().query.compte === 'supprime'
 const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'campagnes' })
 </script>
 
@@ -24,6 +25,7 @@ const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'c
   <div>
     <section class="section hero" aria-labelledby="hero-h">
       <div class="wrap hero__in">
+        <p v-if="compteSupprime" role="status" class="avis">Ton compte est supprimé. Tes données personnelles sont effacées ; seule reste, s'il y en a une, ta ligne anonyme d'un classement publié.</p>
         <h1 id="hero-h">Concours de code jugé par Claude</h1>
         <p class="lead">
           Un thème imposé, le même pour tous. Tu déposes ton projet, cinq jurés le notent, et chaque note cite le

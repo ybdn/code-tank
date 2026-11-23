@@ -43,15 +43,15 @@ watch(user, async () => {
 async function sinscrire() {
   occupe.value = true
   message.value = alerte.value = ''
-  // La fonction SQL contrôle tout (compte autorisé, statut, place restante) et répond en français.
-  const { error } = await supabase.rpc('sinscrire', { p_campagne_id: campagne.value.id })
-  occupe.value = false
-  if (error) {
-    alerte.value = error.code === 'P0001' ? error.message : 'L\'inscription a échoué. Réessaie dans un instant.'
-    return
+  // Le serveur applique la limite de débit, puis la fonction SQL contrôle tout (compte autorisé, statut, place restante).
+  try {
+    await $fetch(`/api/campagnes/${slug}/inscription`, { method: 'POST' })
+    message.value = 'Inscription enregistrée.'
+  } catch (e) {
+    alerte.value = (e as { data?: { statusMessage?: string } }).data?.statusMessage ?? 'L\'inscription a échoué. Réessaie dans un instant.'
   }
+  occupe.value = false
   await charger()
-  message.value = 'Inscription enregistrée.'
 }
 
 async function sedesinscrire() {

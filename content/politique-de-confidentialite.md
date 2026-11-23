@@ -87,7 +87,7 @@ Nous te demandons de ne déposer aucun secret et aucun code confidentiel.
 | Donnée | Durée |
 |---|---|
 | Compte (identifiant GitHub, données GitHub lues, vrai nom, e-mail, motivation, déclaration d'âge) | Durée de vie du compte. Compte sans connexion depuis 24 mois : prévenu par e-mail, puis supprimé |
-| Résultats (rapports, scores, entretiens) | Gardés tant que le compte existe ; supprimés avec lui |
+| Résultats (rapports, scores, entretiens) | Rapports et entretiens : gardés tant que le compte existe, supprimés avec lui. Scores et notes par critère : ils restent sur la ligne du classement, devenue anonyme (« candidat supprimé ») quand le compte est supprimé |
 | Candidature refusée | Effacée 30 jours après la décision |
 | Candidature en liste d'attente | Conservée tant que tu veux y rester. Nous te demandons une confirmation tous les 12 mois. Sans réponse, elle est effacée. |
 | Archive zip et code extrait | Effacés 30 jours après la publication des résultats |
@@ -100,7 +100,7 @@ Nous te demandons de ne déposer aucun secret et aucun code confidentiel.
 
 Tu peux supprimer ton compte à tout moment, par un bouton dans ton compte, avec confirmation, à effet immédiat. Si la campagne n'a pas encore été délibérée, ton dépôt est retiré. Après la publication des résultats, le classement garde la ligne sous « candidat supprimé ». Tu peux retirer ton dépôt et te désinscrire d'une campagne tant que la délibération n'a pas commencé.
 
-La fiche d'une campagne terminée (titre, thème, critères et poids, dates, classement) ne contient pas de donnée personnelle par elle-même : elle est gardée sans limite. Les données personnelles qui s'y rattachent (pseudo, scores, rapport, présentation, demande au jury, empreinte, case de contact, déclarations de charte, de majorité et de dépôt, outils d'IA déclarés et traces relevées) suivent le compte : elles sont gardées tant que le compte existe, et la ligne du classement passe sous « candidat supprimé » quand le compte est supprimé.
+La fiche d'une campagne terminée (titre, thème, critères et poids, dates, classement) ne contient pas de donnée personnelle par elle-même : elle est gardée sans limite. Les données personnelles qui s'y rattachent (pseudo, rapport, présentation, demande au jury, empreinte, case de contact, déclarations de charte, de majorité et de dépôt, outils d'IA déclarés et traces relevées) suivent le compte : elles sont gardées tant que le compte existe, et la ligne du classement passe sous « candidat supprimé » quand le compte est supprimé, avec ses scores et ses notes, sans plus rien qui permette de t'identifier.
 
 ## 7. Tes droits
 

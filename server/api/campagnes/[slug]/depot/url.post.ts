@@ -4,6 +4,7 @@
 export default defineEventHandler(async (event) => {
   const { campagne, participation, service } = await contexteDepot(event)
   declarationValide(await readBody(event)) // inutile d'envoyer 20 Mo pour une déclaration refusée
+  await limiter(event, 'depot')
   // Le chemin est choisi ici, jamais par le client.
   const chemin = `${campagne.id}/${participation.id}/${crypto.randomUUID()}.zip`
   const { data, error } = await service.storage.from('depots').createSignedUploadUrl(chemin)

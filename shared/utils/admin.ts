@@ -51,7 +51,7 @@ export const EFFET_ETAPE: Record<string, string> = {
   depot: 'La campagne passe en phase de dépôt : inscriptions et dépôt restent ouverts jusqu\'à la clôture.',
   deliberation: 'Les dépôts, retraits et désinscriptions sont fermés. Le vote du Boss s\'ouvre. Ce site ne lance pas les audits Claude.',
   prete: 'Tu passes à la relecture des alertes et des répliques. Rien n\'est encore visible des candidats.',
-  publiee: 'Les résultats, les entretiens, les rapports et le classement deviennent visibles. La base refuse tant qu\'un vote du Boss n\'est pas verrouillé. Aucun e-mail de résultat ne part depuis ce site.',
+  publiee: 'Les résultats, les entretiens, les rapports et le classement deviennent visibles. La base refuse tant qu\'un vote du Boss n\'est pas verrouillé. Un e-mail part une seule fois à chaque participant ayant un dépôt et une adresse vérifiée, sans aucun score.',
   archivee: 'La campagne passe en archivée. L\'effacement des archives n\'est pas automatisé par ce site.',
 }
 

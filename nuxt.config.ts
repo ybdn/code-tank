@@ -13,6 +13,7 @@ export default defineNuxtConfig({
   runtimeConfig: {
     // Valeurs fournies par l'environnement (NUXT_*) ; voir le README.
     secretVerification: '',
+    secretDebit: '',
     versionCharte: '',
     siteUrl: '',
     githubApi: 'https://api.github.com',
@@ -38,7 +39,7 @@ export default defineNuxtConfig({
     nonce: true,
     // Pas d'API ouverte à d'autres origines pour l'instant.
     corsHandler: false,
-    // Limite de débit : lot suivant.
+    // Pas celle du module : la limite de débit est la nôtre (table debit, server/utils/debit.ts).
     rateLimiter: false,
     // Le filtre XSS rejetait en 400 tout corps citant une balise, cas normal chez des développeurs : le texte saisi est rendu comme
     // du texte par Vue, la CSP interdit les scripts en ligne et aucun v-html ne reçoit de texte saisi.

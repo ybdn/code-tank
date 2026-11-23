@@ -17,9 +17,18 @@ const confirmerEtape = ref(false)
 const aAjouter = ref('')
 
 async function avancer() {
-  const ok = await statut.lancer(() => $fetch(`/api/admin/campagnes/${slug}/statut`, { method: 'POST', body: { statut: suite.value } }), `Campagne passée à « ${STATUT_ADMIN[suite.value!]} ».`)
+  const r = await statut.lancer(
+    () => $fetch<{ courriels?: { envoyes: number; echecs: number; sansAdresseVerifiee: number } | null }>(`/api/admin/campagnes/${slug}/statut`, { method: 'POST', body: { statut: suite.value } }),
+    `Campagne passée à « ${STATUT_ADMIN[suite.value!]} ».`,
+  )
   confirmerEtape.value = false
-  if (ok) await refresh()
+  const c = r?.courriels
+  if (c) {
+    statut.message.value += ` E-mails de résultat : ${c.envoyes} envoyé${c.envoyes > 1 ? 's' : ''}, ${c.echecs} échec${c.echecs > 1 ? 's' : ''}, ${c.sansAdresseVerifiee} participant${c.sansAdresseVerifiee > 1 ? 's' : ''} sans adresse vérifiée. Il n'y a pas de bouton de renvoi : il créerait des doublons.`
+  } else if (r?.courriels === null) {
+    statut.message.value += ' Les destinataires des e-mails de résultat n\'ont pas pu être lus : aucun e-mail n\'est parti, et il n\'y a pas de bouton de renvoi.'
+  }
+  if (r) await refresh()
 }
 async function enregistrer(corps: CorpsCampagne) {
   const r = await edition.lancer(() => $fetch<{ slug: string }>(`/api/admin/campagnes/${slug}`, { method: 'PATCH', body: corps }), 'Campagne enregistrée.')

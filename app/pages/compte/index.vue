@@ -133,6 +133,7 @@ async function renvoyer() {
           <a href="mailto:support@ybdn.io?subject=Code%20Tank%20%E2%80%94%20Mes%20donn%C3%A9es">support@ybdn.io</a>.
         </p>
         <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+        <SuppressionCompte :pseudo="compte.pseudo" />
       </template>
 
       <template v-else>
@@ -157,6 +158,7 @@ async function renvoyer() {
           @envoyer="modifier"
         />
         <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+        <SuppressionCompte :pseudo="compte.pseudo" />
       </template>
     </div>
   </section>

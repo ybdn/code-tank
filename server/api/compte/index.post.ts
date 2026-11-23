@@ -26,6 +26,7 @@ export default defineEventHandler(async (event) => {
   }
   if (Object.keys(erreurs).length) throw createError({ statusCode: 422, statusMessage: 'Formulaire invalide.', data: { erreurs } })
 
+  await limiter(event, 'compte')
   const maintenant = new Date().toISOString()
   // La clé de service ne sort pas d'ici ; id et github_id viennent de l'identité vérifiée.
   const { error } = await serverSupabaseServiceRole(event)

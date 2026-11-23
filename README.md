@@ -38,7 +38,9 @@ L'accueil liste les campagnes lisibles (la RLS cache les brouillons) ; `/campagn
 `GET /api/campagnes[/slug]` (le client Supabase de la page ne sait pas lire la session pendant le rendu serveur) et le
 reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception`, `mon_depot`, `places_campagne`).
 
-- **Inscription** : le navigateur appelle `sinscrire` (fonction SQL, session du candidat). **Désinscription** :
+- **Inscription** : `POST /api/campagnes/[slug]/inscription` (limite de débit, puis `sinscrire` avec la session du candidat ; la page
+  passe par cette route). La fonction SQL reste appelable directement depuis un navigateur : c'est accepté, car elle ne permet qu'une
+  inscription par compte et par campagne, et seulement à un compte autorisé à la main. **Désinscription** :
   `DELETE /api/campagnes/[slug]/inscription` appelle `se_desinscrire` avec sa session, puis efface la réception et les archives.
 - **Dépôt en trois temps**, le zip ne passant jamais par le serveur Nuxt (corps de requête plafonné vers 4,5 Mo chez
   l'hébergeur, zip jusqu'à 20 Mo) :
@@ -78,14 +80,64 @@ reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception
   case de réutilisation, décisions. Rien n'est exécuté : l'archive se télécharge, c'est tout (SPECS § 4).
 - **Pages** : `/admin` (tableau de bord), `/admin/comptes`, `/admin/reglages`, `/admin/campagnes`,
   `/admin/campagnes/[slug]`. Dates saisies et affichées à l'heure de Paris.
-- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), démasquage d'une
-  réplique (`masquer_replique` ne sait pas démasquer), e-mail de résultat, lancement des audits.
+- **E-mails de résultat** : quand `POST /api/admin/campagnes/[slug]/statut` fait passer une campagne à `publiee` avec succès,
+  le serveur envoie un e-mail (texte seul, tutoiement, lien vers la page de la campagne, aucun score ni classement, expéditeur
+  `code-tank@ybdn.io`) à chaque participant inscrit ayant un dépôt **et une adresse vérifiée**. Adresses lues avec la session de
+  l'organisateur (RLS), jamais avec la clé de service. L'envoi ne bloque ni n'annule la publication : la réponse donne
+  `{ envoyes, echecs, sansAdresseVerifiee }`, que la page affiche, et le journal ne cite aucune adresse. Un SMTP injoignable
+  arrête la boucle (délai de 10 s par connexion). Il n'y a **pas de bouton de renvoi** (risque de doublons, aucune colonne pour
+  se souvenir de qui a reçu quoi) ; la page le dit.
+- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), lancement des audits,
+  tâches planifiées de conservation.
+
+## Limite de débit
+
+Table `debit` (migration `20261124000001_debit.sql`) : empreinte de l'IP, action, horodatage. RLS activée, aucun droit pour
+`anon` ni `authenticated` ; seul le rôle de service y accède, par la fonction `consommer_debit`, qui compte, refuse ou enregistre
+dans une seule transaction (verrou consultatif par empreinte et action : deux requêtes simultanées au dernier créneau n'en
+laissent passer qu'une) et purge au passage les lignes de plus de 24 heures **de cette empreinte**. La purge générale des autres
+empreintes est faite par le lot des tâches planifiées : tant qu'il n'existe pas, la promesse « 24 heures » de la politique de
+confidentialité n'est tenue que pour les adresses qui reviennent.
+
+- **L'IP n'est jamais stockée** : Nuxt (`server/utils/debit.ts`) la lit dans la première adresse de `x-forwarded-for` (posée par le
+  proxy de l'hébergeur ; **ne vaut que derrière un proxy qui l'écrase**, sinon un client la choisit), en calcule un HMAC-SHA-256
+  avec `NUXT_SECRET_DEBIT` (32 caractères au moins) et n'envoie que l'empreinte. Sans adresse lisible, tous les appels partagent
+  une empreinte commune. Sans secret, ou si la base est injoignable : **503**, jamais un passage sans limite.
+- **Plafonds** (constante `PLAFONDS`, un seul endroit), par IP : création de compte 5 / 24 h ; renvoi du lien de vérification
+  5 / h ; demande d'URL de dépôt 30 / 24 h ; inscription à une campagne 20 / 24 h ; suppression de compte 5 / 24 h ;
+  confirmation d'e-mail (`POST /api/compte/verifier`) 30 / h. Au-delà : **429** avec un message français et `Retry-After`.
+  Le compte est fait juste avant l'action coûteuse, après les contrôles de session et de formulaire : une faute de frappe
+  n'entame pas le plafond, mais une demande valable le fait même si elle échoue ensuite.
+- **Non limités** : les autres routes (dont `PATCH /api/compte`, qui renvoie un lien si l'adresse change) et l'appel direct à
+  `sinscrire`.
+- **Tests** : les helpers de `tests/stack/aide.ts` envoient une adresse `x-forwarded-for` neuve à chaque requête ; aucun
+  interrupteur ne désactive la limite.
+
+## Droits du candidat
+
+- **Suppression du compte** : `DELETE /api/compte` (session requise, corps `{ pseudo }` : le pseudo exact). L'organisateur ne
+  peut pas supprimer son compte par là. Le serveur efface d'abord du bucket tout le dossier de chaque participation du compte
+  (archives du dépôt, de la réception, envois jamais confirmés) ; si le stockage échoue, il répond 500 et ne touche à rien
+  d'autre. Il supprime ensuite l'utilisateur Auth (clé de service) et la base fait le reste dans une seule transaction.
+  Les clés étrangères suppriment `compte` (cascade depuis `auth.users`) et mettent `participation.compte_id` à nul ; le déclencheur
+  `participation_apres_depart` (migration `20261124000003_suppression_compte.sql`) :
+  - supprime la participation entière (donc dépôt, réception, audits, vote du Boss, décisions) quand elle n'a pas de dépôt ou que
+    la campagne n'est ni `publiee` ni `archivee` ;
+  - sinon la garde pour le classement, avec ses scores, et vide le reste : réception supprimée, décision `fermeture_compte`
+    supprimée, commentaire du Boss effacé, dépôt vidé (chemin, empreinte, présentation, demande, fichiers exclus, outils d'IA,
+    traces, faits, alertes, case de réutilisation), audits réduits à la clé et à la note de chaque critère (plus de
+    justification, de preuve ni de réplique). Restent : notes, note d'outillage, note du Boss, décisions publiques
+    (disqualification, départage) avec leur justification.
+  Il s'applique aussi à toute suppression future d'un compte (inactivité de 24 mois).
+- **Case de réutilisation** : `regler_contact_reutilisation(campagne, accord)` (session du candidat, appel direct depuis la page)
+  met à jour la case de **sa** participation dans `depot` et dans `reception` quand elles existent, rien d'autre, même après la
+  clôture. Interrupteur sur la page de dépôt dès qu'il existe une réception ou un dépôt.
 
 ### Pile locale et tests d'intégration
 
 ```sh
 pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
-pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé ; comptes, dépôt, administration
+pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé ; comptes, dépôt, administration, droits
 pnpm stack:stop
 ```
 
@@ -103,6 +155,7 @@ tests créent leurs utilisateurs par l'API d'administration et n'en ont pas beso
 | `NUXT_PUBLIC_SUPABASE_KEY` | Clé publique (anon / publishable) |
 | `NUXT_SUPABASE_SECRET_KEY` | Clé de service, serveur seulement |
 | `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification, **32 caractères au moins** ; sans lui (ou trop court), aucun e-mail ne part |
+| `NUXT_SECRET_DEBIT` | Secret HMAC de l'empreinte des adresses IP (limite de débit), **32 caractères au moins** ; sans lui, les routes limitées répondent 503 |
 | `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
 | `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |
 | `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, la boîte mail sur 54425, sans identifiant) |

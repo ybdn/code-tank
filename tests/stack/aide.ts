@@ -8,6 +8,8 @@ const racine = fileURLToPath(new URL('../..', import.meta.url))
 export const statut = JSON.parse(execFileSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { cwd: racine, stdio: ['ignore', 'pipe', 'ignore'] }).toString())
 export const API = statut.API_URL as string
 export const admin = createClient(API, statut.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
+// Secret de l'empreinte des adresses IP (limite de débit), commun à tous les serveurs de test.
+export const SECRET_DEBIT = 'secret-debit-de-test-' + randomBytes(16).toString('hex')
 export const anon = () => createClient(API, statut.ANON_KEY, { auth: { persistSession: false } })
 
 // `env` s'ajoute à l'environnement de base. `sortie()` rend ce que le serveur a écrit (journal et erreurs).
@@ -22,6 +24,7 @@ export async function demarrer(port: number, env: Record<string, string> = {}): 
       NUXT_PUBLIC_SUPABASE_KEY: statut.ANON_KEY,
       NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
       NUXT_SITE_URL: `http://127.0.0.1:${port}`,
+      NUXT_SECRET_DEBIT: SECRET_DEBIT,
       ...env,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
@@ -129,17 +132,21 @@ export async function nettoyer() {
   for (const id of crees) await admin.auth.admin.deleteUser(id)
 }
 
-export async function api(base: string, methode: string, chemin: string, u?: Utilisateur, corps?: unknown) {
+// Adresse IP fictive, neuve à chaque appel : la limite de débit s'applique par adresse (x-forwarded-for), et les tests
+// qui enchaînent beaucoup de requêtes ne doivent pas se la partager. Passer `ip` pour viser une adresse précise.
+export const ipNeuve = () => `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`
+
+export async function api(base: string, methode: string, chemin: string, u?: Utilisateur, corps?: unknown, ip = ipNeuve()) {
   const r = await fetch(base + chemin, {
     method: methode,
     redirect: 'manual',
-    headers: { ...(u ? { cookie: u.cookie } : {}), ...(corps ? { 'content-type': 'application/json' } : {}) },
+    headers: { 'x-forwarded-for': ip, ...(u ? { cookie: u.cookie } : {}), ...(corps ? { 'content-type': 'application/json' } : {}) },
     body: corps ? JSON.stringify(corps) : undefined,
   })
   const texte = await r.text()
-  let json: { ok?: boolean; chemin?: string; token?: string; resultat?: string; courrielEnvoye?: boolean; statusMessage?: string; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
+  let json: { ok?: boolean; chemin?: string; token?: string; resultat?: string; courrielEnvoye?: boolean; statusMessage?: string; courriels?: { envoyes: number; echecs: number; sansAdresseVerifiee: number } | null; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
   try { json = JSON.parse(texte) } catch { /* pas du JSON */ }
-  return { statut: r.status, json, texte, location: r.headers.get('location') }
+  return { statut: r.status, json, texte, location: r.headers.get('location'), retryAfter: r.headers.get('retry-after') }
 }
 
 // Zip vide valide (fin de répertoire central seule) : le bucket contrôle le type et la taille, pas le contenu.

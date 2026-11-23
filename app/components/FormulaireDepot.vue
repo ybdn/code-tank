@@ -5,6 +5,8 @@ const props = defineProps<{
   // Étape de l'envoi en cours (0 : aucune), annoncée aux technologies d'assistance.
   etape: number
   redepot: boolean
+  // Valeur actuelle de la case de réutilisation, reprise pour qu'un nouveau dépôt ne la retire pas sans le dire.
+  reutilisation: boolean
 }>()
 const emit = defineEmits<{ envoyer: [fichier: File, corps: Record<string, unknown>] }>()
 
@@ -18,8 +20,9 @@ const f = reactive({
   declaration_code: false,
   aucun_outil: false,
   outils: '',
-  contact_reutilisation: false,
+  contact_reutilisation: props.reutilisation,
 })
+watch(() => props.reutilisation, (v) => { f.contact_reutilisation = v })
 const ETAPES = ['', 'Vérification de ta déclaration', 'Envoi de l\'archive', 'Enregistrement du dépôt']
 const fichier = ref<File | null>(null)
 const locales = ref<ErreursDepot>({})

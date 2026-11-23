@@ -7,8 +7,8 @@ const supabase = useSupabaseClient()
 const user = useSupabaseUser()
 
 type Motif = { code?: string; message?: string }
-type Reception = { etat: 'en_attente' | 'acceptee' | 'refusee'; motifs_refus: Motif[]; recue_le: string; traitee_le: string | null }
-type Recu = { sha256: string; taille_octets: number; nb_fichiers: number; fichiers_exclus: unknown[]; nb_tokens: number; depose_le: string }
+type Reception = { contact_reutilisation: boolean; etat: 'en_attente' | 'acceptee' | 'refusee'; motifs_refus: Motif[]; recue_le: string; traitee_le: string | null }
+type Recu = { contact_reutilisation: boolean; sha256: string; taille_octets: number; nb_fichiers: number; fichiers_exclus: unknown[]; nb_tokens: number; depose_le: string }
 
 const pret = ref(false)
 const compteAutorise = ref(false)
@@ -22,6 +22,8 @@ const cle = ref(0) // change après un dépôt : le formulaire repart vide
 const erreurs = ref<ErreursDepot>({})
 const message = ref('')
 const alerte = ref('')
+// Case de réutilisation : la dernière déclaration (celle de l'envoi en cours, sinon celle du dépôt accepté).
+const accord = computed(() => reception.value?.contact_reutilisation ?? recu.value?.contact_reutilisation ?? false)
 const peutRetirer = computed(() => ['inscriptions', 'depot'].includes(campagne.value.statut) && Boolean(reception.value || recu.value))
 
 async function charger() {
@@ -34,8 +36,8 @@ async function charger() {
   inscrit.value = Boolean(participation)
   if (!participation) return
   const [r, d] = await Promise.all([
-    supabase.from('ma_reception').select('etat, motifs_refus, recue_le, traitee_le').eq('participation_id', participation.id).maybeSingle(),
-    supabase.from('mon_depot').select('sha256, taille_octets, nb_fichiers, fichiers_exclus, nb_tokens, depose_le').eq('participation_id', participation.id).maybeSingle(),
+    supabase.from('ma_reception').select('etat, motifs_refus, recue_le, traitee_le, contact_reutilisation').eq('participation_id', participation.id).maybeSingle(),
+    supabase.from('mon_depot').select('sha256, taille_octets, nb_fichiers, fichiers_exclus, nb_tokens, depose_le, contact_reutilisation').eq('participation_id', participation.id).maybeSingle(),
   ])
   reception.value = r.data as Reception | null
   recu.value = d.data as Recu | null
@@ -70,14 +72,30 @@ async function deposer(fichier: File, corps: Record<string, unknown>) {
     etape.value = 3
     await $fetch(`/api/campagnes/${slug}/depot`, { method: 'POST', body: { ...corps, chemin } })
     message.value = 'Archive reçue. Elle est maintenant en cours de contrôle.'
-    cle.value++
     await charger()
+    cle.value++
   } catch (e) {
     erreurs.value = (e as { data?: { data?: { erreurs?: ErreursDepot } } }).data?.data?.erreurs ?? {}
     if (!Object.keys(erreurs.value).length) alerte.value = messageServeur(e, 'Le dépôt a échoué. Réessaie dans un instant.')
   } finally {
     etape.value = 0
   }
+}
+
+async function regler(e: Event) {
+  const champ = e.target as HTMLInputElement
+  const voulu = champ.checked
+  occupe.value = true
+  message.value = alerte.value = ''
+  const { error } = await supabase.rpc('regler_contact_reutilisation', { p_campagne_id: campagne.value.id, p_accord: voulu })
+  occupe.value = false
+  if (error) {
+    champ.checked = !voulu
+    alerte.value = error.code === 'P0001' ? error.message : 'Le réglage n\'a pas pu être enregistré. Réessaie dans un instant.'
+    return
+  }
+  message.value = voulu ? 'Noté : l\'organisateur pourra te contacter au sujet d\'une réutilisation.' : 'Noté : l\'organisateur ne te contactera pas au sujet d\'une réutilisation.'
+  await charger()
 }
 
 async function retirer() {
@@ -142,10 +160,22 @@ async function retirer() {
           <p v-if="reception && reception.etat !== 'acceptee'" class="note-claire">Ce reçu reste valable tant que ton nouvel envoi n'est pas accepté.</p>
         </template>
 
+        <template v-if="reception || recu">
+          <h2>Réutilisation de ton code</h2>
+          <p>
+            Participer ne donne aucun droit sur ton code : toute réutilisation passe par un accord écrit séparé. Cette case dit seulement
+            si l'organisateur peut te contacter pour en parler. Tu peux la modifier à tout moment, même après la clôture ; elle n'a aucun effet sur ta note.
+          </p>
+          <div class="champ champ--case">
+            <input id="reutilisation" type="checkbox" :checked="accord" :disabled="occupe || etape > 0" @change="regler">
+            <label for="reutilisation">D'accord pour être contacté au sujet d'une réutilisation</label>
+          </div>
+        </template>
+
         <template v-if="depotOuvert(campagne)">
           <h2>{{ reception || recu ? 'Redéposer' : 'Déposer ton code' }}</h2>
           <p v-if="reception || recu">Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>
-          <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="Boolean(reception || recu)" @envoyer="deposer" />
+          <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="Boolean(reception || recu)" :reutilisation="accord" @envoyer="deposer" />
         </template>
         <p v-else>Le dépôt n'est pas ouvert pour cette campagne.</p>
 
