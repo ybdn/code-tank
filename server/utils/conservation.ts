@@ -185,6 +185,9 @@ export async function conserver(event: H3Event) {
       const efface = await supprimer(sansReponse)
       return { avertis: avertis.envoyes, echecs_envoi: avertis.echecs, supprimes: efface.supprimes, echecs_suppression: efface.echecs }
     },
+    // g. Filet du jury : un appel par jour, même sans réception, pour les clôtures dues et les lots à relever.
+    // `code` : le code HTTP reçu (202 lancé, 409 déjà en cours), 0 si le jury n'est pas configuré ou injoignable.
+    jury: async () => ({ code: (await appelerJury(event, 'cron')).code }),
   }
 
   // Une tâche qui échoue n'arrête pas les suivantes : son code d'erreur remplace ses compteurs.
