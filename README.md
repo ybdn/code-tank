@@ -4,7 +4,9 @@ Site public du concours de code Code Tank, jugé par Claude. Nuxt 4, TypeScript,
 
 Ce lot contient le socle (accueil, charte, politique de confidentialité, mentions légales, en-têtes de sécurité),
 le schéma de la base (`supabase/`, voir plus bas) et les comptes : connexion GitHub par Supabase Auth, création du
-compte, vérification de l'e-mail de contact, page `/compte`. Pas encore de dépôt de code ni d'administration.
+compte, vérification de l'e-mail de contact, page `/compte`, puis les campagnes : page publique, inscription et
+désinscription, dépôt du zip, reçu, retrait. Le contrôle du contenu du zip vit hors de ce dépôt ; pas encore
+d'administration.
 
 ## Commandes
 
@@ -29,15 +31,42 @@ lié à l'adresse. Le lien de l'e-mail ouvre la page `/compte/verifier`, qui ne 
 mon adresse » envoie `POST /api/compte/verifier` (aperçus de lien et antivirus ne valident donc rien). L'adresse lue en base
 repasse par la règle du formulaire avant tout envoi et toute validation, car la colonne est écrivable directement.
 
+## Campagnes et dépôt
+
+L'accueil liste les campagnes lisibles (la RLS cache les brouillons) ; `/campagnes/[slug]` est publique et
+`/campagnes/[slug]/depot` demande un compte autorisé et inscrit. Les pages lisent la campagne par
+`GET /api/campagnes[/slug]` (le client Supabase de la page ne sait pas lire la session pendant le rendu serveur) et le
+reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception`, `mon_depot`, `places_campagne`).
+
+- **Inscription** : le navigateur appelle `sinscrire` (fonction SQL, session du candidat). **Désinscription** :
+  `DELETE /api/campagnes/[slug]/inscription` appelle `se_desinscrire` avec sa session, puis efface la réception et les archives.
+- **Dépôt en trois temps**, le zip ne passant jamais par le serveur Nuxt (corps de requête plafonné vers 4,5 Mo chez
+  l'hébergeur, zip jusqu'à 20 Mo) :
+  1. `POST /api/campagnes/[slug]/depot/url` vérifie la session, le compte `autorise`, la participation `inscrit`, le statut
+     (`inscriptions` ou `depot`, comme `sinscrire`, car les deux phases se chevauchent), la clôture et la déclaration, puis
+     délivre une URL d'envoi signée (clé de service, chemin `{campagne}/{participation}/{uuid}.zip` choisi par le serveur ;
+     validité fixée à 2 h par Supabase, un seul envoi par chemin) ;
+  2. le navigateur envoie le fichier au bucket privé `depots` (20 Mo, zip seulement, aucune politique de stockage) ;
+  3. `POST /api/campagnes/[slug]/depot` revérifie tout, contrôle que l'archive est bien arrivée dans le dossier de la
+     participation, écrit la ligne de `reception` (`en_attente`, une seule par participation) et efface l'ancienne archive
+     ainsi que les envois jamais confirmés, sauf celle du dépôt déjà accepté.
+- **Retrait** : `DELETE /api/campagnes/[slug]/depot` (fonction `retirer_depot` avec la session ; règle équivalente quand il
+  n'existe qu'une réception), puis effacement de la réception et des archives. Un échec du stockage après la suppression
+  en base est journalisé sans donnée personnelle et renvoyé en erreur 500.
+- Rien dans ce lot ne fait passer une réception à `acceptee` ou `refusee` : le contrôle du zip, ailleurs, lira `reception`
+  et écrira `depot` avec la clé de service. Les tests simulent ce contrôle.
+- Limite connue : un envoi jamais confirmé reste dans le bucket jusqu'au prochain dépôt, retrait ou désinscription de ce
+  candidat ; aucune tâche de nettoyage dans ce lot.
+
 ### Pile locale et tests d'intégration
 
 ```sh
-pnpm stack:start   # base, Auth, PostgREST, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
-pnpm test:stack    # construit le site, le lance contre la pile, GitHub simulé
+pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
+pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé
 pnpm stack:stop
 ```
 
-La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, storage, etc.). Ports décalés : API 54421, base
+La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, etc. ; le stockage est inclus, environ 170 Mo). Ports décalés : API 54421, base
 54422, boîte mail 54424 (web) et 54425 (SMTP, `smtp_port` dans `supabase/config.toml`).
 `pnpm db:types` régénère `app/types/database.types.ts` depuis la base locale. Fournisseur GitHub en local : renseigner
 `SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID` et `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` pour une vraie connexion ; les

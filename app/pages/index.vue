@@ -15,6 +15,9 @@ const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
   { nom: 'Lint', jure: 'lint', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par Claude ; Lint la commente sans la modifier.", points: '25 points' },
   { nom: 'Pitch', jure: 'pitch', role: 'Réponse au brief, originalité et finition', points: '25 points' },
 ]
+
+// Lue par le serveur (les brouillons sont cachés par la RLS) ; en cas d'erreur, `campagnes` reste vide.
+const { data: campagnes } = await useFetch('/api/campagnes', { key: 'campagnes' })
 </script>
 
 <template>
@@ -36,7 +39,16 @@ const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
     <section id="campagnes" class="section" aria-labelledby="campagnes-h">
       <div class="wrap">
         <h2 id="campagnes-h">Campagnes</h2>
-        <p class="vide">Aucune campagne ouverte pour l'instant.</p>
+        <p v-if="!campagnes" class="vide">Les campagnes ne peuvent pas être lues pour le moment.</p>
+        <p v-else-if="!campagnes.length" class="vide">Aucune campagne ouverte pour l'instant.</p>
+        <ul v-else class="cartes">
+          <li v-for="c in campagnes" :key="c.slug" class="carte">
+            <p class="carte__statut">{{ LIBELLE_STATUT[c.statut] }}</p>
+            <h3><NuxtLink :to="`/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></h3>
+            <p>Thème : {{ c.theme }}</p>
+            <p class="carte__dates">Dépôt jusqu'au {{ formaterDate(c.cloture_depot) }}</p>
+          </li>
+        </ul>
       </div>
     </section>
 

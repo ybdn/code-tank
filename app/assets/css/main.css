@@ -139,3 +139,23 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .avis--erreur { border-color: #ff9a85; }
 .etat { font-weight: 600; max-width: 40rem; }
 .note-claire { color: var(--muted); font-size: .9rem; }
+
+/* Campagnes : cartes de l'accueil, page de campagne, dépôt. */
+.cartes { list-style: none; margin: 24px 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr)); gap: 24px; }
+.carte { padding: 24px; background: var(--surface); border-radius: 8px; }
+.carte p { margin: 8px 0 0; }
+.carte__statut { color: var(--accent); font: 700 .9rem var(--font-display); }
+.carte__dates { color: var(--muted); font-size: .9rem; }
+.brief { white-space: pre-line; max-width: 46rem; overflow-wrap: anywhere; }
+.criteres { list-style: none; margin: 0; padding: 0; max-width: 40rem; }
+.criteres li { display: flex; justify-content: space-between; gap: 16px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+.dates { display: grid; gap: 12px; margin: 0; max-width: 40rem; }
+.dates dt { color: var(--muted); font-size: .9rem; }
+.dates dd { margin: 0; overflow-wrap: anywhere; }
+.empreinte { font-family: var(--font-display); font-size: .85rem; }
+.groupe { border: 0; padding: 0; margin: 0; min-width: 0; }
+.groupe legend { padding: 0; font-weight: 600; }
+.champ input[type=file] { min-height: 44px; padding: 8px 0; font: inherit; color: inherit; }
+.avancement { width: 100%; max-width: 40rem; height: 12px; accent-color: var(--accent); }
+.champ :is(input, textarea):disabled { opacity: .6; }
+.etat[data-etat="refusee"] { color: #ff9a85; }
