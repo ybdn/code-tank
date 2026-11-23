@@ -1,5 +1,6 @@
 // L'URL de Supabase entre dans la CSP au build : elle doit être définie à ce moment-là.
-const urlSupabase = process.env.NUXT_PUBLIC_SUPABASE_URL
+// Même ordre que @nuxtjs/supabase (NUXT_* avant SUPABASE_* de l'intégration Vercel) : la CSP et le client lisent la même URL.
+const urlSupabase = process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-22',

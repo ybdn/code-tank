@@ -197,11 +197,15 @@ tests créent leurs utilisateurs par l'API d'administration et n'en ont pas beso
 
 ### Variables d'environnement (noms seulement, aucune valeur dans le dépôt)
 
+Supabase : l'intégration Supabase de la Marketplace Vercel fournit déjà les trois premières variables (noms `SUPABASE_*`),
+le site les lit telles quelles. Les noms `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_KEY` et `NUXT_SUPABASE_SECRET_KEY`
+sont l'alternative locale (tests, pile locale) et **l'emportent** sur `SUPABASE_*` si les deux existent.
+
 | Variable | Rôle |
 |---|---|
-| `NUXT_PUBLIC_SUPABASE_URL` | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
-| `NUXT_PUBLIC_SUPABASE_KEY` | Clé publique (anon / publishable) |
-| `NUXT_SUPABASE_SECRET_KEY` | Clé de service, serveur seulement |
+| `SUPABASE_URL` (ou `NUXT_PUBLIC_SUPABASE_URL`) | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
+| `SUPABASE_PUBLISHABLE_KEY` (repli `SUPABASE_ANON_KEY` ; ou `NUXT_PUBLIC_SUPABASE_KEY`) | Clé publique (`sb_publishable_…` ou anon) |
+| `SUPABASE_SECRET_KEY` (repli `SUPABASE_SERVICE_ROLE_KEY` ; ou `NUXT_SUPABASE_SECRET_KEY`) | Clé de service, serveur seulement |
 | `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification, **32 caractères au moins** ; sans lui (ou trop court), aucun e-mail ne part |
 | `CRON_SECRET` | Secret du planificateur (variable de Vercel, **sans préfixe `NUXT_`**), 32 caractères au moins ; sans lui, `/api/cron/conservation` répond 404 |
 | `NUXT_SECRET_DEBIT` | Secret HMAC de l'empreinte des adresses IP (limite de débit), **32 caractères au moins** ; sans lui, les routes limitées répondent 503 |
