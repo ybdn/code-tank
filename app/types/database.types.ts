@@ -240,7 +240,15 @@ isOneToOne: true
                   }
                   ComputedFields: never
                   Relationships: [
-                    
+
+                  ]
+                },"classement_calcul": {
+                  Row: {
+                    "campagne_id": string,"disqualifie": boolean | null,"justification": string | null,"justification_departage": string | null,"note_boss": number | null,"notes": Json | null,"participation_id": string,"pseudo": string | null,"rang": number | null,"score_claude": number | null,"score_final": number | null,"statut": Database["public"]['Enums']["campagne_statut"],"vote_verrouille": boolean | null
+                  }
+                  ComputedFields: never
+                  Relationships: [
+
                   ]
                 },"contact_reutilisation_lisible": {
                   Row: {
@@ -364,6 +372,9 @@ isOneToOne: false
                            },
 "ajouter_participant":
 { Args: { "p_campagne_id": string,"p_compte_id": string }; Returns: undefined
+                           },
+"apercu_classement":
+{ Args: { "p_campagne_id": string }; Returns: { "disqualifie": boolean,"justification": string,"justification_departage": string,"note_boss": number,"notes": Json,"participation_id": string,"pseudo": string,"rang": number,"score_claude": number,"score_final": number,"vote_verrouille": boolean }[]
                            },
 "changer_statut_campagne":
 { Args: { "p_campagne_id": string,"p_statut": Database["public"]['Enums']["campagne_statut"] }; Returns: undefined

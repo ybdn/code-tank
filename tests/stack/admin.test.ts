@@ -361,6 +361,16 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect(html).not.toMatch(/REPLIQUE-SECRETE|JUSTIFICATION-SECRETE/)
     expect(html).toContain('Vote à l&#39;aveugle')
 
+    // Aperçu du classement : la ligne existe, mais son score Claude et ses notes restent cachés.
+    const apercu = await appeler('GET', `/api/admin/campagnes/${slug}/classement`, orga)
+    expect(apercu.statut).toBe(200)
+    expect(apercu.json).toEqual([expect.objectContaining({ participation_id: pA, vote_verrouille: false, score_claude: null, notes: null, rang: null })])
+    expect(apercu.texte).not.toMatch(/REPLIQUE-SECRETE|JUSTIFICATION-SECRETE/)
+    expect(html).toContain('Aperçu du classement')
+    expect(html).toContain('Vote du Boss non verrouillé : score Claude caché.')
+    expect((await appeler('GET', `/api/admin/campagnes/${slug}/classement`, A)).statut).toBe(404)
+    expect((await appeler('GET', `/api/campagnes/${slug}/classement`)).json).toEqual([])
+
     // Un vote sans dépôt, une participation inconnue.
     expect((await appeler('PUT', `/api/admin/participations/${UUID}/vote`, orga, { note: 5 })).statut).toBe(409)
   })
@@ -385,6 +395,12 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect(html).toContain('REPLIQUE-SECRETE')
     expect(html).toContain('JUSTIFICATION-SECRETE &lt;b&gt;gras&lt;/b&gt;')
     expect(html).toContain('src/a.ts:3')
+
+    // Aperçu : vote verrouillé, notes visibles ; un seul juré a rendu son audit, donc pas encore de score Claude ni de rang.
+    const [ligne] = (await appeler('GET', `/api/admin/campagnes/${slug}/classement`, orga)).json as unknown as LigneApercu[]
+    expect(ligne).toMatchObject({ participation_id: pA, vote_verrouille: true, note_boss: 8, score_claude: null, score_final: null, rang: null })
+    expect(ligne!.notes).toMatchObject({ outillage: 6 })
+    expect(html).toContain('Audits incomplets')
   })
 
   it('masque une réplique, enregistre une décision avec sa justification, refuse les doublons et les justifications vides', async () => {

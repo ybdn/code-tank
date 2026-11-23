@@ -228,3 +228,40 @@ export type DetailCampagne = {
   participations: ParticipationAdmin[]
   candidats: { id: string; pseudo: string; vrai_nom: string }[]
 }
+
+// --- Aperçu du classement (organisateur, avant publication) -------------------------------------
+
+// Une ligne par participation inscrite avec dépôt, calculée comme le classement public (fonction SQL apercu_classement).
+// Vote à l'aveugle : tant que vote_verrouille est faux, score_claude et notes sont nuls.
+export type LigneApercu = {
+  participation_id: string
+  pseudo: string
+  rang: number | null
+  vote_verrouille: boolean
+  score_claude: number | null
+  note_boss: number | null
+  score_final: number | null
+  notes: Record<string, number | null> | null
+  disqualifie: boolean
+  justification: string | null
+  justification_departage: string | null
+}
+
+// Statuts où l'aperçu a un sens : des dépôts existent et les résultats ne sont pas encore publics.
+export const STATUTS_APERCU = ['depot', 'deliberation', 'prete']
+
+// Pourquoi une ligne n'a pas de rang, dans l'ordre où l'organisateur peut y remédier. Nul pour une ligne classée.
+export function motifNonClasse(l: LigneApercu): string | null {
+  if (l.rang !== null) return null
+  if (l.disqualifie) return 'Disqualifié.'
+  if (!l.vote_verrouille) return 'Vote du Boss non verrouillé : score Claude caché.'
+  if (l.score_claude === null) return 'Audits incomplets : un juré n\'a pas rendu de note, ou la note d\'outillage manque.'
+  return 'Non classé.'
+}
+
+// Égalités de score final entre classés sans décision de départage : à trancher avant la publication.
+export function egalitesSansDepartage(lignes: LigneApercu[]): string[][] {
+  const parRang = new Map<number, LigneApercu[]>()
+  for (const l of lignes) if (l.rang !== null) parRang.set(l.rang, [...(parRang.get(l.rang) ?? []), l])
+  return [...parRang.values()].filter((g) => g.length > 1).map((g) => g.map((l) => l.pseudo))
+}

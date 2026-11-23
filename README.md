@@ -87,7 +87,14 @@ reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception
   `{ envoyes, echecs, sansAdresseVerifiee }`, que la page affiche, et le journal ne cite aucune adresse. Un SMTP injoignable
   arrête la boucle (délai de 10 s par connexion). Il n'y a **pas de bouton de renvoi** (risque de doublons, aucune colonne pour
   se souvenir de qui a reçu quoi) ; la page le dit.
-- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), lancement des audits.
+- **Aperçu du classement** : sur `/admin/campagnes/[slug]`, pendant le dépôt, la délibération et la relecture (`STATUTS_APERCU`),
+  le classement tel qu'il serait publié maintenant, avec les notes par critère, le motif de chaque ligne non classée
+  (disqualifiée, vote non verrouillé, audits incomplets) et les égalités restant sans départage. `GET
+  /api/admin/campagnes/[slug]/classement` appelle la fonction SQL `apercu_classement`, réservée à l'organisateur. Elle lit
+  la vue interne `classement_calcul`, la même que la vue publique `classement`, qui n'en garde que les campagnes publiées ou
+  archivées : une seule règle de calcul. Vote à l'aveugle : tant que le vote du Boss d'une ligne n'est pas verrouillé, son
+  score Claude et ses notes sont nuls. L'aperçu se recalcule après un vote, une décision ou une étape, et par son bouton.
+- **Audits** : le site ne les lance pas lui-même ; il réveille le jury (voir « Appel du jury »).
 
 ## Limite de débit
 
@@ -236,7 +243,7 @@ Avec Colima, exporter `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` ava
 - Les tests simulent le rôle (`anon`, `authenticated`) et l'identité (`request.jwt.claims`), sans Auth ni API.
 - Refus par défaut : `anon` et `authenticated` n'ont aucun droit sans privilège et politique explicites. Le serveur
   écrit avec la clé de service, qui contourne la RLS. Lire `classement`, `rapport` et `contact_reutilisation_lisible`
-  par les vues, et lister les colonnes de `depot` (`select *` est refusé : `contact_reutilisation` n'est pas lisible directement).
+  par les vues (`classement_calcul` n'est lisible de personne : seules la vue `classement` et `apercu_classement` la lisent), et lister les colonnes de `depot` (`select *` est refusé : `contact_reutilisation` n'est pas lisible directement).
 
 Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Ils ne contiennent que le texte publiable : la source complète, avec notes de rédaction, reste hors de ce dépôt. Les polices sont auto-hébergées
 (Space Mono et Plus Jakarta Sans, licence OFL) : le site n'appelle aucun service tiers.

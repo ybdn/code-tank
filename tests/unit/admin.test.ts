@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, validerCampagne, validerReglages, versChampLocal,
+  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, egalitesSansDepartage, etapeSuivante, motifNonClasse,
+  validerCampagne, validerReglages, versChampLocal,
 } from '../../shared/utils/admin'
+import type { LigneApercu } from '../../shared/utils/admin'
 
 const valide = () => ({
   slug: 'minuteur-de-pause', titre: 'Minuteur', theme: 'Un minuteur', brief: 'Écris un minuteur.', criteres: structuredClone(CRITERES_PAR_DEFAUT),
@@ -112,4 +114,26 @@ describe('étapes', () => {
     expect(etapeSuivante('prete')).toBe('publiee')
     expect(etapeSuivante('archivee')).toBeNull()
   })
+})
+
+const ligne = (l: Partial<LigneApercu>): LigneApercu => ({
+  participation_id: 'p', pseudo: 'x', rang: null, vote_verrouille: true, score_claude: 70, note_boss: 7, score_final: 70, notes: {},
+  disqualifie: false, justification: null, justification_departage: null, ...l,
+})
+
+describe('motifNonClasse : pourquoi une ligne de l\'aperçu n\'a pas de rang', () => {
+  it('classé : aucun motif', () => expect(motifNonClasse(ligne({ rang: 1 }))).toBeNull())
+  it('disqualifié d\'abord, même sans vote', () => expect(motifNonClasse(ligne({ disqualifie: true, vote_verrouille: false }))).toBe('Disqualifié.'))
+  it('vote non verrouillé : score caché', () =>
+    expect(motifNonClasse(ligne({ vote_verrouille: false, score_claude: null, note_boss: null, score_final: null }))).toMatch(/non verrouillé/))
+  it('vote verrouillé mais score Claude absent : audits incomplets', () =>
+    expect(motifNonClasse(ligne({ score_claude: null, score_final: null }))).toMatch(/Audits incomplets/))
+})
+
+describe('egalitesSansDepartage : rangs partagés à trancher avant publication', () => {
+  it('aucune égalité', () => expect(egalitesSansDepartage([ligne({ pseudo: 'a', rang: 1 }), ligne({ pseudo: 'b', rang: 2 })])).toEqual([]))
+  it('deux candidats au même rang, les non classés ignorés', () =>
+    expect(egalitesSansDepartage([
+      ligne({ pseudo: 'a', rang: 1 }), ligne({ pseudo: 'b', rang: 2 }), ligne({ pseudo: 'c', rang: 2 }), ligne({ pseudo: 'd', rang: null }), ligne({ pseudo: 'e', rang: null }),
+    ])).toEqual([['b', 'c']]))
 })

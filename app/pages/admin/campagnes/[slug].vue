@@ -1,7 +1,9 @@
 <script setup lang="ts">
 definePageMeta({ layout: 'admin' })
 const slug = String(useRoute().params.slug)
-const { data, refresh } = await useLectureAdmin<DetailCampagne>(`/api/admin/campagnes/${slug}`)
+const { data, refresh: relire } = await useLectureAdmin<DetailCampagne>(`/api/admin/campagnes/${slug}`)
+// Un vote, une décision ou une étape changent aussi l'aperçu du classement.
+const refresh = () => Promise.all([relire(), refreshNuxtData(`apercu-${slug}`)])
 const campagne = computed(() => data.value.campagne)
 useHead({ title: campagne.value.titre })
 
@@ -115,6 +117,11 @@ async function ajouter() {
       <p class="note-claire">Aucun dépôt n'est exécuté, par personne : on lit, on ne lance rien.</p>
       <p v-if="!inscrits.length" class="note-claire">Aucune participation.</p>
       <ParticipationAdmin v-for="p in inscrits" :key="p.id" :participation="p" :campagne="campagne" @change="refresh()" />
+
+      <template v-if="STATUTS_APERCU.includes(campagne.statut)">
+        <h2>Aperçu du classement</h2>
+        <ApercuClassement :slug="campagne.slug" :criteres="campagne.criteres" />
+      </template>
 
       <h2>Modifier la campagne</h2>
       <p v-if="figees" class="avis">Le premier dépôt a figé le brief, le thème et les critères.</p>
