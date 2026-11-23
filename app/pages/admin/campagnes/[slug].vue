@@ -13,6 +13,7 @@ const ajoutables = computed(() => data.value.candidats.filter((c) => !inscrits.v
 const statut = useAction()
 const edition = useAction()
 const ajout = useAction()
+const jury = useAction()
 const confirmerEtape = ref(false)
 const aAjouter = ref('')
 
@@ -29,6 +30,16 @@ async function avancer() {
     statut.message.value += ' Les destinataires des e-mails de résultat n\'ont pas pu être lus : aucun e-mail n\'est parti, et il n\'y a pas de bouton de renvoi.'
   }
   if (r) await refresh()
+}
+const MESSAGES_JURY: Record<string, string> = {
+  lance: 'Jury lancé : il traite les dépôts reçus et les audits en cours.',
+  deja_en_cours: 'Le jury travaille déjà : rien à relancer pour l\'instant.',
+  non_configure: 'Le jury n\'est pas configuré sur ce site : l\'appel n\'a pas eu lieu.',
+  echec: 'Le jury n\'a pas répondu : réessaie dans un instant.',
+}
+async function relancerJury() {
+  const r = await jury.lancer(() => $fetch<{ etat: string }>(`/api/admin/campagnes/${slug}/jury`, { method: 'POST' }), '')
+  if (r) jury.message.value = MESSAGES_JURY[r.etat] ?? MESSAGES_JURY.echec!
 }
 async function enregistrer(corps: CorpsCampagne) {
   const r = await edition.lancer(() => $fetch<{ slug: string }>(`/api/admin/campagnes/${slug}`, { method: 'PATCH', body: corps }), 'Campagne enregistrée.')
@@ -66,6 +77,14 @@ async function ajouter() {
             <button class="btn" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = false">Annuler</button>
           </p>
         </div>
+      </template>
+
+      <template v-if="campagne.statut !== 'brouillon'">
+        <h2>Jury</h2>
+        <p class="note-claire">Les dépôts reçus sont traités à chaque envoi, et le jury se réveille chaque jour. Ce bouton le relance tout de suite (une fois par minute au plus).</p>
+        <div role="status" aria-live="polite"><p v-if="jury.message.value" class="avis">{{ jury.message.value }}</p></div>
+        <p v-if="jury.alerte.value" role="alert" class="avis avis--erreur">{{ jury.alerte.value }}</p>
+        <p class="btns"><button class="btn" type="button" :disabled="jury.occupe.value" @click="relancerJury">Relancer le jury</button></p>
       </template>
 
       <h2>Participants ({{ inscrits.length }} sur {{ campagne.max_participants }})</h2>

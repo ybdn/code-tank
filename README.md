@@ -143,6 +143,24 @@ les suivantes. Réponse et journal : des compteurs et des codes, jamais de pseud
   et une panne du SMTP arrête la boucle. Un échec d'envoi se retente le lendemain.
 - **Le planificateur ne règle rien chez Vercel** : définir `CRON_SECRET` dans le projet, puis déployer `vercel.json`.
 
+## Appel du jury
+
+Le jury (dépôt privé, second projet Vercel) traite les réceptions de dépôt et délibère ; le site le réveille par
+`POST <NUXT_JURY_URL>` avec `Authorization: Bearer <NUXT_JURY_SECRET>`, sans corps (`server/utils/jury.ts`, `appelerJury`).
+Le jury répond tout de suite : **202** (passage lancé) ou **409** (déjà en cours, grâce au bail `verrou` en base). L'appel n'est jamais
+bloquant : délai de 5 s, un échec est journalisé (code seulement) et n'empêche jamais l'action de l'utilisateur ; sans les deux
+variables, rien n'est appelé et un seul avertissement est journalisé.
+
+- **Après une réception** : `POST /api/campagnes/[slug]/depot` appelle le jury après l'enregistrement, hors de la réponse (`waitUntil`).
+- **Tâche quotidienne** : `/api/cron/conservation` appelle aussi le jury (tâche `jury` du bilan : `code`, le code HTTP reçu ; 0 si non configuré ou injoignable).
+- **« Relancer le jury »** : bouton de la page d'administration d'une campagne (non brouillon), `POST /api/admin/campagnes/[slug]/jury`,
+  organisateur seulement (404 sinon), **un appel par minute et par adresse** (`PLAFONDS.jury`, 429 au-delà). Réponse `{ etat }` :
+  `lance`, `deja_en_cours`, `non_configure` ou `echec`.
+- **Bail d'exclusion** : migration `20261126000001_verrou.sql`, table `verrou` (nom, détenteur, expiration), fonctions `prendre_verrou` et
+  `rendre_verrou` réservées au rôle de service. Le jury prend `prendre_verrou('jury', <uuid du passage>, 330)` avant tout travail.
+- **Tests** : pgTAP (`14_verrou.test.sql`) et `tests/stack/jury.test.ts` (faux jury HTTP local : appel après dépôt avec le bon secret, jury injoignable,
+  bouton refusé à un candidat, limite d'une minute, tâche quotidienne, vingt prises simultanées du bail).
+
 ## Droits du candidat
 
 - **Suppression du compte** : `DELETE /api/compte` (session requise, corps `{ pseudo }` : le pseudo exact). L'organisateur ne
@@ -190,6 +208,8 @@ tests créent leurs utilisateurs par l'API d'administration et n'en ont pas beso
 | `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
 | `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |
 | `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, la boîte mail sur 54425, sans identifiant) |
+| `NUXT_JURY_URL` | Facultatif : URL complète de `POST /api/jury` du projet Vercel du jury (dépôt privé), `/api/jury` inclus. Sans elle ou sans le secret, le site n'appelle rien (un avertissement au journal) |
+| `NUXT_JURY_SECRET` | Le secret de ce jury (`JURY_SECRET` de son projet), **32 caractères au moins** |
 | `NUXT_GITHUB_API` | Facultatif : base de l'API GitHub (`https://api.github.com` par défaut), changée par les tests |
 
 ## Base de données
