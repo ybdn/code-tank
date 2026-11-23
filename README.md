@@ -5,8 +5,8 @@ Site public du concours de code Code Tank, jugé par Claude. Nuxt 4, TypeScript,
 Ce lot contient le socle (accueil, charte, politique de confidentialité, mentions légales, en-têtes de sécurité),
 le schéma de la base (`supabase/`, voir plus bas) et les comptes : connexion GitHub par Supabase Auth, création du
 compte, vérification de l'e-mail de contact, page `/compte`, puis les campagnes : page publique, inscription et
-désinscription, dépôt du zip, reçu, retrait. Le contrôle du contenu du zip vit hors de ce dépôt ; pas encore
-d'administration.
+désinscription, dépôt du zip, reçu, retrait, et l'administration `/admin` de l'organisateur. Le contrôle du
+contenu du zip et le lancement des audits vivent hors de ce dépôt.
 
 ## Commandes
 
@@ -58,11 +58,34 @@ reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception
 - Limite connue : un envoi jamais confirmé reste dans le bucket jusqu'au prochain dépôt, retrait ou désinscription de ce
   candidat ; aucune tâche de nettoyage dans ce lot.
 
+## Administration
+
+`/admin` (comptes, réglages, campagnes, dépôts, vote du Boss, publication) est réservée à l'organisateur.
+
+- **Accès** : le middleware `server/middleware/admin.ts` contrôle toute requête vers `/admin…` ou `/api/admin…` (casse,
+  pourcentages et barres doublées compris, `cheminAdmin` dans `shared/utils/admin.ts`) : session vérifiée par Auth, puis
+  `est_organisateur()` avec cette session. Sinon **404**, jamais 403 ni redirection. Pages et réponses d'administration
+  portent `noindex` ; le lien « Administration » n'apparaît dans la navigation que pour l'organisateur (affichage
+  seulement : la barrière est le serveur). Un candidat ou un visiteur qui arrive par la navigation du navigateur voit
+  aussi la page 404, car les pages lisent leurs données par `/api/admin/*`, que le middleware refuse.
+- **Écritures par la session de l'organisateur** (RLS et fonctions SQL : `decider_compte`, `changer_statut_campagne`,
+  `ajouter_participant`, `verrouiller_vote`, `masquer_replique`, `enregistrer_decision`, tables `reglage`, `campagne`,
+  `vote_boss`). La clé de service ne sert qu'à une chose : `GET /api/admin/participations/[id]/archive` délivre une URL de
+  lecture signée de **60 secondes** après contrôle de l'organisateur. Les refus de la base (poids ≠ 100, transition
+  interdite, vote verrouillé, publication sans vote verrouillé…) sont renvoyés tels quels (409).
+- **Vote à l'aveugle** : tant qu'un vote n'est pas verrouillé, la base cache à la session de l'organisateur les audits et la
+  case de réutilisation ; l'API ne les lit pas et l'écran le dit. Après verrouillage : audits, réplique (masquable), coût,
+  case de réutilisation, décisions. Rien n'est exécuté : l'archive se télécharge, c'est tout (SPECS § 4).
+- **Pages** : `/admin` (tableau de bord), `/admin/comptes`, `/admin/reglages`, `/admin/campagnes`,
+  `/admin/campagnes/[slug]`. Dates saisies et affichées à l'heure de Paris.
+- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), démasquage d'une
+  réplique (`masquer_replique` ne sait pas démasquer), e-mail de résultat, lancement des audits.
+
 ### Pile locale et tests d'intégration
 
 ```sh
 pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
-pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé
+pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé ; comptes, dépôt, administration
 pnpm stack:stop
 ```
 

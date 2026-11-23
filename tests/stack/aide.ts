@@ -80,6 +80,14 @@ export async function candidat(etat = 'autorise'): Promise<Utilisateur> {
   return u
 }
 
+// Organisateur de test : le rôle n'est écrit par aucun client, seulement par la clé de service.
+export async function organisateur(): Promise<Utilisateur> {
+  const u = await candidat()
+  const { error } = await admin.from('compte').update({ role: 'organisateur' }).eq('id', u.id)
+  if (error) throw error
+  return u
+}
+
 const ordre = ['brouillon', 'inscriptions', 'depot', 'deliberation', 'prete', 'publiee', 'archivee']
 const campagnes: string[] = []
 // Campagne créée en brouillon puis avancée d'un cran à la fois (le déclencheur contrôle l'ordre).

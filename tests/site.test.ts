@@ -44,6 +44,14 @@ describe('Supabase injoignable', () => {
   })
 })
 
+describe('administration sans session (Supabase injoignable)', () => {
+  it.each(['/admin', '/admin/comptes', '/Admin', '/api/admin/comptes'])('%s répond 404, sans redirection', async (chemin) => {
+    const res = await fetch(chemin, { redirect: 'manual' })
+    expect(res.status).toBe(404)
+    expect(res.headers.get('location')).toBeNull()
+  })
+})
+
 describe('aucune note interne publiée', () => {
   it('content/ ne contient ni notes de rédaction, ni « À COMPLÉTER », ni commentaire HTML', () => {
     for (const f of fichiers(join(racine, 'content'))) {
