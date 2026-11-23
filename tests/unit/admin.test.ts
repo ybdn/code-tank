@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, depuisChampLocal, etapeSuivante, validerCampagne, validerReglages, versChampLocal,
+  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, validerCampagne, validerReglages, versChampLocal,
 } from '../../shared/utils/admin'
 
 const valide = () => ({
@@ -78,17 +78,31 @@ describe('validerReglages', () => {
   })
 })
 
-describe('contradictionsIa : traces comparées aux outils déclarés', () => {
-  it('rien à signaler sans trace', () => {
-    expect(contradictionsIa([], [])).toEqual([])
-    expect(contradictionsIa(['Claude Code'], [])).toEqual([])
+const trace = (surcharge: Record<string, unknown> = {}) => ({ outil: 'claude', type: 'dossier', fichier: '.claude/settings.json', occurrences: 2, declaree: true, ...surcharge })
+
+describe('contradictionsIa : seul `declaree: false` du contrôle des zips compte', () => {
+  it('rien à signaler sans trace, ou quand toutes sont couvertes (alias gérés par le contrôle)', () => {
+    expect(contradictionsIa([])).toEqual([])
+    expect(contradictionsIa(undefined)).toEqual([])
+    expect(contradictionsIa([
+      trace({ outil: 'claude', declaree: true }), // couverte par « Anthropic » déclaré
+      trace({ outil: 'windsurf', fichier: '.windsurfrules', declaree: true }), // couverte par « Codeium »
+      trace({ outil: 'agents', type: 'fichier', fichier: 'AGENTS.md', occurrences: 1, declaree: true }), // trace générique
+    ])).toEqual([])
   })
-  it('aucun outil déclaré mais des traces', () => {
-    expect(contradictionsIa([], ['.cursor/'])[0]).toContain('Aucun outil d\'IA déclaré')
+  it('une trace non couverte est une contradiction, avec son lieu', () => {
+    expect(contradictionsIa([trace({ declaree: true }), trace({ outil: 'cursor', fichier: '.cursor/rules', ligne: 4, occurrences: 1, declaree: false })]))
+      .toEqual(['Trace non couverte par la déclaration : cursor · dossier : .cursor/rules:4, 1 occurrence.'])
   })
-  it('une trace d\'un outil absent de la déclaration', () => {
-    expect(contradictionsIa(['Claude Code'], [{ outil: 'Cursor' }])).toEqual(['Trace de « Cursor », absent des outils déclarés.'])
-    expect(contradictionsIa(['Claude Code'], [{ outil: 'claude code' }])).toEqual([])
+})
+
+describe('libelleElement : jamais « [object Object] »', () => {
+  it('alerte d\'intégrité, trace, texte', () => {
+    expect(libelleElement({ type: 'postinstall', fichier: 'package.json', ligne: 12 })).toBe('postinstall : package.json:12')
+    expect(libelleElement({ type: 'eval', fichier: 'a.js' })).toBe('eval : a.js')
+    expect(libelleElement(trace())).toBe('claude · dossier : .claude/settings.json, 2 occurrences')
+    expect(libelleElement('texte')).toBe('texte')
+    expect(libelleElement({ inconnu: 1 })).toBe('{"inconnu":1}')
   })
 })
 

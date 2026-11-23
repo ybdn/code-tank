@@ -153,20 +153,29 @@ export function validerReglages(corps: Record<string, unknown>): { reglages: Cor
   return { reglages: { plafond_comptes: plafond as number | null, plafond_depense_usd: typeof d === 'number' ? d : 0 }, erreurs }
 }
 
-// --- Dépôt : contradictions entre les outils d'IA déclarés et les traces relevées ------------
+// --- Dépôt : traces d'outils d'IA et alertes ------------------------------------------------
 
-// Le contrôle du dépôt (hors de ce dépôt) range les traces comme des textes ou des objets { outil }.
-// Hypothèse à confirmer avec lui : tout ce qui n'a pas de nom d'outil lisible n'est comparé qu'à la déclaration vide.
-const nomTrace = (t: unknown) => (typeof t === 'string' ? t : typeof (t as { outil?: unknown })?.outil === 'string' ? (t as { outil: string }).outil : null)
+// Forme écrite par le contrôle des zips (hors de ce dépôt) :
+//   traces_ia        { outil, type, fichier, ligne?, occurrences, declaree }
+//   alertes_integrite { type, fichier, ligne? }
+// `declaree: false` veut dire « outil non couvert par la déclaration » : le contrôle gère lui-même les alias
+// (claude/Anthropic, windsurf/Codeium, trace générique), on ne recompare jamais les noms ici.
+export function contradictionsIa(traces: unknown): string[] {
+  return (Array.isArray(traces) ? traces : [])
+    .filter((t) => (t as { declaree?: unknown } | null)?.declaree === false)
+    .map((t) => `Trace non couverte par la déclaration : ${libelleElement(t)}.`)
+}
 
-export function contradictionsIa(outils: unknown, traces: unknown): string[] {
-  const declares = (Array.isArray(outils) ? outils : []).map((o) => String(o).toLowerCase().trim()).filter(Boolean)
-  const relevees = Array.isArray(traces) ? traces : []
-  if (!relevees.length) return []
-  if (!declares.length) return [`Aucun outil d'IA déclaré, mais ${relevees.length} trace${relevees.length > 1 ? 's' : ''} relevée${relevees.length > 1 ? 's' : ''}.`]
-  const inconnues = relevees.map(nomTrace).filter((n): n is string => Boolean(n))
-    .filter((n) => !declares.some((d) => n.toLowerCase().includes(d) || d.includes(n.toLowerCase())))
-  return inconnues.map((n) => `Trace de « ${n} », absent des outils déclarés.`)
+// Texte lisible d'une trace, d'une alerte ou d'un fichier exclu (jamais « [object Object] »).
+export function libelleElement(a: unknown): string {
+  if (typeof a === 'string') return a
+  const o = (a && typeof a === 'object' ? a : {}) as Record<string, unknown>
+  if (typeof o.message === 'string') return o.message
+  const nom = [o.outil, o.type].filter((v) => typeof v === 'string' && v).join(' · ')
+  const lieu = typeof o.fichier === 'string' ? `${o.fichier}${typeof o.ligne === 'number' ? `:${o.ligne}` : ''}` : ''
+  if (!nom && !lieu) return JSON.stringify(a)
+  const n = typeof o.occurrences === 'number' ? `, ${o.occurrences} occurrence${o.occurrences > 1 ? 's' : ''}` : ''
+  return [nom, lieu].filter(Boolean).join(' : ') + n
 }
 
 // --- Types des réponses de l'API ------------------------------------------------------------

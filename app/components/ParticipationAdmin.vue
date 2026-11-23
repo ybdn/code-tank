@@ -17,9 +17,8 @@ const TYPES_DECISION: Record<string, string> = {
 const voteOuvert = computed(() => ['deliberation', 'prete'].includes(props.campagne.statut))
 const libelleCritere = (cle?: string) => props.campagne.criteres.find((c) => c.cle === cle)?.libelle ?? cle ?? '—'
 const octets = (n: number) => (n >= 1048576 ? `${(n / 1048576).toFixed(1)} Mo` : `${Math.ceil(n / 1024)} Ko`)
-const texteAlerte = (a: unknown) => (typeof a === 'string' ? a : typeof (a as { message?: unknown })?.message === 'string' ? (a as { message: string }).message : JSON.stringify(a))
 
-const contradictions = computed(() => (p.value.depot ? contradictionsIa(p.value.depot.outils_ia, p.value.depot.traces_ia) : []))
+const contradictions = computed(() => (p.value.depot ? contradictionsIa(p.value.depot.traces_ia) : []))
 const nbAlertes = computed(() => {
   const d = p.value.depot
   return d ? Number(d.alerte_manipulation) + d.alertes_integrite.length + contradictions.value.length : 0
@@ -43,6 +42,7 @@ async function agir(requete: () => Promise<unknown>, ok: string) {
 const enregistrerVote = () =>
   agir(() => $fetch(`/api/admin/participations/${p.value.id}/vote`, { method: 'PUT', body: { note: saisie.note, commentaire: saisie.commentaire } }), 'Vote enregistré, pas encore verrouillé.')
 const verrouiller = () => agir(() => $fetch(`/api/admin/participations/${p.value.id}/verrouillage`, { method: 'POST' }), 'Vote verrouillé : les audits sont maintenant lisibles.')
+const demasquer = (id: string) => agir(() => $fetch(`/api/admin/audits/${id}/demasquage`, { method: 'POST' }), 'Réplique démasquée.')
 const masquer = (id: string) => agir(() => $fetch(`/api/admin/audits/${id}/masquage`, { method: 'POST' }), 'Réplique masquée.')
 async function decider() {
   const r = await agir(() => $fetch(`/api/admin/participations/${p.value.id}/decision`, { method: 'POST', body: { type: saisie.type, justification: saisie.justification } }), 'Décision enregistrée.')
@@ -97,7 +97,7 @@ const champ = (n: string, aide?: string) => ({
         </dl>
         <details v-if="p.depot.fichiers_exclus.length">
           <summary>Fichiers exclus ({{ p.depot.fichiers_exclus.length }})</summary>
-          <ul><li v-for="(f, n) in p.depot.fichiers_exclus" :key="n">{{ texteAlerte(f) }}</li></ul>
+          <ul><li v-for="(f, n) in p.depot.fichiers_exclus" :key="n">{{ libelleElement(f) }}</li></ul>
         </details>
 
         <h3>Alertes</h3>
@@ -107,11 +107,11 @@ const champ = (n: string, aide?: string) => ({
         <p v-if="p.depot.alerte_manipulation" class="avis avis--erreur"><strong>Manipulation.</strong> Une phrase visant le jury a été relevée dans le dépôt (accepté, signalé).</p>
         <template v-if="p.depot.alertes_integrite.length">
           <p><strong>Intégrité :</strong></p>
-          <ul><li v-for="(a, n) in p.depot.alertes_integrite" :key="n">{{ texteAlerte(a) }}</li></ul>
+          <ul><li v-for="(a, n) in p.depot.alertes_integrite" :key="n">{{ libelleElement(a) }}</li></ul>
         </template>
         <template v-if="p.depot.traces_ia.length">
           <p><strong>Traces d'outils d'IA relevées :</strong></p>
-          <ul><li v-for="(t, n) in p.depot.traces_ia" :key="n">{{ texteAlerte(t) }}</li></ul>
+          <ul><li v-for="(t, n) in p.depot.traces_ia" :key="n">{{ libelleElement(t) }}</li></ul>
         </template>
         <p v-if="!nbAlertes && !p.depot.traces_ia.length" class="note-claire">Aucune alerte.</p>
       </template>
@@ -176,7 +176,7 @@ const champ = (n: string, aide?: string) => ({
           </p>
           <template v-if="a.resultat">
             <p v-if="a.resultat.verdict">Verdict : <strong>{{ a.resultat.verdict === 'convaincu' ? 'Convaincu' : a.resultat.verdict === 'pas_convaincu' ? 'Pas convaincu' : a.resultat.verdict }}</strong></p>
-            <p v-if="a.resultat.manipulation_detectee?.detectee" class="avis avis--erreur"><strong>Manipulation détectée par ce juré.</strong> {{ (a.resultat.manipulation_detectee.preuves ?? []).map(texteAlerte).join(' · ') }}</p>
+            <p v-if="a.resultat.manipulation_detectee?.detectee" class="avis avis--erreur"><strong>Manipulation détectée par ce juré.</strong> {{ (a.resultat.manipulation_detectee.preuves ?? []).map(libelleElement).join(' · ') }}</p>
             <div v-if="a.resultat.criteres?.length" class="tableau" role="region" :aria-label="`Notes de ${NOM_JURE[a.jure] ?? a.jure}`" tabindex="0">
               <table>
                 <thead><tr><th scope="col">Critère</th><th scope="col">Note</th><th scope="col">Justification et preuves</th></tr></thead>
@@ -202,12 +202,15 @@ const champ = (n: string, aide?: string) => ({
             </template>
             <p><strong>Réplique</strong> <template v-if="a.replique_masquee">(masquée : le candidat ne la verra pas)</template></p>
             <p class="brief">{{ a.resultat.replique ?? '—' }}</p>
-            <template v-if="!a.replique_masquee">
+            <p v-if="a.replique_masquee" class="btns">
+              <button class="btn" type="button" :disabled="occupe" @click="demasquer(a.id)">Démasquer la réplique<span class="sr-only"> de {{ NOM_JURE[a.jure] ?? a.jure }}</span></button>
+            </p>
+            <template v-else>
               <p v-if="confirmation !== `masque-${a.id}`" class="btns">
                 <button class="btn" type="button" :disabled="occupe" @click="confirmation = `masque-${a.id}`">Masquer la réplique<span class="sr-only"> de {{ NOM_JURE[a.jure] ?? a.jure }}</span></button>
               </p>
               <div v-else class="avis" role="group" :aria-labelledby="`masque-${a.id}`">
-                <p :id="`masque-${a.id}`">Masquer cette réplique ? Avec les droits actuels de la base, on ne peut pas la démasquer. Les notes ne changent pas.</p>
+                <p :id="`masque-${a.id}`">Masquer cette réplique ? Les notes ne changent pas. Tu pourras la démasquer.</p>
                 <p class="btns">
                   <button class="btn btn--primary" type="button" :disabled="occupe" @click="masquer(a.id)">Masquer</button>
                   <button class="btn" type="button" :disabled="occupe" @click="confirmation = null">Annuler</button>

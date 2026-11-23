@@ -181,8 +181,13 @@ async function deposerSimule(campagneId: string, pid: string, options: { audit?:
   await admin.from('reception').insert({ ...base, etat: 'acceptee', traitee_le: maintenant(), outils_ia: ['Claude Code'] })
   const { data, error } = await admin.from('depot').insert({
     ...base, sha256: 'a'.repeat(64), taille_octets: 40, nb_fichiers: 3, fichiers_exclus: ['node_modules/'], nb_tokens: 1234, licence_presente: true,
-    outils_ia: ['Claude Code'], traces_ia: [{ outil: 'Cursor' }], contact_reutilisation: true, alerte_manipulation: true,
-    alertes_integrite: ['postinstall relevé dans package.json'], note_outillage: 6,
+    outils_ia: ['Claude Code'], contact_reutilisation: true, alerte_manipulation: true, note_outillage: 6,
+    // Formes écrites par le contrôle des zips : « Claude Code » (Anthropic) couvre la trace claude, pas cursor.
+    traces_ia: [
+      { outil: 'claude', type: 'dossier', fichier: '.claude/settings.json', occurrences: 2, declaree: true },
+      { outil: 'cursor', type: 'dossier', fichier: '.cursor/rules', ligne: 4, occurrences: 1, declaree: false },
+    ],
+    alertes_integrite: [{ type: 'postinstall', fichier: 'package.json', ligne: 12 }],
   }).select('id').single()
   if (error) throw error
   if (options.audit !== false) {
@@ -299,8 +304,10 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
 
     const html = (await page(`/admin/campagnes/${slug}`, orga)).texte
     expect(html).toContain('Contradiction avec la déclaration')
-    expect(html).toContain('Trace de « Cursor », absent des outils déclarés.')
-    expect(html).toContain('postinstall relevé dans package.json')
+    expect(html).toContain('Trace non couverte par la déclaration : cursor · dossier : .cursor/rules:4, 1 occurrence.')
+    expect(html).not.toContain('Trace non couverte par la déclaration : claude')
+    expect(html).toContain('postinstall : package.json:12')
+    expect(html).not.toContain('[object Object]')
     expect(html).toContain('Aucun dépôt n&#39;est exécuté, par personne')
     expect(html).toContain('Mon &lt;b&gt;minuteur&lt;/b&gt;')
 
@@ -385,6 +392,11 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect((await appeler('POST', `/api/admin/audits/${audit!.id}/masquage`, orga)).statut).toBe(200)
     expect((await admin.from('audit').select('replique_masquee').eq('id', audit!.id).single()).data?.replique_masquee).toBe(true)
     expect((await appeler('POST', `/api/admin/audits/${UUID}/masquage`, orga)).statut).toBe(409)
+    expect((await page(`/admin/campagnes/${slug}`, orga)).texte).toContain('Démasquer la réplique')
+    expect((await appeler('POST', `/api/admin/audits/${audit!.id}/demasquage`, orga)).statut).toBe(200)
+    expect((await admin.from('audit').select('replique_masquee').eq('id', audit!.id).single()).data?.replique_masquee).toBe(false)
+    expect((await appeler('POST', `/api/admin/audits/${UUID}/demasquage`, orga)).statut).toBe(409)
+    expect((await appeler('POST', `/api/admin/audits/${audit!.id}/masquage`, orga)).statut).toBe(200) // masquée de nouveau
 
     const decision = (type: unknown, justification: unknown, pid = pA) => appeler('POST', `/api/admin/participations/${pid}/decision`, orga, { type, justification })
     expect((await decision('departage', '  ')).json.data.erreurs).toHaveProperty('justification')
