@@ -1,19 +1,13 @@
 // Tests d'intégration contre la pile Supabase locale (pnpm stack:start) et le serveur Nuxt construit.
 // GitHub est simulé par un petit serveur local : aucun appel réseau réel.
-import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
-import { randomBytes, randomInt } from 'node:crypto'
+import { randomBytes } from 'node:crypto'
 import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
-import { fileURLToPath } from 'node:url'
-import { createClient } from '@supabase/supabase-js'
 import { creerJeton } from '../../server/utils/jeton'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { admin, api as apiBase, demarrer as demarrerBase, nettoyer, statut, utilisateur } from './aide'
 
-const racine = fileURLToPath(new URL('../..', import.meta.url))
-const statut = JSON.parse(execFileSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { cwd: racine, stdio: ['ignore', 'pipe', 'ignore'] }).toString())
-const API = statut.API_URL as string
 const MAIL = statut.MAILPIT_URL as string
-const admin = createClient(API, statut.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 
 // --- GitHub simulé ---
 let githubEnPanne = false
@@ -29,40 +23,17 @@ const github: Server = createServer((req, res) => {
 })
 
 // --- Serveur Nuxt ---
-type Serveur = { url: string; arreter: () => void }
-async function demarrer(port: number, env: Record<string, string>): Promise<Serveur> {
-  const proc: ChildProcess = spawn('node', ['.output/server/index.mjs'], {
-    cwd: racine,
-    env: {
-      PATH: process.env.PATH,
-      NITRO_PORT: String(port),
-      NITRO_HOST: '127.0.0.1',
-      NUXT_PUBLIC_SUPABASE_URL: API,
-      NUXT_PUBLIC_SUPABASE_KEY: statut.ANON_KEY,
-      NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
-      NUXT_SECRET_VERIFICATION: SECRET,
-      NUXT_SITE_URL: `http://127.0.0.1:${port}`,
-      NUXT_SMTP_HOST: '127.0.0.1',
-      NUXT_SMTP_PORT: '54425',
-      NUXT_GITHUB_API: `http://127.0.0.1:${(github.address() as AddressInfo).port}`,
-      ...env,
-    },
-    stdio: 'ignore',
-  })
-  const url = `http://127.0.0.1:${port}`
-  for (let i = 0; i < 100; i++) {
-    try {
-      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill() }
-    } catch { /* pas encore prêt */ }
-    await new Promise((r) => setTimeout(r, 200))
-  }
-  proc.kill()
-  throw new Error('Le serveur Nuxt ne démarre pas (pnpm build fait ?)')
-}
+type Serveur = Awaited<ReturnType<typeof demarrerBase>>
+const demarrer = (port: number, env: Record<string, string>) => demarrerBase(port, {
+  NUXT_SECRET_VERIFICATION: SECRET,
+  NUXT_SMTP_HOST: '127.0.0.1',
+  NUXT_SMTP_PORT: '54425',
+  NUXT_GITHUB_API: `http://127.0.0.1:${(github.address() as AddressInfo).port}`,
+  ...env,
+})
 
 let serveur: Serveur
 let serveurSansCharte: Serveur
-const crees: string[] = []
 const SECRET = 'secret-de-test-' + randomBytes(16).toString('hex')
 
 beforeAll(async () => {
@@ -74,34 +45,8 @@ afterAll(async () => {
   serveur?.arreter()
   serveurSansCharte?.arreter()
   github.close()
-  for (const id of crees) await admin.auth.admin.deleteUser(id) // supprime aussi la ligne compte (cascade)
+  await nettoyer() // supprime aussi la ligne compte (cascade)
 })
-
-// --- Utilisateurs simulés ---
-type Utilisateur = { id: string; email: string; cookie: string; client: ReturnType<typeof createClient>; githubId: string }
-async function utilisateur(options: { provider?: string; githubId?: string } = {}): Promise<Utilisateur> {
-  const provider = options.provider ?? 'github'
-  const githubId = options.githubId ?? String(randomInt(1e6, 1e9))
-  const email = `ada-${randomBytes(5).toString('hex')}@example.org`
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: 'mot-de-passe-de-test-1',
-    email_confirm: true,
-    app_metadata: { provider, providers: [provider], ...(provider === 'github' ? { github_id: githubId } : {}) },
-    // Comme une vraie connexion, mais modifiable par l'utilisateur : le serveur ne doit pas s'y fier.
-    user_metadata: { provider_id: 'faux-id-modifiable' },
-  })
-  if (error) throw error
-  crees.push(data.user.id)
-  const client = createClient(API, statut.ANON_KEY, { auth: { persistSession: false } })
-  const { data: connexion, error: e2 } = await client.auth.signInWithPassword({ email, password: 'mot-de-passe-de-test-1' })
-  if (e2) throw e2
-  // Cookie de session tel que l'écrit @supabase/ssr : base64url préfixé, découpé en morceaux de 3180 caractères.
-  const valeur = 'base64-' + Buffer.from(JSON.stringify(connexion.session)).toString('base64url')
-  const morceaux = valeur.match(/.{1,3180}/g)!
-  const cookie = morceaux.length === 1 ? `sb-code-tank=${valeur}` : morceaux.map((m, i) => `sb-code-tank.${i}=${m}`).join('; ')
-  return { id: data.user.id, email, cookie, client, githubId }
-}
 
 const formulaire = (surcharge: Record<string, unknown> = {}) => ({
   vrai_nom: 'Ada Lovelace',
@@ -114,18 +59,8 @@ const formulaire = (surcharge: Record<string, unknown> = {}) => ({
   ...surcharge,
 })
 
-async function api(methode: string, chemin: string, u?: Utilisateur, corps?: unknown, base = serveur.url) {
-  const r = await fetch(base + chemin, {
-    method: methode,
-    redirect: 'manual',
-    headers: { ...(u ? { cookie: u.cookie } : {}), ...(corps ? { 'content-type': 'application/json' } : {}) },
-    body: corps ? JSON.stringify(corps) : undefined,
-  })
-  const texte = await r.text()
-  let json: { resultat?: string; courrielEnvoye?: boolean; statusMessage?: string; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
-  try { json = JSON.parse(texte) } catch { /* pas du JSON */ }
-  return { statut: r.status, json, location: r.headers.get('location') }
-}
+const api = (methode: string, chemin: string, u?: Parameters<typeof apiBase>[3], corps?: unknown, base = serveur.url) =>
+  apiBase(base, methode, chemin, u, corps)
 
 const jetonDuLien = (lien: string) => new URL(lien).searchParams.get('jeton')!
 // Confirmation par le POST de la page /compte/verifier ; renvoie ok, expire ou invalide.

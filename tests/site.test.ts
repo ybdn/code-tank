@@ -6,8 +6,9 @@ import { $fetch, fetch, setup } from '@nuxt/test-utils/e2e'
 
 const racine = fileURLToPath(new URL('..', import.meta.url))
 
-// Le module Supabase exige une URL et une clé publique pour rendre les pages ; valeurs factices, aucun appel réseau.
-process.env.NUXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:54421'
+// Le module Supabase exige une URL et une clé publique pour rendre les pages ; valeurs factices. Le port 9 (discard)
+// est fermé : Supabase est injoignable, comme pile arrêtée ou base en panne.
+process.env.NUXT_PUBLIC_SUPABASE_URL = 'http://127.0.0.1:9'
 process.env.NUXT_PUBLIC_SUPABASE_KEY = 'cle-publique-factice'
 
 // Lance le serveur de rendu côté serveur sur le build.
@@ -25,6 +26,21 @@ describe('pages publiques', () => {
     ['/compte', 'Se connecter avec GitHub'],
   ])('%s répond avec son contenu rendu côté serveur', async (chemin, texte) => {
     expect(await $fetch<string>(chemin)).toContain(texte)
+  })
+})
+
+describe('Supabase injoignable', () => {
+  it('l\'accueil reste rendu, vite, avec un message de repli', async () => {
+    const debut = Date.now()
+    const html = await $fetch<string>('/')
+    expect(Date.now() - debut).toBeLessThan(5000)
+    expect(html).toContain('Les campagnes ne peuvent pas être lues pour le moment.')
+  })
+
+  it('une page de campagne répond 503 sans attendre', async () => {
+    const debut = Date.now()
+    expect((await fetch('/campagnes/une-campagne')).status).toBe(503)
+    expect(Date.now() - debut).toBeLessThan(5000)
   })
 })
 
@@ -51,7 +67,7 @@ describe('en-têtes de sécurité', () => {
     expect(csp).not.toContain('unsafe-inline')
     expect(csp).toContain("frame-ancestors 'none'")
     // Origine exacte de Supabase, sans joker.
-    expect(csp).toMatch(/connect-src 'self' http:\/\/127\.0\.0\.1:54421(;|$)/)
+    expect(csp).toMatch(/connect-src 'self' http:\/\/127\.0\.0\.1:9(;|$)/)
     expect(res.headers.get('x-content-type-options')).toBe('nosniff')
     expect(res.headers.get('strict-transport-security')).toBeTruthy()
   })

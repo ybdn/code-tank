@@ -1,7 +1,7 @@
 // Inscription, dépôt, reçu, retrait et désinscription contre la pile Supabase locale (stockage compris)
 // et le serveur Nuxt construit. Le contrôle du zip n'existe pas ici : les tests le simulent par la clé de service.
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { admin, anon, API, api, campagne, demarrer, inscrire, nettoyer, utilisateur, zip, type Utilisateur } from './aide'
+import { admin, anon, API, api, campagne, candidat, demarrer, inscrire, nettoyer, utilisateur, zip, type Utilisateur } from './aide'
 
 let serveur: { url: string; arreter: () => void }
 const appeler = (m: string, c: string, u?: Utilisateur, corps?: unknown) => api(serveur.url, m, c, u, corps)
@@ -45,7 +45,7 @@ const reception = async (participationId: string) =>
 describe('inscription et désinscription', () => {
   it('un compte autorisé s\'inscrit par l\'API, une seule fois ; les places restantes suivent', async () => {
     const c = await campagne('inscriptions', { max: 2 })
-    const u = await utilisateur()
+    const u = await candidat()
     const places = async () => (await anon().from('places_campagne').select('places_restantes').eq('campagne_id', c.id).single()).data?.places_restantes
     expect(await places()).toBe(2)
     expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error).toBeNull()
@@ -55,14 +55,14 @@ describe('inscription et désinscription', () => {
 
   it('refuse un compte non autorisé', async () => {
     const c = await campagne('inscriptions')
-    const u = await utilisateur('verifie')
+    const u = await candidat('verifie')
     expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error?.message).toContain('pas autorisé')
     expect((await anon().rpc('sinscrire', { p_campagne_id: c.id })).error).not.toBeNull()
   })
 
   it('se désinscrire retire la participation, la réception et l\'archive', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error).toBeNull()
     const chemin = await deposer(c.slug, u)
     const { data: p } = await admin.from('participation').select('id').eq('campagne_id', c.id).single()
@@ -79,7 +79,7 @@ describe('inscription et désinscription', () => {
 
   it('la désinscription supprime aussi le dépôt accepté et son archive ; refusée une fois la délibération commencée', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const chemin = await deposer(c.slug, u)
     await admin.from('depot').insert({
@@ -91,7 +91,7 @@ describe('inscription et désinscription', () => {
     expect(await existe(chemin)).toBe(false)
 
     const d = await campagne('deliberation')
-    const v = await utilisateur()
+    const v = await candidat()
     const pv = await inscrire(d, v)
     const cheminV = `${d.id}/${pv}/${crypto.randomUUID()}.zip`
     await stockage().upload(cheminV, zip())
@@ -112,11 +112,11 @@ describe('URL d\'envoi : qui peut déposer', () => {
 
   it('refuse un compte non inscrit, sans compte, ou non autorisé (même inscrit)', async () => {
     const c = await campagne('depot')
-    const nonInscrit = await utilisateur()
+    const nonInscrit = await candidat()
     expect((await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, nonInscrit, declaration())).statut).toBe(403)
-    const sansCompte = await utilisateur(null)
+    const sansCompte = await utilisateur()
     expect((await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, sansCompte, declaration())).statut).toBe(403)
-    const ferme = await utilisateur()
+    const ferme = await candidat()
     await inscrire(c, ferme)
     await admin.from('compte').update({ etat: 'ferme' }).eq('id', ferme.id)
     const r = await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, ferme, declaration())
@@ -126,7 +126,7 @@ describe('URL d\'envoi : qui peut déposer', () => {
   })
 
   it('refuse hors statut, après la clôture, et pour une campagne inconnue ou en brouillon', async () => {
-    const u = await utilisateur()
+    const u = await candidat()
     const delib = await campagne('deliberation')
     await inscrire(delib, u)
     expect((await appeler('POST', `/api/campagnes/${delib.slug}/depot/url`, u, declaration())).statut).toBe(409)
@@ -144,7 +144,7 @@ describe('URL d\'envoi : qui peut déposer', () => {
 
   it('refuse le dépôt enregistré après la clôture, même si l\'archive est partie avant', async () => {
     const c = await campagne('depot', { cloture: new Date(Date.now() + 4000) })
-    const u = await utilisateur()
+    const u = await candidat()
     await inscrire(c, u)
     const { chemin, token } = (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
     await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip())
@@ -154,14 +154,14 @@ describe('URL d\'envoi : qui peut déposer', () => {
 
   it('autorise le dépôt pendant la phase inscriptions (elle chevauche le dépôt)', async () => {
     const c = await campagne('inscriptions')
-    const u = await utilisateur()
+    const u = await candidat()
     await inscrire(c, u)
     await deposer(c.slug, u)
   })
 
   it('refuse une déclaration invalide, sans délivrer d\'URL', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     await inscrire(c, u)
     const cas: [string, Record<string, unknown>, string][] = [
       ['présentation vide', { presentation: '  ' }, 'presentation'],
@@ -191,7 +191,7 @@ describe('URL d\'envoi : qui peut déposer', () => {
 describe('envoi au stockage et réception', () => {
   it('envoie un petit zip par l\'URL signée, puis la réception est en attente avec la déclaration', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const chemin = await deposer(c.slug, u)
     expect(chemin).toMatch(new RegExp(`^${c.id}/${pid}/[0-9a-f-]{36}\\.zip$`))
@@ -212,7 +212,7 @@ describe('envoi au stockage et réception', () => {
 
   it('« aucun » outil d\'IA est une déclaration valide', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     await deposer(c.slug, u, { aucun_outil: true, outils_ia: [], demande: '' })
     expect(await reception(pid)).toMatchObject({ outils_ia: [], demande: null })
@@ -220,7 +220,7 @@ describe('envoi au stockage et réception', () => {
 
   it('le stockage refuse un fichier trop gros et un fichier d\'un autre type', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     await inscrire(c, u)
     const url = async () => (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
 
@@ -241,7 +241,7 @@ describe('envoi au stockage et réception', () => {
 
   it('un jeton d\'envoi ne sert qu\'une fois : un second envoi au même chemin est refusé', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     await inscrire(c, u)
     const { chemin, token } = (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
     expect((await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip(30))).error).toBeNull()
@@ -251,9 +251,9 @@ describe('envoi au stockage et réception', () => {
 
   it('refuse d\'enregistrer un envoi inconnu : archive absente, chemin d\'un autre, chemin mal formé', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
-    const autre = await utilisateur()
+    const autre = await candidat()
     const pAutre = await inscrire(c, autre)
     const cheminAutre = await deposer(c.slug, autre)
 
@@ -274,7 +274,7 @@ describe('envoi au stockage et réception', () => {
 
   it('un candidat ne peut ni lister, ni lire, ni écraser, ni effacer un objet du bucket, pas même le sien', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const chemin = await deposer(c.slug, u)
     const bucket = u.client.storage.from('depots')
@@ -303,7 +303,7 @@ describe('envoi au stockage et réception', () => {
 describe('remplacement, états et reçu', () => {
   it('un second dépôt remplace le premier, et l\'ancienne archive (comme un envoi jamais confirmé) n\'existe plus', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const premier = await deposer(c.slug, u)
 
@@ -323,7 +323,7 @@ describe('remplacement, états et reçu', () => {
 
   it('le candidat voit en_attente, refusee avec ses motifs, puis acceptee avec son reçu ; un nouvel envoi garde le dépôt accepté', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const chemin = await deposer(c.slug, u)
     const etat = async () => (await u.client.from('ma_reception').select('etat, motifs_refus').single()).data
@@ -361,7 +361,7 @@ describe('remplacement, états et reçu', () => {
 describe('retrait du dépôt', () => {
   it('efface le dépôt, la réception et les deux archives, et laisse l\'inscription', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const acceptee = await deposer(c.slug, u)
     await admin.from('reception').update({ etat: 'acceptee', traitee_le: new Date().toISOString() }).eq('participation_id', pid)
@@ -382,7 +382,7 @@ describe('retrait du dépôt', () => {
 
   it('marche aussi quand il n\'existe qu\'une réception, sans dépôt accepté', async () => {
     const c = await campagne('depot')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(c, u)
     const chemin = await deposer(c.slug, u)
     expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, u)).statut).toBe(200)
@@ -393,10 +393,10 @@ describe('retrait du dépôt', () => {
   it('est refusé sans session, pour un non-inscrit, et une fois la délibération commencée (rien n\'est effacé)', async () => {
     const c = await campagne('depot')
     expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`)).statut).toBe(401)
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, await utilisateur())).statut).toBe(403)
+    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, await candidat())).statut).toBe(403)
 
     const d = await campagne('deliberation')
-    const u = await utilisateur()
+    const u = await candidat()
     const pid = await inscrire(d, u)
     const chemin = `${d.id}/${pid}/${crypto.randomUUID()}.zip`
     await stockage().upload(chemin, zip())
@@ -408,8 +408,8 @@ describe('retrait du dépôt', () => {
 
   it('ne touche pas au dépôt d\'un autre candidat', async () => {
     const c = await campagne('depot')
-    const a = await utilisateur()
-    const b = await utilisateur()
+    const a = await candidat()
+    const b = await candidat()
     await inscrire(c, a)
     const pb = await inscrire(c, b)
     const chemin = await deposer(c.slug, b)
@@ -439,5 +439,20 @@ describe('pages', () => {
     expect((await fetch(`${serveur.url}/campagnes/${brouillon.slug}`)).status).toBe(404)
     expect((await fetch(`${serveur.url}/campagnes/inconnue`)).status).toBe(404)
     expect((await fetch(`${serveur.url}/campagnes/${c.slug}/depot`)).status).toBe(200)
+  })
+
+  it('rend les pages, avec et sans session, sans aucune erreur dans la sortie du serveur', async () => {
+    const c = await campagne('depot')
+    const u = await candidat()
+    await inscrire(c, u)
+    const avant = serveur.sortie().length // les refus des tests précédents journalisent des avis h3 : on ne regarde que le rendu
+    for (const chemin of ['/', '/compte', `/campagnes/${c.slug}`, `/campagnes/${c.slug}/depot`]) {
+      for (const cookie of [undefined, u.cookie]) {
+        const r = await fetch(serveur.url + chemin, { headers: cookie ? { cookie } : {} })
+        expect(r.status, chemin).toBe(200)
+        await r.text()
+      }
+    }
+    expect(serveur.sortie().slice(avant)).not.toMatch(/error|unhandled|TypeError/i)
   })
 })

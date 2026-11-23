@@ -1,2 +1,8 @@
 allowBuilds:
   esbuild: true
+# @nuxtjs/supabase importe h3 sans le déclarer : pnpm lui donnait h3 v2 (hoisté par un outil de test) au lieu
+# de la v1 de Nitro 2, et le rendu serveur échouait (event.req.headers.get is not a function).
+packageExtensions:
+  '@nuxtjs/supabase':
+    dependencies:
+      h3: ^1.15.11

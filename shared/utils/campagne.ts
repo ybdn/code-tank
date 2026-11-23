@@ -1,4 +1,9 @@
 export type Critere = { cle: string; libelle: string; poids: number; jure: string }
+export type Campagne = {
+  id: string; slug: string; titre: string; theme: string; brief: string; criteres: Critere[]; statut: string
+  ouverture_inscriptions: string; cloture_depot: string; date_resultats: string; max_participants: number
+}
+export type CampagneListee = Pick<Campagne, 'slug' | 'titre' | 'theme' | 'statut' | 'cloture_depot'>
 
 // Le statut « prête » ne se distingue pas de la délibération pour le public : rien n'est encore visible.
 export const LIBELLE_STATUT: Record<string, string> = {

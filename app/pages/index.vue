@@ -17,7 +17,7 @@ const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
 ]
 
 // Lue par le serveur (les brouillons sont cachés par la RLS) ; en cas d'erreur, `campagnes` reste vide.
-const { data: campagnes } = await useFetch('/api/campagnes', { key: 'campagnes' })
+const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'campagnes' })
 </script>
 
 <template>

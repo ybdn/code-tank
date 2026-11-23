@@ -10,7 +10,8 @@ export const API = statut.API_URL as string
 export const admin = createClient(API, statut.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 export const anon = () => createClient(API, statut.ANON_KEY, { auth: { persistSession: false } })
 
-export async function demarrer(port: number): Promise<{ url: string; arreter: () => void }> {
+// `env` s'ajoute à l'environnement de base. `sortie()` rend ce que le serveur a écrit (journal et erreurs).
+export async function demarrer(port: number, env: Record<string, string> = {}): Promise<{ url: string; arreter: () => void; sortie: () => string }> {
   const proc: ChildProcess = spawn('node', ['.output/server/index.mjs'], {
     cwd: racine,
     env: {
@@ -21,13 +22,17 @@ export async function demarrer(port: number): Promise<{ url: string; arreter: ()
       NUXT_PUBLIC_SUPABASE_KEY: statut.ANON_KEY,
       NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
       NUXT_SITE_URL: `http://127.0.0.1:${port}`,
+      ...env,
     },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  let sortie = ''
+  proc.stdout?.on('data', (d) => (sortie += d))
+  proc.stderr?.on('data', (d) => (sortie += d))
   const url = `http://127.0.0.1:${port}`
   for (let i = 0; i < 100; i++) {
     try {
-      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill() }
+      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill(), sortie: () => sortie }
     } catch { /* pas encore prêt */ }
     await new Promise((r) => setTimeout(r, 200))
   }
@@ -35,30 +40,23 @@ export async function demarrer(port: number): Promise<{ url: string; arreter: ()
   throw new Error('Le serveur Nuxt ne démarre pas (pnpm build fait ?)')
 }
 
-export type Utilisateur = { id: string; cookie: string; client: ReturnType<typeof anon> }
+export type Utilisateur = { id: string; email: string; githubId: string; cookie: string; client: ReturnType<typeof anon> }
 const crees: string[] = []
 
-// Utilisateur GitHub simulé, avec un compte à l'état demandé (ou sans compte).
-export async function utilisateur(etat: string | null = 'autorise'): Promise<Utilisateur> {
+// Utilisateur simulé, sans compte : comme une vraie connexion, avec un user_metadata modifiable que le serveur ne doit pas croire.
+export async function utilisateur(options: { provider?: string; githubId?: string } = {}): Promise<Utilisateur> {
+  const provider = options.provider ?? 'github'
+  const githubId = options.githubId ?? String(randomInt(1e6, 1e9))
   const email = `ada-${randomBytes(5).toString('hex')}@example.org`
-  const githubId = String(randomInt(1e6, 1e9))
   const { data, error } = await admin.auth.admin.createUser({
     email,
     password: 'mot-de-passe-de-test-1',
     email_confirm: true,
-    app_metadata: { provider: 'github', providers: ['github'], github_id: githubId },
+    app_metadata: { provider, providers: [provider], ...(provider === 'github' ? { github_id: githubId } : {}) },
+    user_metadata: { provider_id: 'faux-id-modifiable' },
   })
   if (error) throw error
   crees.push(data.user.id)
-  if (etat) {
-    const maintenant = new Date().toISOString()
-    const { error: e } = await admin.from('compte').insert({
-      id: data.user.id, github_id: githubId, vrai_nom: 'Ada Lovelace', pseudo: 'ada' + randomBytes(4).toString('hex'), email_contact: email,
-      motivation: 'Je code.', depot_cite_url: 'https://example.org/ada', majeur_declare_le: maintenant, charte_acceptee_le: maintenant,
-      version_charte: '2026-12-01', etat: etat as 'autorise',
-    })
-    if (e) throw e
-  }
   const client = anon()
   const { data: connexion, error: e2 } = await client.auth.signInWithPassword({ email, password: 'mot-de-passe-de-test-1' })
   if (e2) throw e2
@@ -66,7 +64,20 @@ export async function utilisateur(etat: string | null = 'autorise'): Promise<Uti
   const valeur = 'base64-' + Buffer.from(JSON.stringify(connexion.session)).toString('base64url')
   const morceaux = valeur.match(/.{1,3180}/g)!
   const cookie = morceaux.length === 1 ? `sb-code-tank=${valeur}` : morceaux.map((m, i) => `sb-code-tank.${i}=${m}`).join('; ')
-  return { id: data.user.id, cookie, client }
+  return { id: data.user.id, email, githubId, cookie, client }
+}
+
+// Utilisateur avec un compte déjà créé à l'état demandé (la création par l'API est testée dans compte.test.ts).
+export async function candidat(etat = 'autorise'): Promise<Utilisateur> {
+  const u = await utilisateur()
+  const maintenant = new Date().toISOString()
+  const { error } = await admin.from('compte').insert({
+    id: u.id, github_id: u.githubId, vrai_nom: 'Ada Lovelace', pseudo: 'ada' + randomBytes(4).toString('hex'), email_contact: u.email,
+    motivation: 'Je code.', depot_cite_url: 'https://example.org/ada', majeur_declare_le: maintenant, charte_acceptee_le: maintenant,
+    version_charte: '2026-12-01', etat: etat as 'autorise',
+  })
+  if (error) throw error
+  return u
 }
 
 const ordre = ['brouillon', 'inscriptions', 'depot', 'deliberation', 'prete', 'publiee', 'archivee']
@@ -118,9 +129,9 @@ export async function api(base: string, methode: string, chemin: string, u?: Uti
     body: corps ? JSON.stringify(corps) : undefined,
   })
   const texte = await r.text()
-  let json: { ok?: boolean; chemin?: string; token?: string; statusMessage?: string; data?: { erreurs: Record<string, string> } } = {}
+  let json: { ok?: boolean; chemin?: string; token?: string; resultat?: string; courrielEnvoye?: boolean; statusMessage?: string; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
   try { json = JSON.parse(texte) } catch { /* pas du JSON */ }
-  return { statut: r.status, json, texte }
+  return { statut: r.status, json, texte, location: r.headers.get('location') }
 }
 
 // Zip vide valide (fin de répertoire central seule) : le bucket contrôle le type et la taille, pas le contenu.
