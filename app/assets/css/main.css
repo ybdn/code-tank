@@ -159,3 +159,44 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .avancement { width: 100%; max-width: 40rem; height: 12px; accent-color: var(--accent); }
 .champ :is(input, textarea):disabled { opacity: .6; }
 .etat[data-etat="refusee"] { color: #ff9a85; }
+
+/* Administration : sobre et dense. Les textes saisis par les candidats sont toujours du texte (overflow-wrap, pas de HTML). */
+.sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.admin__nav { display: flex; flex-wrap: wrap; gap: 0 20px; border-bottom: 1px solid var(--line); }
+.admin__nav a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
+.admin__nav a:hover { text-decoration: underline; }
+.admin :is(.section) { padding-block: clamp(32px, 5vw, 64px); }
+.admin h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); }
+.admin h2 { margin-top: 2.5rem; font-size: clamp(1.25rem, 2.5vw, 1.75rem); }
+.admin :is(h1, h2, h3, h4) + * { margin-top: .75rem; }
+.admin :is(p, ul, .tableau, .fiche, .form, .avis, .bloc, .audit) + :is(p, ul, .tableau, .fiche, .form, .avis, .bloc, .audit, details) { margin-top: 1rem; }
+.admin h3 { margin-top: 1.5rem; font-size: 1.1rem; }
+.admin h4 { margin: 0; font-size: 1rem; }
+.fiche h3 { margin: 0; }
+.admin :is(p, li, dd, td) { overflow-wrap: anywhere; }
+.admin code { font: .9em var(--font-display); }
+/* position: relative : contient les .sr-only des cellules, qui sinon élargissent la page. */
+.tableau { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
+.tableau table { width: 100%; min-width: 36rem; border-collapse: collapse; text-align: left; }
+.tableau :is(th, td) { padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: 400; }
+.tableau thead th { color: var(--muted); font-size: .85rem; font-weight: 600; }
+.tableau tbody th { font-weight: 600; }
+.tableau :is(tbody tr:last-child, tfoot tr) :is(th, td) { border-bottom: 0; }
+.tableau tfoot { border-top: 1px solid var(--line); }
+.tableau :is(input:not([type=checkbox]), select) { width: 100%; min-width: 8rem; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
+.tableau input.court { min-width: 5rem; width: 6rem; }
+.fiche { display: grid; gap: 12px; padding: 20px; background: var(--surface); border-radius: 8px; }
+.infos { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 6px 20px; margin: 0; }
+.infos dt { color: var(--muted); font-size: .9rem; }
+.infos dd { margin: 0; }
+@media (max-width: 36rem) { .infos { grid-template-columns: 1fr; gap: 0; } .infos dd { margin-bottom: 8px; } }
+.bloc { border: 1px solid var(--line); border-radius: 8px; }
+.bloc > summary { display: list-item; list-style-position: inside; min-height: 44px; padding: 9px 16px; cursor: pointer; }
+.bloc__corps { padding: 4px 16px 20px; }
+.bloc__corps > * + * { margin-top: 1rem; }
+.audit { padding: 16px; background: var(--surface); border-radius: 8px; }
+.audit > * + * { margin-top: .75rem; }
+.form--large { max-width: 56rem; }
+.champ :is(select) { width: 100%; min-height: 44px; padding: 10px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
+.champ input.court { max-width: 8rem; }
+.empreinte { overflow-wrap: anywhere; }

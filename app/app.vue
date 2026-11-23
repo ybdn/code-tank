@@ -1,3 +1,7 @@
+<script setup lang="ts">
+const organisateur = useOrganisateur()
+</script>
+
 <template>
   <div>
     <a class="skip" href="#contenu">Aller au contenu</a>
@@ -8,11 +12,12 @@
           <a href="/#campagnes">Campagnes</a>
           <a href="/#jury">Jury</a>
           <NuxtLink to="/charte">Charte</NuxtLink>
+          <NuxtLink v-if="organisateur" to="/admin">Administration</NuxtLink>
         </nav>
         <NuxtLink class="btn btn--primary" to="/compte">Créer mon compte</NuxtLink>
       </div>
     </header>
-    <main id="contenu" tabindex="-1"><NuxtPage /></main>
+    <main id="contenu" tabindex="-1"><NuxtLayout><NuxtPage /></NuxtLayout></main>
     <footer class="footer">
       <div class="wrap footer__bar">
         <p>Code Tank, le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
