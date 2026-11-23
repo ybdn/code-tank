@@ -27,28 +27,28 @@ isOneToOne: false
                   ]
                 },"campagne": {
                   Row: {
-                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id": string,"max_participants": number,"ouverture_inscriptions": string,"regles_figees_le": string | null,"slug": string,"statut": Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
+                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id": string,"max_participants": number,"ouverture_inscriptions": string,"publiee_le": string | null,"regles_figees_le": string | null,"slug": string,"statut": Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id"?: string,"max_participants": number,"ouverture_inscriptions": string,"regles_figees_le"?: string | null,"slug": string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
+                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id"?: string,"max_participants": number,"ouverture_inscriptions": string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug": string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
                   }
                   Update: {
-                    "brief"?: string,"cloture_depot"?: string,"criteres"?: NonNullable<Json>,"date_resultats"?: string,"id"?: string,"max_participants"?: number,"ouverture_inscriptions"?: string,"regles_figees_le"?: string | null,"slug"?: string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme"?: string,"titre"?: string
+                    "brief"?: string,"cloture_depot"?: string,"criteres"?: NonNullable<Json>,"date_resultats"?: string,"id"?: string,"max_participants"?: number,"ouverture_inscriptions"?: string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug"?: string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme"?: string,"titre"?: string
                   }
                   Relationships: [
                     
                   ]
                 },"compte": {
                   Row: {
-                    "charte_acceptee_le": string,"confirme_attente_le": string | null,"cree_le": string,"depot_cite_url": string,"derniere_connexion_le": string,"email_contact": string,"email_verifie_le": string | null,"etat": Database["public"]['Enums']["compte_etat"],"etat_le": string,"github_donnees": Json | null,"github_id": string,"id": string,"majeur_declare_le": string,"motivation": string,"prevenu_inactivite_le": string | null,"pseudo": string,"role": Database["public"]['Enums']["compte_role"],"version_charte": string,"vrai_nom": string
+                    "attente_demandee_le": string | null,"charte_acceptee_le": string,"confirme_attente_le": string | null,"cree_le": string,"depot_cite_url": string,"derniere_connexion_le": string,"email_contact": string,"email_verifie_le": string | null,"etat": Database["public"]['Enums']["compte_etat"],"etat_le": string,"github_donnees": Json | null,"github_id": string,"id": string,"majeur_declare_le": string,"motivation": string,"prevenu_inactivite_le": string | null,"pseudo": string,"role": Database["public"]['Enums']["compte_role"],"version_charte": string,"vrai_nom": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "charte_acceptee_le": string,"confirme_attente_le"?: string | null,"cree_le"?: string,"depot_cite_url": string,"derniere_connexion_le"?: string,"email_contact": string,"email_verifie_le"?: string | null,"etat"?: Database["public"]['Enums']["compte_etat"],"etat_le"?: string,"github_donnees"?: Json | null,"github_id": string,"id": string,"majeur_declare_le": string,"motivation": string,"prevenu_inactivite_le"?: string | null,"pseudo": string,"role"?: Database["public"]['Enums']["compte_role"],"version_charte": string,"vrai_nom": string
+                    "attente_demandee_le"?: string | null,"charte_acceptee_le": string,"confirme_attente_le"?: string | null,"cree_le"?: string,"depot_cite_url": string,"derniere_connexion_le"?: string,"email_contact": string,"email_verifie_le"?: string | null,"etat"?: Database["public"]['Enums']["compte_etat"],"etat_le"?: string,"github_donnees"?: Json | null,"github_id": string,"id": string,"majeur_declare_le": string,"motivation": string,"prevenu_inactivite_le"?: string | null,"pseudo": string,"role"?: Database["public"]['Enums']["compte_role"],"version_charte": string,"vrai_nom": string
                   }
                   Update: {
-                    "charte_acceptee_le"?: string,"confirme_attente_le"?: string | null,"cree_le"?: string,"depot_cite_url"?: string,"derniere_connexion_le"?: string,"email_contact"?: string,"email_verifie_le"?: string | null,"etat"?: Database["public"]['Enums']["compte_etat"],"etat_le"?: string,"github_donnees"?: Json | null,"github_id"?: string,"id"?: string,"majeur_declare_le"?: string,"motivation"?: string,"prevenu_inactivite_le"?: string | null,"pseudo"?: string,"role"?: Database["public"]['Enums']["compte_role"],"version_charte"?: string,"vrai_nom"?: string
+                    "attente_demandee_le"?: string | null,"charte_acceptee_le"?: string,"confirme_attente_le"?: string | null,"cree_le"?: string,"depot_cite_url"?: string,"derniere_connexion_le"?: string,"email_contact"?: string,"email_verifie_le"?: string | null,"etat"?: Database["public"]['Enums']["compte_etat"],"etat_le"?: string,"github_donnees"?: Json | null,"github_id"?: string,"id"?: string,"majeur_declare_le"?: string,"motivation"?: string,"prevenu_inactivite_le"?: string | null,"pseudo"?: string,"role"?: Database["public"]['Enums']["compte_role"],"version_charte"?: string,"vrai_nom"?: string
                   }
                   Relationships: [
                     
@@ -328,6 +328,9 @@ isOneToOne: false
 "changer_statut_campagne":
 { Args: { "p_campagne_id": string,"p_statut": Database["public"]['Enums']["campagne_statut"] }; Returns: undefined
                            },
+"confirmer_attente":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
 "consommer_debit":
 { Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
                            },
@@ -345,6 +348,15 @@ isOneToOne: false
                            },
 "masquer_replique":
 { Args: { "p_audit_id": string }; Returns: undefined
+                           },
+"noter_connexion":
+{ Args: Record<PropertyKey, never>; Returns: undefined
+                           },
+"objets_abandonnes":
+{ Args: { "p_age_h": number,"p_limite": number }; Returns: string[]
+                           },
+"purger_debit":
+{ Args: { "p_age_h": number,"p_limite": number }; Returns: number
                            },
 "regler_contact_reutilisation":
 { Args: { "p_accord": boolean,"p_campagne_id": string }; Returns: undefined
