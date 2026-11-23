@@ -272,6 +272,7 @@ describe('tâches', () => {
     expect(trois).toEqual({
       debit: { supprimes: 0 }, envois: { supprimes: 0 }, archives: { campagnes: 0, objets: 0 }, refuses: { supprimes: 0, echecs: 0 },
       attente: { demandes: 0, echecs_envoi: 0, sans_adresse: 0, supprimes: 0, echecs_suppression: 0 }, non_verifies: { supprimes: 0, echecs: 0 }, inactivite: { avertis: 0, echecs_envoi: 0, supprimes: 0, echecs_suppression: 0 },
+      jury: { code: 0 }, // jury non configuré dans ce serveur de test
     })
   }, 240_000)
 

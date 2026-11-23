@@ -17,6 +17,9 @@ export default defineNuxtConfig({
     versionCharte: '',
     siteUrl: '',
     githubApi: 'https://api.github.com',
+    // Jury (dépôt privé) : URL complète de POST /api/jury et secret partagé ; sans eux, le site n'appelle rien.
+    juryUrl: '',
+    jurySecret: '',
     smtp: { host: '', port: 587, user: '', pass: '' },
   },
   css: [
