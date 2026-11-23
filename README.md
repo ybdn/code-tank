@@ -87,8 +87,7 @@ reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception
   `{ envoyes, echecs, sansAdresseVerifiee }`, que la page affiche, et le journal ne cite aucune adresse. Un SMTP injoignable
   arrête la boucle (délai de 10 s par connexion). Il n'y a **pas de bouton de renvoi** (risque de doublons, aucune colonne pour
   se souvenir de qui a reçu quoi) ; la page le dit.
-- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), lancement des audits,
-  tâches planifiées de conservation.
+- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), lancement des audits.
 
 ## Limite de débit
 
@@ -112,6 +111,35 @@ confidentialité n'est tenue que pour les adresses qui reviennent.
   `sinscrire`.
 - **Tests** : les helpers de `tests/stack/aide.ts` envoient une adresse `x-forwarded-for` neuve à chaque requête ; aucun
   interrupteur ne désactive la limite.
+
+## Conservation (tâches planifiées)
+
+`GET /api/cron/conservation`, appelée une fois par jour par le planificateur de Vercel (`vercel.json`, entrée `crons` seule :
+03:17 UTC). Elle exige `Authorization: Bearer <CRON_SECRET>` ; sans le bon secret, ou si `CRON_SECRET` manque ou fait moins de
+32 caractères : **404**. Le secret est lu dans `process.env.CRON_SECRET` (le nom que Vercel envoie, sans préfixe `NUXT_`) et
+comparé en temps constant. La route utilise la clé de service. Chaque tâche est idempotente, bornée (constantes `DELAIS` et
+`BORNES` de `server/utils/conservation.ts`) et indépendante : l'échec de l'une met son code d'erreur dans la réponse sans arrêter
+les suivantes. Réponse et journal : des compteurs et des codes, jamais de pseudo, d'adresse, de chemin ni d'identifiant.
+
+| Tâche | Ce qu'elle fait | Borne |
+|---|---|---|
+| `debit` | supprime les lignes de plus de 24 h (`purger_debit`) | 10 000 |
+| `envois` | efface les objets du bucket `depots` de plus de 24 h que ni `depot` ni `reception` ne référencent (`objets_abandonnes`) | 500 |
+| `archives` | campagne `publiee` depuis 30 jours (`campagne.publiee_le`) : efface toutes les archives de ses participations, met `depot.chemin_stockage` à nul, supprime ses lignes `reception`, passe à `archivee`. Une campagne dont les archives dépassent la borne finit au passage suivant | 500 objets |
+| `refuses` | supprime les comptes `refuse` depuis 30 jours | 50 |
+| `attente` | compte en liste d'attente sans confirmation depuis 12 mois : e-mail de demande (`attente_demandee_le`) ; sans réponse sous 30 jours : suppression. Le candidat confirme par un bouton sur `/compte` (`confirmer_attente`) | 50 + 50 |
+| `inactivite` | compte sans connexion depuis 24 mois et adresse vérifiée : e-mail d'avertissement (`prevenu_inactivite_le`) ; 30 jours plus tard, toujours sans connexion : suppression | 50 + 50 |
+
+- **Suppression d'un compte** : une seule routine (`supprimerCompte`, `server/utils/compte.ts`), partagée avec `DELETE /api/compte` :
+  archives du stockage, puis utilisateur Auth ; le déclencheur `participation_apres_depart` garde la ligne anonyme du classement.
+  Elle refuse le compte de l'organisateur, que les requêtes des tâches excluent d'ailleurs déjà.
+- **Délais que la spec ne fixe pas, à confirmer par le porteur** : 30 jours pour répondre à la demande de la liste d'attente
+  (`attenteReponseJours`) et 30 jours entre l'e-mail d'inactivité et la suppression (`avertissementJours`).
+- **Dernière connexion** : `/compte` appelle `noter_connexion` (au plus une écriture par jour) quand le candidat lit son compte ;
+  elle annule l'avertissement d'inactivité.
+- **E-mails** : texte seul, lien vers `/compte`, envoyés seulement à une adresse utilisable ; un échec d'envoi ne marque personne,
+  et une panne du SMTP arrête la boucle. Un compte dont l'adresse n'est pas vérifiée n'est jamais averti, donc jamais supprimé pour inactivité.
+- **Le planificateur ne règle rien chez Vercel** : définir `CRON_SECRET` dans le projet, puis déployer `vercel.json`.
 
 ## Droits du candidat
 
@@ -137,7 +165,7 @@ confidentialité n'est tenue que pour les adresses qui reviennent.
 
 ```sh
 pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
-pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé ; comptes, dépôt, administration, droits
+pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé ; comptes, dépôt, administration, droits, conservation (les tests antidatent des objets par `docker exec` sur la base locale)
 pnpm stack:stop
 ```
 
@@ -155,6 +183,7 @@ tests créent leurs utilisateurs par l'API d'administration et n'en ont pas beso
 | `NUXT_PUBLIC_SUPABASE_KEY` | Clé publique (anon / publishable) |
 | `NUXT_SUPABASE_SECRET_KEY` | Clé de service, serveur seulement |
 | `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification, **32 caractères au moins** ; sans lui (ou trop court), aucun e-mail ne part |
+| `CRON_SECRET` | Secret du planificateur (variable de Vercel, **sans préfixe `NUXT_`**), 32 caractères au moins ; sans lui, `/api/cron/conservation` répond 404 |
 | `NUXT_SECRET_DEBIT` | Secret HMAC de l'empreinte des adresses IP (limite de débit), **32 caractères au moins** ; sans lui, les routes limitées répondent 503 |
 | `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
 | `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |

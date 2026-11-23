@@ -29,6 +29,8 @@ async function charger() {
     .maybeSingle()
   if (error) alerte.value = 'Impossible de lire ton compte pour le moment.'
   compte.value = data as Compte | null
+  // Dernière connexion, pour la conservation : la base n'écrit qu'une fois par jour.
+  if (data) await supabase.rpc('noter_connexion')
 }
 
 onMounted(async () => {
@@ -93,6 +95,15 @@ async function modifier(corps: Record<string, unknown>) {
       : 'Profil enregistré, mais l\'e-mail n\'a pas pu partir : utilise « Renvoyer le lien ».'
 }
 
+async function confirmerAttente() {
+  occupe.value = true
+  message.value = alerte.value = ''
+  const { error } = await supabase.rpc('confirmer_attente')
+  occupe.value = false
+  if (error) alerte.value = error.code === 'P0001' ? error.message : 'La confirmation a échoué. Réessaie dans un instant.'
+  else message.value = 'Merci, c\'est noté : ta candidature reste sur la liste d\'attente.'
+}
+
 async function renvoyer() {
   if (await appeler('POST', '/api/compte/verification')) message.value = 'Lien renvoyé. Il est valable 24 heures.'
 }
@@ -139,6 +150,10 @@ async function renvoyer() {
       <template v-else>
         <h2>État</h2>
         <p class="etat" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
+        <template v-if="compte.etat === 'liste_attente'">
+          <p>Tous les 12 mois, nous te demandons par e-mail si tu attends toujours une place. Tu peux le confirmer ici, à tout moment.</p>
+          <p class="btns"><button class="btn btn--primary" type="button" :disabled="occupe" @click="confirmerAttente">Je suis toujours en attente</button></p>
+        </template>
         <p>
           E-mail de contact : <strong>{{ compte.email_contact }}</strong>
           ({{ compte.email_verifie_le ? 'vérifié' : 'pas encore vérifié' }}).

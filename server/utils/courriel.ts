@@ -42,6 +42,17 @@ export async function envoyerLienVerification(config: Config, compteId: string, 
   })
 }
 
+// Panne du SMTP lui-même (et non refus d'un destinataire) : inutile d'insister auprès des suivants.
+export const estPanneSmtp = (e: unknown) => ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EAUTH'].includes((e as { code?: string }).code ?? '')
+
+// Avis court à un candidat, avec un lien vers /compte. Lève si la configuration, l'adresse ou l'envoi sont en défaut :
+// l'appelant ne marque alors personne comme prévenu.
+export async function envoyerAvis(config: Config, to: string, sujet: string, texte: string) {
+  verifierSite(config)
+  if (!adresseUtilisable(to)) throw new Error('Adresse de contact inutilisable : aucun e-mail envoyé.')
+  await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}/compte\n\nCode Tank` })
+}
+
 // E-mail de résultat à chaque adresse donnée, un par un. Texte seul, aucun score ni classement.
 // Ne lève jamais : il rend le compte des envois et des échecs. Rien d'un destinataire n'est journalisé (un message d'erreur
 // SMTP peut citer l'adresse) ; un SMTP injoignable arrête la boucle, le reste compte en échec.
@@ -58,7 +69,7 @@ export async function envoyerResultats(config: Config, campagne: { slug: string;
       } catch (e) {
         const code = (e as { code?: string }).code
         console.error('Envoi du résultat :', code ?? 'erreur')
-        if (code && ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EAUTH'].includes(code)) break
+        if (estPanneSmtp(e)) break
       }
     }
   } catch (e) {

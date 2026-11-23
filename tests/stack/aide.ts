@@ -10,6 +10,8 @@ export const API = statut.API_URL as string
 export const admin = createClient(API, statut.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
 // Secret de l'empreinte des adresses IP (limite de débit), commun à tous les serveurs de test.
 export const SECRET_DEBIT = 'secret-debit-de-test-' + randomBytes(16).toString('hex')
+// SQL direct sur la base locale, pour ce que l'API n'expose pas (par exemple antidater un objet du stockage).
+export const sql = (requete: string) => execFileSync('docker', ['exec', 'supabase_db_code-tank-site', 'psql', '-U', 'postgres', '-d', 'postgres', '-c', requete], { stdio: 'pipe' })
 export const anon = () => createClient(API, statut.ANON_KEY, { auth: { persistSession: false } })
 
 // `env` s'ajoute à l'environnement de base. `sortie()` rend ce que le serveur a écrit (journal et erreurs).
