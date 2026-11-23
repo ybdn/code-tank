@@ -1,0 +1,43 @@
+# Configuration locale uniquement. Aucun projet distant, aucun secret.
+project_id = "code-tank-site"
+
+[db]
+# Ports décalés : 54322 est pris par un autre projet local.
+port = 54422
+shadow_port = 54420
+major_version = 17
+
+[db.migrations]
+enabled = true
+
+[db.seed]
+enabled = true
+sql_paths = ["./seed.sql"]
+
+[api]
+enabled = true
+# Décalé comme la base : 54321 est pris par un autre projet local.
+port = 54421
+schemas = ["public"]
+
+# Boîte mail locale : interface web et API des messages sur 54424, SMTP publié sur 54425.
+[local_smtp]
+enabled = true
+port = 54424
+smtp_port = 54425
+
+[auth]
+enabled = true
+site_url = "http://127.0.0.1:3000"
+additional_redirect_urls = ["http://127.0.0.1:3000/compte", "http://localhost:3000/compte"]
+# Les comptes naissent de la connexion GitHub. Le fournisseur e-mail reste actif en local seulement, pour que les
+# tests ouvrent des sessions ; en ligne, le désactiver dans Auth. La route de création refuse de toute façon
+# un utilisateur dont app_metadata.provider n'est pas github.
+enable_anonymous_sign_ins = false
+
+# Identité et e-mail seulement : le fournisseur n'ajoute aucun scope. Les valeurs viennent de
+# l'environnement ; aucune application OAuth n'est créée par ce dépôt.
+[auth.external.github]
+enabled = true
+client_id = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID)"
+secret = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET)"
