@@ -1,4 +1,4 @@
-// Masquer une réplique (jamais une note). masquer_replique ne sait pas démasquer.
+// Masquer une réplique (jamais une note). demasquage.post.ts fait l'inverse.
 export default defineEventHandler(async (event) => {
   const { client } = contexteAdmin(event)
   const { error } = await client.rpc('masquer_replique', { p_audit_id: uuidDe(event, 'id') })

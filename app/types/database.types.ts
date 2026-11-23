@@ -317,6 +317,9 @@ isOneToOne: false
 "decider_compte":
 { Args: { "p_compte_id": string,"p_etat": Database["public"]['Enums']["compte_etat"] }; Returns: undefined
                            },
+"demasquer_replique":
+{ Args: { "p_audit_id": string }; Returns: undefined
+                           },
 "enregistrer_decision":
 { Args: { "p_justification": string,"p_participation_id": string,"p_type": Database["public"]['Enums']["decision_type"] }; Returns: undefined
                            },

@@ -21,9 +21,9 @@ select is_empty(
 select is(
   (select array_agg(proname::text order by proname) from pg_proc
    where pronamespace = 'public'::regnamespace and has_function_privilege('authenticated', oid, 'execute')),
-  array['ajouter_participant','changer_statut_campagne','decider_compte','enregistrer_decision',
+  array['ajouter_participant','changer_statut_campagne','decider_compte','demasquer_replique','enregistrer_decision',
         'est_organisateur','masquer_replique','retirer_depot','se_desinscrire','sinscrire','verrouiller_vote'],
-  'authenticated exécute exactement les dix fonctions prévues');
+  'authenticated exécute exactement les onze fonctions prévues');
 
 set local role anon;
 set local request.jwt.claims = '{"role":"anon"}';
