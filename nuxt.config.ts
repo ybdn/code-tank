@@ -1,6 +1,23 @@
+// L'URL de Supabase entre dans la CSP au build : elle doit être définie à ce moment-là.
+const urlSupabase = process.env.NUXT_PUBLIC_SUPABASE_URL
+
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-22',
-  modules: ['@nuxt/eslint', 'nuxt-security'],
+  modules: ['@nuxt/eslint', 'nuxt-security', '@nuxtjs/supabase'],
+  supabase: {
+    // Seule /compte demande une session, et elle gère elle-même l'état déconnecté : aucune redirection globale.
+    redirect: false,
+    // Nom stable du cookie de session, indépendant de l'URL de Supabase.
+    cookiePrefix: 'sb-code-tank',
+  },
+  runtimeConfig: {
+    // Valeurs fournies par l'environnement (NUXT_*) ; voir le README.
+    secretVerification: '',
+    versionCharte: '',
+    siteUrl: '',
+    githubApi: 'https://api.github.com',
+    smtp: { host: '', port: 587, user: '', pass: '' },
+  },
   css: [
     '@fontsource/space-mono/400.css',
     '@fontsource/space-mono/700.css',
@@ -21,7 +38,7 @@ export default defineNuxtConfig({
     nonce: true,
     // Pas d'API ouverte à d'autres origines pour l'instant.
     corsHandler: false,
-    // Pas de formulaire dans ce lot : la limite de débit viendra avec la création de compte.
+    // Limite de débit : lot suivant.
     rateLimiter: false,
     headers: {
       contentSecurityPolicy: {
@@ -30,7 +47,7 @@ export default defineNuxtConfig({
         'style-src': ["'self'"],
         'img-src': ["'self'", 'data:'],
         'font-src': ["'self'"],
-        'connect-src': ["'self'"],
+        'connect-src': ["'self'", ...(urlSupabase ? [new URL(urlSupabase).origin] : [])],
         'manifest-src': ["'self'"],
         'base-uri': ["'none'"],
         'form-action': ["'self'"],
