@@ -6,7 +6,7 @@ import { join, relative } from 'node:path'
 import { fileURLToPath } from 'node:url'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { creerJeton } from '../../server/utils/jeton'
-import { admin, api, candidat, campagne as campagneService, demarrer, nettoyer, organisateur, utilisateur, zip, type Utilisateur } from './aide'
+import { admin, anon, api, candidat, campagne as campagneService, demarrer, nettoyer, organisateur, utilisateur, zip, type Utilisateur } from './aide'
 
 const SECRET = 'secret-de-test-' + randomBytes(16).toString('hex')
 const UUID = '00000000-0000-4000-8000-000000000000'
@@ -412,6 +412,77 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect((await appeler('GET', `/api/campagnes/${slug}`)).json).toMatchObject({ statut: 'publiee' })
     expect((await statut('archivee')).statut).toBe(200)
     expect((await statut('brouillon')).statut).toBe(409) // on ne revient pas en arrière
+  })
+})
+
+const HTML = '<script>alert(1)</script> et <img src=x onerror=alert(1)>'
+const ECHAPPE = '&lt;script&gt;alert(1)&lt;/script&gt;'
+const sansHtmlActif = (html: string) => {
+  expect(html).toContain(ECHAPPE)
+  expect(html).toContain('&lt;img src=x onerror=alert(1)&gt;')
+  expect(html).not.toContain('<script>alert(1)')
+  expect(html).not.toContain('<img src=x')
+}
+
+describe('textes saisis contenant du HTML : acceptés, stockés tels quels, rendus échappés', () => {
+  it('motivation (profil), lue par l\'organisateur', async () => {
+    const u = await candidat('verifie')
+    expect((await appeler('PATCH', '/api/compte', u, { motivation: HTML })).statut).toBe(200)
+    expect((await admin.from('compte').select('motivation').eq('id', u.id).single()).data?.motivation).toBe(HTML)
+    const liste = (await appeler('GET', '/api/admin/comptes', orga)).json as unknown as { comptes: { id: string; motivation: string }[] }
+    expect(liste.comptes.find((c) => c.id === u.id)?.motivation).toBe(HTML)
+    sansHtmlActif((await page('/admin/comptes', orga)).texte)
+  })
+
+  it('présentation de dépôt, brief de campagne et commentaire de vote', async () => {
+    const slug = 'html-' + randomBytes(5).toString('hex')
+    const criteres = [{ cle: 'brief', libelle: 'Réponse au brief', poids: 100, jure: 'pitch' }]
+    const creation = await appeler('POST', '/api/admin/campagnes', orga, {
+      slug, titre: 'Titre', theme: 'Thème', brief: HTML, criteres, ouverture_inscriptions: jours(-1), cloture_depot: jours(7), date_resultats: jours(14), max_participants: 5,
+    })
+    expect(creation.statut).toBe(200)
+    const { data: c } = await admin.from('campagne').select('id, brief').eq('slug', slug).single()
+    expect(c!.brief).toBe(HTML)
+    expect((await appeler('POST', `/api/admin/campagnes/${slug}/statut`, orga, { statut: 'inscriptions' })).statut).toBe(200)
+    sansHtmlActif((await page(`/campagnes/${slug}`)).texte)
+
+    // Dépôt : la présentation passe la validation, est stockée telle quelle et sort échappée côté administration.
+    const u = await candidat()
+    expect((await u.client.rpc('sinscrire', { p_campagne_id: c!.id })).error).toBeNull()
+    const declaration = { presentation: HTML, demande: '', type_code: 'open_source', declaration_code: true, aucun_outil: true, outils_ia: [], contact_reutilisation: false }
+    const url = await appeler('POST', `/api/campagnes/${slug}/depot/url`, u, declaration)
+    expect(url.statut).toBe(200)
+    const { chemin, token } = url.json as { chemin: string; token: string }
+    expect((await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip())).error).toBeNull()
+    expect((await appeler('POST', `/api/campagnes/${slug}/depot`, u, { ...declaration, chemin })).statut).toBe(200)
+    const { data: p } = await admin.from('participation').select('id').eq('campagne_id', c!.id).single()
+    expect((await admin.from('reception').select('presentation').eq('participation_id', p!.id).single()).data?.presentation).toBe(HTML)
+
+    // Vote : la campagne passe en délibération, la réception est simulée acceptée avec son dépôt.
+    for (const s of ['depot', 'deliberation']) expect((await appeler('POST', `/api/admin/campagnes/${slug}/statut`, orga, { statut: s })).statut).toBe(200)
+    await admin.from('depot').insert({ participation_id: p!.id, sha256: 'b'.repeat(64), taille_octets: 22, nb_fichiers: 1, nb_tokens: 1, presentation: HTML, type_code: 'open_source', licence_presente: true, declaration_code_le: maintenant() })
+    const vote = await appeler('PUT', `/api/admin/participations/${p!.id}/vote`, orga, { note: 5, commentaire: HTML })
+    expect(vote.statut).toBe(200)
+    expect((await admin.from('vote_boss').select('commentaire').eq('participation_id', p!.id).single()).data?.commentaire).toBe(HTML)
+    const detail = await page(`/admin/campagnes/${slug}`, orga)
+    sansHtmlActif(detail.texte)
+    // Le brief et la présentation ne sont pas non plus servis comme HTML par l'API d'administration.
+    expect(((await appeler('GET', `/api/admin/campagnes/${slug}`, orga)).json as unknown as { participations: { depot: { presentation: string } }[] }).participations[0]!.depot.presentation).toBe(HTML)
+  })
+
+  it('la CSP reste stricte (nonce, aucun unsafe-inline)', async () => {
+    const csp = (await fetch(serveur.url + '/')).headers.get('content-security-policy') ?? ''
+    expect(csp).toMatch(/script-src [^;]*'nonce-/)
+    expect(csp).not.toContain('unsafe-inline')
+    expect(csp).toContain("script-src-attr 'none'")
+  })
+
+  it('le lien du dépôt cité est limité à https:// par la base', async () => {
+    const u = await candidat()
+    for (const url of ['javascript:alert(1)', 'http://example.org', 'data:text/html,x']) {
+      expect((await admin.from('compte').update({ depot_cite_url: url }).eq('id', u.id)).error?.code, url).toBe('23514')
+      expect((await u.client.from('compte').update({ depot_cite_url: url }).eq('id', u.id)).error?.code, url).toBe('23514')
+    }
   })
 })
 

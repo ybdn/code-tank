@@ -40,6 +40,9 @@ export default defineNuxtConfig({
     corsHandler: false,
     // Limite de débit : lot suivant.
     rateLimiter: false,
+    // Le filtre XSS rejetait en 400 tout corps citant une balise, cas normal chez des développeurs : le texte saisi est rendu comme
+    // du texte par Vue, la CSP interdit les scripts en ligne et aucun v-html ne reçoit de texte saisi.
+    xssValidator: false,
     headers: {
       contentSecurityPolicy: {
         'default-src': ["'none'"],
