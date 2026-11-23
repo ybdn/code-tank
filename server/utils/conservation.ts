@@ -4,7 +4,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 import { SECRET_MIN } from './jeton'
 
 // Durées et bornes de la conservation (SPECS § 9), à un seul endroit.
-// À CONFIRMER PAR LE PORTEUR : attenteReponseJours, avertissementJours et nonVerifieJours, que la spec ne fixe pas.
+// Délais que la spec ne fixe pas (attenteReponseJours, avertissementJours, nonVerifieJours) : 30 jours, confirmés par le porteur.
 export const DELAIS = {
   debitHeures: 24,
   envoiAbandonneHeures: 24,
@@ -49,7 +49,7 @@ const AVIS_ATTENTE = {
 }
 const AVIS_INACTIVITE = {
   sujet: 'Code Tank : ton compte sera supprimé',
-  texte: `Tu ne t'es pas connecté à Code Tank depuis plus de ${DELAIS.inactiviteMois} mois. Sans connexion de ta part sous ${DELAIS.avertissementJours} jours, tes données seront supprimées ; si tu as participé à une campagne publiée, ta ligne du classement restera, sous « candidat supprimé ». Pour le garder, ouvre simplement ton compte :`,
+  texte: `Tu ne t'es pas connecté à Code Tank depuis plus de ${DELAIS.inactiviteMois} mois. Sans connexion de ta part sous ${DELAIS.avertissementJours} jours, tes données seront supprimées ; si tu as participé à une campagne publiée, ta ligne du classement restera, sous « candidat supprimé ». Pour garder ton compte, ouvre-le simplement :`,
 }
 
 type Compte = { id: string; email_contact: string }

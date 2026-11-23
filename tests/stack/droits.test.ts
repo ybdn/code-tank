@@ -445,3 +445,57 @@ describe('e-mails de résultat à la publication', () => {
     }
   })
 })
+
+// --- E-mail de décision d'autorisation -----------------------------------------------------------------------------------
+
+describe('e-mail de décision sur un compte', () => {
+  const verifie = async () => {
+    const u = await candidat('verifie')
+    await faire(admin.from('compte').update({ email_verifie_le: maintenant() }).eq('id', u.id))
+    return u
+  }
+  const etat = async (id: string) => (await admin.from('compte').select('etat').eq('id', id).single()).data?.etat
+
+  it('trois décisions, trois e-mails au bon texte ; adresse non vérifiée : aucun e-mail', async () => {
+    const orga = await organisateur()
+    const [a, b, c] = [await verifie(), await verifie(), await verifie()]
+    const attendu: [Utilisateur, string, RegExp][] = [
+      [a, 'autorise', /autorisé ton compte.*t'inscrire/s],
+      [b, 'liste_attente', /liste d'attente.*pas l'ordre d'arrivée/s],
+      [c, 'refuse', /pas été retenue.*support@ybdn\.io/s],
+    ]
+    for (const [u, decision, texte] of attendu) {
+      const r = await appeler('POST', `/api/admin/comptes/${u.id}/decision`, orga, { etat: decision })
+      expect(r.statut).toBe(200)
+      expect((r.json as { courriel?: string }).courriel).toBe('envoye')
+      const [mail] = await recus(u.email, 1)
+      expect(mail.From.Address).toBe('code-tank@ybdn.io')
+      expect(mail.Text).toMatch(texte)
+      expect(mail.Text).toContain(`${serveur.url}/compte`)
+      expect(mail.HTML).toBe('')
+      expect(await etat(u.id)).toBe(decision)
+    }
+    const nonVerifie = await candidat('verifie')
+    const r = await appeler('POST', `/api/admin/comptes/${nonVerifie.id}/decision`, orga, { etat: 'autorise' })
+    expect(r.statut).toBe(200)
+    expect((r.json as { courriel?: string }).courriel).toBe('non_verifiee')
+    expect(await recus(nonVerifie.email, 1)).toHaveLength(0)
+    expect(await etat(nonVerifie.id)).toBe('autorise')
+    for (const u of [a, b, c, nonVerifie]) expect(serveur.sortie()).not.toContain(u.email)
+  })
+
+  it('SMTP en panne : la décision est enregistrée quand même, sans adresse dans le journal', async () => {
+    const enPanne = await demarrer(3424, { NUXT_SMTP_HOST: '127.0.0.1', NUXT_SMTP_PORT: '1' })
+    try {
+      const orga = await organisateur()
+      const u = await verifie()
+      const r = await api(enPanne.url, 'POST', `/api/admin/comptes/${u.id}/decision`, orga, { etat: 'autorise' })
+      expect(r.statut).toBe(200)
+      expect((r.json as { courriel?: string }).courriel).toBe('echec')
+      expect(await etat(u.id)).toBe('autorise')
+      expect(enPanne.sortie()).not.toContain(u.email)
+    } finally {
+      enPanne.arreter()
+    }
+  })
+})

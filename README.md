@@ -134,7 +134,7 @@ les suivantes. Réponse et journal : des compteurs et des codes, jamais de pseud
 - **Suppression d'un compte** : une seule routine (`supprimerCompte`, `server/utils/compte.ts`), partagée avec `DELETE /api/compte` :
   archives du stockage, puis utilisateur Auth ; le déclencheur `participation_apres_depart` garde la ligne anonyme du classement.
   Elle refuse le compte de l'organisateur, que les requêtes des tâches excluent d'ailleurs déjà.
-- **Délais que la spec ne fixe pas, à confirmer par le porteur** : 30 jours pour répondre à la demande de la liste d'attente
+- **Délais que la spec ne fixe pas, confirmés par le porteur** : 30 jours pour répondre à la demande de la liste d'attente
   (`attenteReponseJours`), 30 jours entre l'e-mail d'inactivité et la suppression (`avertissementJours`), 30 jours pour une
   candidature qui n'a jamais vérifié son adresse (`nonVerifieJours`).
 - **Dernière connexion** : `/compte` appelle `noter_connexion` (au plus une écriture par jour) quand le candidat lit son compte ;

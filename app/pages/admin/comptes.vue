@@ -27,9 +27,12 @@ const plafondAtteint = computed(() => data.value.plafond !== null && comptesPris
 
 const choix = ref<{ id: string; etat: string } | null>(null)
 async function decider(c: CompteAdmin, etat: string) {
-  const ok = await lancer(() => $fetch(`/api/admin/comptes/${c.id}/decision`, { method: 'POST', body: { etat } }), `Décision enregistrée pour ${c.pseudo}.`)
+  const r = await lancer(() => $fetch<{ courriel: 'envoye' | 'echec' | 'non_verifiee' }>(`/api/admin/comptes/${c.id}/decision`, { method: 'POST', body: { etat } }), `Décision enregistrée pour ${c.pseudo}.`)
   choix.value = null
-  if (ok) await refresh()
+  if (r) {
+    message.value += { envoye: ' L\'e-mail de décision est parti.', echec: ' L\'e-mail de décision n\'a pas pu partir ; il n\'y a pas de renvoi, préviens le candidat toi-même.', non_verifiee: ' Aucun e-mail : son adresse n\'est pas vérifiée.' }[r.courriel]
+    await refresh()
+  }
 }
 
 const lien = (url: string) => (/^https:\/\//.test(url) ? url : undefined)

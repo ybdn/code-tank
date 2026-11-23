@@ -28,7 +28,7 @@ Code Tank est un concours de code ouvert aux développeurs majeurs, à l'adresse
 | Archive zip et code extrait | Analyse du code par Claude, contrôles du dépôt | Exécution de la charte du concours (dépôt et analyse) ; intérêt légitime pour les contrôles contre le code malveillant | Effacés 30 jours après la publication des résultats (à l'archivage) |
 | Déclaration de charte (date de version), déclaration de majorité et déclaration faite à chaque dépôt (type de code) | Preuve de ce que tu as déclaré | Exécution de la charte du concours | Tant que le compte existe |
 | Rapports, scores, entretiens | Résultat du concours | Exécution de la charte du concours | Tant que le compte existe |
-| Adresse IP du visiteur (limite de débit) | Limiter la création de compte, l'inscription et le dépôt contre l'abus | Intérêt légitime (protéger le site contre l'abus) | 24 heures |
+| Adresse IP du visiteur (limite de débit) : jamais conservée en clair, seulement une empreinte calculée avec une clé secrète, dans la base Supabase | Limiter la création de compte, l'inscription et le dépôt contre l'abus | Intérêt légitime (protéger le site contre l'abus) | 24 heures |
 
 Données liées au dépôt :
 
@@ -86,17 +86,18 @@ Nous te demandons de ne déposer aucun secret et aucun code confidentiel.
 
 | Donnée | Durée |
 |---|---|
-| Compte (identifiant GitHub, données GitHub lues, vrai nom, e-mail, motivation, déclaration d'âge) | Durée de vie du compte. Compte sans connexion depuis 24 mois : prévenu par e-mail, puis supprimé |
+| Compte (identifiant GitHub, données GitHub lues, vrai nom, e-mail, motivation, déclaration d'âge) | Durée de vie du compte. Compte sans connexion depuis 24 mois : prévenu par e-mail, puis supprimé 30 jours après, sauf connexion de ta part. Si l'adresse n'est pas vérifiée, le compte est supprimé sans avertissement |
 | Résultats (rapports, scores, entretiens) | Rapports et entretiens : gardés tant que le compte existe, supprimés avec lui. Scores et notes par critère : ils restent sur la ligne du classement, devenue anonyme (« candidat supprimé ») quand le compte est supprimé |
 | Candidature refusée | Effacée 30 jours après la décision |
-| Candidature en liste d'attente | Conservée tant que tu veux y rester. Nous te demandons une confirmation tous les 12 mois. Sans réponse, elle est effacée. |
+| Candidature en liste d'attente | Conservée tant que tu veux y rester. Nous te demandons une confirmation tous les 12 mois. Sans réponse sous 30 jours après la demande, elle est effacée. Sans adresse vérifiée ou utilisable, elle est effacée sans e-mail au moment où la confirmation serait demandée. |
+| Candidature dont l'adresse n'a jamais été vérifiée | Effacée 30 jours après la création du compte |
 | Archive zip et code extrait | Effacés 30 jours après la publication des résultats |
 | Pseudo | Tant que le compte existe ; ensuite la ligne du classement passe sous « candidat supprimé » |
 | Déclaration de charte (date de version), déclaration de majorité et déclaration faite à chaque dépôt (type de code) | Tant que le compte existe |
 | Présentation, demande au jury, empreinte SHA-256 de l'archive, case « d'accord pour être contacté au sujet d'une réutilisation » | Gardées avec les résultats, donc tant que le compte existe (supprimées avec lui) |
 | Outils d'IA déclarés au dépôt et traces d'outils d'IA relevées | Gardés avec les résultats, donc tant que le compte existe (supprimés avec eux) |
 | Chez Anthropic | 30 jours ; jusqu'à 2 ans si le contenu est signalé (voir § 4) |
-| Adresse IP du visiteur (limite de débit) | 24 heures |
+| Adresse IP du visiteur (limite de débit) : jamais conservée en clair, seulement une empreinte calculée avec une clé secrète, dans la base Supabase | 24 heures |
 
 Tu peux supprimer ton compte à tout moment, par un bouton dans ton compte, avec confirmation, à effet immédiat. Si la campagne n'a pas encore été délibérée, ton dépôt est retiré. Après la publication des résultats, le classement garde la ligne sous « candidat supprimé ». Tu peux retirer ton dépôt et te désinscrire d'une campagne tant que la délibération n'a pas commencé.
 
