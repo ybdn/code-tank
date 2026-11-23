@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import { creerJeton, verifierJeton } from '../../server/utils/jeton'
 
-const secret = 'secret-de-test'
+const secret = 'secret-de-test-assez-long-0123456789'
 const id = '6f1e5a0e-7a53-4a40-8f6a-0d8f4a0b1c2d'
 
 describe('jeton de vérification', () => {
@@ -24,8 +24,10 @@ describe('jeton de vérification', () => {
   })
   it('refuse un jeton signé avec un autre secret, ou sans secret', () => {
     const jeton = creerJeton(id, 'a@b.fr', secret)
-    expect(verifierJeton(jeton, 'autre').ok).toBe(false)
+    expect(verifierJeton(jeton, 'autre-secret-de-test-assez-long-012').ok).toBe(false)
     expect(verifierJeton(creerJeton(id, 'a@b.fr', ''), '').ok).toBe(false)
+    // Secret trop court : refusé même s'il a signé le jeton.
+    expect(verifierJeton(creerJeton(id, 'a@b.fr', 'court'), 'court').ok).toBe(false)
   })
   it('porte l\'adresse : un jeton pour une adresse ne vaut pas pour une autre', () => {
     const r = verifierJeton(creerJeton(id, 'ancienne@b.fr', secret), secret)

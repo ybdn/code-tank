@@ -3,7 +3,6 @@ useHead({ title: 'Mon compte' })
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
-const route = useRoute()
 
 type Etat = 'email_a_verifier' | 'verifie' | 'liste_attente' | 'autorise' | 'refuse' | 'ferme'
 type Compte = Profil & { email_verifie_le: string | null; etat: Etat }
@@ -16,19 +15,12 @@ const ETATS: Record<Etat, string> = {
   refuse: 'Ta candidature n\'a pas été retenue.',
   ferme: 'Ton compte est fermé.',
 }
-const VERIFICATION: Record<string, string> = {
-  ok: 'Ton adresse e-mail est vérifiée.',
-  expire: 'Ce lien a expiré (il dure 24 heures). Demande-en un nouveau ci-dessous.',
-  invalide: 'Ce lien n\'est pas valable : il a peut-être été remplacé. Demande-en un nouveau ci-dessous.',
-}
-
 const pret = ref(false)
 const compte = ref<Compte | null>(null)
 const occupe = ref(false)
 const erreurs = ref<ErreursProfil>({})
 const message = ref('')
 const alerte = ref('')
-const verification = computed(() => VERIFICATION[String(route.query.verification)] ?? '')
 
 async function charger() {
   const { data, error } = await supabase
@@ -112,7 +104,6 @@ async function renvoyer() {
       <h1>Mon compte</h1>
 
       <div role="status" aria-live="polite">
-        <p v-if="verification" class="avis">{{ verification }}</p>
         <p v-if="message" class="avis">{{ message }}</p>
       </div>
       <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
@@ -131,6 +122,16 @@ async function renvoyer() {
       <template v-else-if="!compte">
         <p class="lead">Tu es connecté avec GitHub. Crée ton compte : le profil, la charte et ta majorité.</p>
         <FormulaireProfil creation :erreurs="erreurs" :occupe="occupe" @envoyer="creer" />
+        <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+      </template>
+
+      <template v-else-if="compte.etat === 'refuse' || compte.etat === 'ferme'">
+        <h2>État</h2>
+        <p class="etat" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
+        <p>
+          Pour exercer tes droits sur tes données :
+          <a href="mailto:support@ybdn.io?subject=Code%20Tank%20%E2%80%94%20Mes%20donn%C3%A9es">support@ybdn.io</a>.
+        </p>
         <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
       </template>
 

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { adresseJetable } from '../../server/utils/jetable'
+import { adresseJetable, adresseUtilisable } from '../../server/utils/jetable'
 import { validerCreation, validerProfil } from '../../shared/utils/compte'
 
 const valide = {
@@ -21,6 +21,12 @@ describe('adresses jetables', () => {
     expect(adresseJetable('ada@example.org')).toBe(false)
     expect(adresseJetable('ada@gmail.com')).toBe(false)
   })
+  it('adresseUtilisable : une seule adresse valide, en minuscules, non jetable', () => {
+    expect(adresseUtilisable('ada@example.org')).toBe(true)
+    expect(adresseUtilisable('a@example.org,b@example.org')).toBe(false)
+    expect(adresseUtilisable('Ada@example.org')).toBe(false)
+    expect(adresseUtilisable('x@mailinator.com')).toBe(false)
+  })
 })
 
 describe('validation du formulaire', () => {
@@ -40,6 +46,9 @@ describe('validation du formulaire', () => {
     [{ pseudo: 'a' }, 'pseudo'],
     [{ pseudo: 'Candidat Supprimé' }, 'pseudo'],
     [{ email_contact: 'pas-un-mail' }, 'email_contact'],
+    [{ email_contact: 'a@example.org,b@example.org' }, 'email_contact'],
+    [{ email_contact: 'a@example.org;b@example.org' }, 'email_contact'],
+    [{ email_contact: '<a@example.org>' }, 'email_contact'],
     [{ motivation: 'a\nb\nc\nd' }, 'motivation'],
     [{ motivation: 'x'.repeat(1001) }, 'motivation'],
     [{ depot_cite_url: 'http://github.com/a/b' }, 'depot_cite_url'],

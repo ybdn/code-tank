@@ -25,18 +25,20 @@ serveur `POST /api/compte`, qui vérifie la session auprès d'Auth, exige `app_m
 l'identité GitHub dans l'identité vérifiée (jamais dans le corps ni dans `user_metadata`) et écrit avec la clé de
 service. Le profil se lit directement par la session de l'utilisateur (RLS) et se modifie par `PATCH /api/compte`
 (session de l'utilisateur, RLS). La vérification de l'e-mail passe par un jeton signé HMAC-SHA-256, valable 24 h,
-lié à l'adresse (`GET /api/compte/verifier`).
+lié à l'adresse. Le lien de l'e-mail ouvre la page `/compte/verifier`, qui ne modifie rien : seul le clic sur « Confirmer
+mon adresse » envoie `POST /api/compte/verifier` (aperçus de lien et antivirus ne valident donc rien). L'adresse lue en base
+repasse par la règle du formulaire avant tout envoi et toute validation, car la colonne est écrivable directement.
 
 ### Pile locale et tests d'intégration
 
 ```sh
-pnpm stack:start   # base, Auth, PostgREST, passerelle, boîte mail (http://127.0.0.1:54424), relais SMTP 54425
+pnpm stack:start   # base, Auth, PostgREST, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
 pnpm test:stack    # construit le site, le lance contre la pile, GitHub simulé
 pnpm stack:stop
 ```
 
-La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, storage, etc.). Le port SMTP de la boîte mail n'est
-pas publié par la CLI : `scripts/stack.sh` lance un relais minimal sur 54425. Ports décalés : API 54421, base 54422.
+La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, storage, etc.). Ports décalés : API 54421, base
+54422, boîte mail 54424 (web) et 54425 (SMTP, `smtp_port` dans `supabase/config.toml`).
 `pnpm db:types` régénère `app/types/database.types.ts` depuis la base locale. Fournisseur GitHub en local : renseigner
 `SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID` et `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` pour une vraie connexion ; les
 tests créent leurs utilisateurs par l'API d'administration et n'en ont pas besoin.
@@ -48,10 +50,10 @@ tests créent leurs utilisateurs par l'API d'administration et n'en ont pas beso
 | `NUXT_PUBLIC_SUPABASE_URL` | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
 | `NUXT_PUBLIC_SUPABASE_KEY` | Clé publique (anon / publishable) |
 | `NUXT_SUPABASE_SECRET_KEY` | Clé de service, serveur seulement |
-| `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification |
+| `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification, **32 caractères au moins** ; sans lui (ou trop court), aucun e-mail ne part |
 | `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
-| `NUXT_SITE_URL` | URL publique du site, pour les liens des e-mails |
-| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, le relais 54425 sans identifiant) |
+| `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |
+| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, la boîte mail sur 54425, sans identifiant) |
 | `NUXT_GITHUB_API` | Facultatif : base de l'API GitHub (`https://api.github.com` par défaut), changée par les tests |
 
 ## Base de données

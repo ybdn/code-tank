@@ -6,6 +6,7 @@ import { createServer, type Server } from 'node:http'
 import type { AddressInfo } from 'node:net'
 import { fileURLToPath } from 'node:url'
 import { createClient } from '@supabase/supabase-js'
+import { creerJeton } from '../../server/utils/jeton'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 
 const racine = fileURLToPath(new URL('../..', import.meta.url))
@@ -39,7 +40,7 @@ async function demarrer(port: number, env: Record<string, string>): Promise<Serv
       NUXT_PUBLIC_SUPABASE_URL: API,
       NUXT_PUBLIC_SUPABASE_KEY: statut.ANON_KEY,
       NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
-      NUXT_SECRET_VERIFICATION: 'secret-de-test-' + randomBytes(8).toString('hex'),
+      NUXT_SECRET_VERIFICATION: SECRET,
       NUXT_SITE_URL: `http://127.0.0.1:${port}`,
       NUXT_SMTP_HOST: '127.0.0.1',
       NUXT_SMTP_PORT: '54425',
@@ -62,6 +63,7 @@ async function demarrer(port: number, env: Record<string, string>): Promise<Serv
 let serveur: Serveur
 let serveurSansCharte: Serveur
 const crees: string[] = []
+const SECRET = 'secret-de-test-' + randomBytes(16).toString('hex')
 
 beforeAll(async () => {
   await new Promise<void>((ok) => github.listen(0, '127.0.0.1', ok))
@@ -120,10 +122,14 @@ async function api(methode: string, chemin: string, u?: Utilisateur, corps?: unk
     body: corps ? JSON.stringify(corps) : undefined,
   })
   const texte = await r.text()
-  let json: { courrielEnvoye?: boolean; statusMessage?: string; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
+  let json: { resultat?: string; courrielEnvoye?: boolean; statusMessage?: string; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
   try { json = JSON.parse(texte) } catch { /* pas du JSON */ }
   return { statut: r.status, json, location: r.headers.get('location') }
 }
+
+const jetonDuLien = (lien: string) => new URL(lien).searchParams.get('jeton')!
+// Confirmation par le POST de la page /compte/verifier ; renvoie ok, expire ou invalide.
+const confirmer = async (jeton: string) => (await api('POST', '/api/compte/verifier', undefined, { jeton })).json.resultat
 
 const ligne = async (id: string) => (await admin.from('compte').select('*').eq('id', id).maybeSingle()).data
 
@@ -235,27 +241,41 @@ describe('création du compte', () => {
 })
 
 describe('vérification de l\'e-mail', () => {
-  it('envoie le lien depuis l\'expéditeur de Code Tank, puis le clic vérifie l\'adresse', async () => {
+  it('envoie le lien depuis l\'expéditeur de Code Tank ; un GET sur le lien ne vérifie rien, le POST de confirmation si', async () => {
     const u = await utilisateur()
     const f = formulaire()
     await api('POST', '/api/compte', u, f)
     const mail = await courriel(f.email_contact)
     expect(mail.from).toBe('code-tank@ybdn.io')
     expect(mail.texte).toContain('24 heures')
-    expect(mail.lien).toContain(serveur.url)
-    const clic = await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)
-    expect(clic.statut).toBe(302)
-    expect(clic.location).toBe('/compte?verification=ok')
+    expect(mail.lien).toBe(`${serveur.url}/compte/verifier?jeton=${jetonDuLien(mail.lien)}`)
+
+    // Ouvrir le lien (aperçu, antivirus) affiche la page avec son bouton et ne modifie rien.
+    const page = await fetch(mail.lien)
+    expect(page.status).toBe(200)
+    expect(await page.text()).toContain('Confirmer mon adresse')
+    expect(await ligne(u.id)).toMatchObject({ etat: 'email_a_verifier', email_verifie_le: null })
+    // L'ancienne route GET n'existe plus.
+    expect((await api('GET', `/api/compte/verifier?jeton=${jetonDuLien(mail.lien)}`)).statut).toBeGreaterThanOrEqual(400)
+    expect(await ligne(u.id)).toMatchObject({ etat: 'email_a_verifier', email_verifie_le: null })
+
+    expect(await confirmer(jetonDuLien(mail.lien))).toBe('ok')
     const c = await ligne(u.id)
     expect(c!.etat).toBe('verifie')
     expect(c!.email_verifie_le).toBeTruthy()
     // Second clic : toujours « ok », l'état ne bouge pas.
-    expect((await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)).location).toBe('/compte?verification=ok')
+    expect(await confirmer(jetonDuLien(mail.lien))).toBe('ok')
   })
 
-  it('refuse un jeton falsifié ou absent', async () => {
-    expect((await api('GET', '/api/compte/verifier?jeton=abc.def')).location).toBe('/compte?verification=invalide')
-    expect((await api('GET', '/api/compte/verifier')).location).toBe('/compte?verification=invalide')
+  it('refuse un jeton falsifié, absent ou expiré', async () => {
+    expect(await confirmer('abc.def')).toBe('invalide')
+    expect((await api('POST', '/api/compte/verifier', undefined, {})).json.resultat).toBe('invalide')
+    const u = await utilisateur()
+    const f = formulaire()
+    await api('POST', '/api/compte', u, f)
+    const vieux = creerJeton(u.id, f.email_contact, SECRET, Date.now() - 25 * 3600_000)
+    expect(await confirmer(vieux)).toBe('expire')
+    expect((await ligne(u.id))!.email_verifie_le).toBeNull()
   })
 
   it('changer d\'adresse annule la vérification, renvoie un lien, et rend l\'ancien lien caduc', async () => {
@@ -263,7 +283,7 @@ describe('vérification de l\'e-mail', () => {
     const f = formulaire()
     await api('POST', '/api/compte', u, f)
     const ancien = await courriel(f.email_contact)
-    await api('GET', new URL(ancien.lien).pathname + new URL(ancien.lien).search)
+    await confirmer(jetonDuLien(ancien.lien))
     expect((await ligne(u.id))!.email_verifie_le).toBeTruthy()
 
     const nouvelle = `nouvelle-${randomBytes(5).toString('hex')}@example.org`
@@ -273,18 +293,36 @@ describe('vérification de l\'e-mail', () => {
     const apres = await ligne(u.id)
     expect(apres).toMatchObject({ email_contact: nouvelle, email_verifie_le: null, etat: 'verifie' })
 
-    expect((await api('GET', new URL(ancien.lien).pathname + new URL(ancien.lien).search)).location).toBe('/compte?verification=invalide')
+    expect(await confirmer(jetonDuLien(ancien.lien))).toBe('invalide')
     expect((await ligne(u.id))!.email_verifie_le).toBeNull()
     const mail = await courriel(nouvelle)
-    expect((await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)).location).toBe('/compte?verification=ok')
+    expect(await confirmer(jetonDuLien(mail.lien))).toBe('ok')
     expect((await ligne(u.id))!.email_verifie_le).toBeTruthy()
   })
 
-  it('refuse une adresse jetable à la modification', async () => {
+  it('refuse une adresse jetable ou malformée à la modification', async () => {
     const u = await utilisateur()
     await api('POST', '/api/compte', u, formulaire())
-    const r = await api('PATCH', '/api/compte', u, { email_contact: 'x@mailinator.com' })
-    expect(r.statut).toBe(422)
+    expect((await api('PATCH', '/api/compte', u, { email_contact: 'x@mailinator.com' })).statut).toBe(422)
+    expect((await api('PATCH', '/api/compte', u, { email_contact: 'a@example.org,b@example.org' })).statut).toBe(422)
+  })
+
+  it('une adresse malformée écrite en direct par l\'API ne déclenche ni e-mail ni validation', async () => {
+    const u = await utilisateur()
+    await api('POST', '/api/compte', u, formulaire())
+    const premiere = `x-${randomBytes(5).toString('hex')}@example.org`
+    const mal = `${premiere},y-${randomBytes(5).toString('hex')}@example.org`
+    // Écriture directe : la base ne contrôle que la longueur.
+    expect((await u.client.from('compte').update({ email_contact: mal }).eq('id', u.id)).error).toBeNull()
+
+    const renvoi = await api('POST', '/api/compte/verification', u)
+    expect(renvoi.statut).toBe(422)
+    const { messages } = await (await fetch(`${MAIL}/api/v1/search?query=${encodeURIComponent(`to:${premiere}`)}`)).json()
+    expect(messages).toHaveLength(0)
+
+    // Un jeton valide signé pour cette adresse ne la valide pas non plus.
+    expect(await confirmer(creerJeton(u.id, mal, SECRET))).toBe('invalide')
+    expect((await ligne(u.id))!.email_verifie_le).toBeNull()
   })
 
   it('renvoie le lien tant que l\'adresse n\'est pas vérifiée, puis refuse', async () => {
@@ -293,7 +331,7 @@ describe('vérification de l\'e-mail', () => {
     await api('POST', '/api/compte', u, f)
     expect((await api('POST', '/api/compte/verification', u)).statut).toBe(200)
     const mail = await courriel(f.email_contact, 2)
-    await api('GET', new URL(mail.lien).pathname + new URL(mail.lien).search)
+    await confirmer(jetonDuLien(mail.lien))
     expect((await api('POST', '/api/compte/verification', u)).statut).toBe(409)
     expect((await api('POST', '/api/compte/verification')).statut).toBe(401)
   })

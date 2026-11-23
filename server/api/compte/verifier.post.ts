@@ -1,11 +1,13 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 
-// Lien reçu par e-mail : pas de session requise, le jeton signé fait preuve.
+// Confirmation faite par un clic sur la page /compte/verifier : seul ce POST modifie la base, un GET n'y suffit pas
+// (un aperçu de lien ou un antivirus de messagerie ouvre les URL). Pas de session : le jeton signé fait preuve.
 export default defineEventHandler(async (event) => {
-  const { jeton } = getQuery(event)
+  const { jeton } = (await readBody(event)) ?? {}
   const r = verifierJeton(typeof jeton === 'string' ? jeton : '', useRuntimeConfig(event).secretVerification)
-  if (!r.ok) return sendRedirect(event, `/compte?verification=${r.raison}`)
-  if (adresseJetable(r.email)) return sendRedirect(event, '/compte?verification=invalide')
+  if (!r.ok) return { resultat: r.raison }
+  // Même règle que le formulaire, appliquée à l'adresse du jeton et plus bas à celle de la base.
+  if (!adresseUtilisable(r.email)) return { resultat: 'invalide' as const }
 
   const db = serverSupabaseServiceRole(event)
   // La condition sur email_contact rend le jeton caduc si l'adresse a changé depuis l'envoi.
@@ -23,5 +25,5 @@ export default defineEventHandler(async (event) => {
   // Second clic sur un lien déjà utilisé : l'adresse est vérifiée, on le dit.
   const dejaVerifiee = lignes?.length
     || (await db.from('compte').select('id').eq('id', r.compteId).eq('email_contact', r.email).not('email_verifie_le', 'is', null)).data?.length
-  return sendRedirect(event, `/compte?verification=${dejaVerifiee ? 'ok' : 'invalide'}`)
+  return { resultat: dejaVerifiee ? ('ok' as const) : ('invalide' as const) }
 })

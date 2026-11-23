@@ -16,8 +16,8 @@
     "db:test": "supabase test db",
     "db:stop": "supabase stop",
     "db:types": "supabase gen types --lang=typescript --local > app/types/database.types.ts",
-    "stack:start": "./scripts/stack.sh start",
-    "stack:stop": "./scripts/stack.sh stop",
+    "stack:start": "supabase start -x studio,realtime,imgproxy,edge-runtime,logflare,vector,postgres-meta,supavisor,storage-api",
+    "stack:stop": "supabase stop",
     "test:stack": "nuxt build && vitest run --config vitest.stack.config.ts"
   },
   "dependencies": {

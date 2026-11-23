@@ -20,10 +20,11 @@ enabled = true
 port = 54421
 schemas = ["public"]
 
-# Boîte mail locale : interface web et API des messages (SMTP : voir la sortie de supabase start).
+# Boîte mail locale : interface web et API des messages sur 54424, SMTP publié sur 54425.
 [local_smtp]
 enabled = true
 port = 54424
+smtp_port = 54425
 
 [auth]
 enabled = true

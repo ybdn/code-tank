@@ -5,7 +5,8 @@ export type ErreursProfil = Partial<Record<ChampProfil | 'charte' | 'majeur', st
 export type Profil = Record<ChampProfil, string>
 
 const texte = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+// Une seule adresse, ASCII : ni virgule, ni point-virgule, ni chevrons ni guillemets (« a@b.fr,c@d.fr » est refusé).
+const EMAIL = /^[^\s@,;<>()[\]"\\]+@[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$/i
 
 // Ne garde que les champs du profil, nettoyés : tout le reste du corps est ignoré.
 export function nettoyerProfil(corps: Record<string, unknown>): Profil {
