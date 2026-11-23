@@ -47,7 +47,7 @@ beforeAll(async () => {
       if (e) throw e
       if (u === A && jure === 'sudo') sudoDeA = a.id
     }
-    await admin.from('vote_boss').insert({ participation_id: pid, note: boss, verrouille_le: maintenant() })
+    await admin.from('vote_boss').insert({ participation_id: pid, note: boss, commentaire: `CMT_BOSS_${u === A ? 'A' : 'B'} ${HTML}`, verrouille_le: maintenant() })
   }
   // Réplique de Sudo masquée pour A.
   await admin.from('audit').update({ replique_masquee: true }).eq('id', sudoDeA)
@@ -71,6 +71,7 @@ describe('pendant la délibération', () => {
 
   it('ni le rapport ni l\'entretien ne sont lisibles, même de leur candidat', async () => {
     expect((await A.client.from('rapport').select('id')).data).toEqual([])
+    expect((await A.client.from('mon_vote_boss').select('note')).data).toEqual([])
     expect((await appeler(`/api/campagnes/${c.slug}/resultat`, A)).statut).toBe(404)
     expect((await page(`/campagnes/${c.slug}/resultat`, A)).texte).toContain('pas encore publiés')
   })
@@ -132,5 +133,17 @@ describe('après publication', () => {
     // Texte de Claude : échappé.
     expect(texte).toContain('&lt;img src=x onerror=alert(1)&gt;')
     expect(texte).not.toContain('<img src=x')
+    // Commentaire du Boss : celui de A seulement, échappé.
+    expect(texte).toContain('CMT_BOSS_A &lt;img src=x onerror=alert(1)&gt;')
+    expect(texte).not.toContain('CMT_BOSS_B')
+  })
+
+  it('le commentaire du Boss est lisible de son seul candidat', async () => {
+    const lu = async (u: Utilisateur) => (await u.client.from('mon_vote_boss').select('note, commentaire')).data ?? []
+    expect(await lu(A)).toEqual([{ note: 7, commentaire: `CMT_BOSS_A ${HTML}` }])
+    expect(JSON.stringify(await lu(B))).not.toContain('CMT_BOSS_A')
+    expect(await lu(autre)).toEqual([])
+    expect((await anon().from('mon_vote_boss').select('note')).error).not.toBeNull()
+    expect((await appeler(`/api/campagnes/${c.slug}/resultat`, B)).texte).not.toContain('CMT_BOSS_A')
   })
 })

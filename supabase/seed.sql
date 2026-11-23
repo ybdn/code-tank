@@ -180,8 +180,10 @@ join seed_resultats_notes s on ('30000000-0000-4000-8000-0000000000' || s.n)::uu
 cross join (values ('sudo'), ('refacto'), ('lint'), ('pitch')) j(jure)
 where p.campagne_id = '20000000-0000-4000-8000-000000000005';
 
-insert into public.vote_boss (participation_id, note, verrouille_le)
-select ('30000000-0000-4000-8000-0000000000' || n)::uuid, boss, now() from seed_resultats_notes;
+insert into public.vote_boss (participation_id, note, commentaire, verrouille_le)
+select ('30000000-0000-4000-8000-0000000000' || n)::uuid, boss,
+       case when n = '5a' then 'Commentaire fictif du Boss : un projet net, je le referais avec un test de plus.' end, now()
+from seed_resultats_notes;
 
 insert into public.decision (campagne_id, participation_id, type, justification)
 values ('20000000-0000-4000-8000-000000000005', '30000000-0000-4000-8000-00000000005c', 'disqualification',

@@ -68,6 +68,7 @@ export type ResultatCandidat = {
   criteres: Critere[]
   ligne: LigneClassement | null
   demande: string | null
+  commentaire_boss: string | null
   jures: { jure: string; sortie: SortieJure }[]
 }
 

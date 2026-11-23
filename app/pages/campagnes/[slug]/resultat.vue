@@ -77,6 +77,8 @@ const mascotte = (jure: string) => jure as Jure
               <li><span>Score Claude</span><span>{{ formaterNombre(data.ligne.score_claude) }} sur 100</span></li>
               <li><span>Score final</span><strong>{{ formaterNombre(data.ligne.score_final) }} sur 100</strong></li>
             </ul>
+            <!-- Commentaire du Boss sur le candidat : texte libre, rendu comme du texte, jamais comme du HTML. -->
+            <blockquote v-if="data.commentaire_boss" class="replique"><p>{{ data.commentaire_boss }}</p></blockquote>
             <p class="note-claire">Score final = deux tiers du score Claude + un tiers de la note du Boss ramenée sur 100.</p>
           </div>
         </article>
