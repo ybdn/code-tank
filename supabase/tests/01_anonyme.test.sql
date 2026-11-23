@@ -1,7 +1,7 @@
 -- Accès anonyme et inventaire des droits. Les données viennent de seed.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 
 -- Inventaire (superutilisateur) : RLS partout, et aucun privilège sans politique.
 select is_empty(
@@ -37,6 +37,7 @@ select throws_ok('select 1 from public.vote_boss', '42501', null, 'anon ne lit p
 select throws_ok('select 1 from public.decision', '42501', null, 'anon ne lit pas decision');
 select throws_ok('select 1 from public.mon_depot', '42501', null, 'anon ne lit pas mon_depot');
 select throws_ok('select 1 from public.rapport', '42501', null, 'anon ne lit pas rapport');
+select throws_ok('select 1 from public.mon_vote_boss', '42501', null, 'anon ne lit pas mon_vote_boss');
 select throws_ok('select 1 from public.contact_reutilisation_lisible', '42501', null, 'anon ne lit pas contact_reutilisation_lisible');
 
 select is(

@@ -3,7 +3,7 @@
 -- et dans une campagne en délibération (03) ; il est aussi inscrit, sans dépôt, à seed-ouverte (02).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(23);
+select plan(25);
 
 insert into auth.users (id, aud, role, email) values ('10000000-0000-4000-8000-0000000000b1', 'authenticated', 'authenticated', 'b1@example.invalid');
 insert into public.compte (id, github_id, vrai_nom, pseudo, email_contact, email_verifie_le, motivation, depot_cite_url,
@@ -42,7 +42,16 @@ select is((select pseudo from public.classement where campagne_id = '20000000-00
   'seed_zoe', 'avant : la ligne est au nom du pseudo');
 select is((select count(*) from public.classement where pseudo = 'candidat supprimé'), 1::bigint, 'avant : une seule ligne anonyme (celle du seed)');
 
+set local role authenticated;
+set local request.jwt.claims = '{"role":"authenticated", "sub":"10000000-0000-4000-8000-0000000000b1"}';
+select is((select commentaire from public.mon_vote_boss), 'Commentaire sur la personne.', 'avant : zoé lit le commentaire du Boss');
+reset role;
+
 delete from public.compte where id = '10000000-0000-4000-8000-0000000000b1';
+
+set local role authenticated;
+select is((select count(*) from public.mon_vote_boss), 0::bigint, 'après : plus rien dans mon_vote_boss');
+reset role;
 
 select is((select count(*) from public.compte where id = '10000000-0000-4000-8000-0000000000b1'), 0::bigint, 'le compte n''existe plus');
 select is((select count(*) from public.participation where compte_id is null and id in (

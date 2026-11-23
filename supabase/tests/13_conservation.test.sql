@@ -3,6 +3,9 @@ begin;
 create extension if not exists pgtap with schema extensions;
 select plan(22);
 
+-- Date de bob avant tout appel : la fin du fichier prouve qu'elle n'a pas bougé, quel que soit son âge.
+create temp table bob_avant as select derniere_connexion_le from public.compte where pseudo = 'seed_bob';
+
 -- publiee_le : renseignée par le passage à « publiee ».
 select isnt((select publiee_le from public.campagne where slug = 'seed-publiee'), null, 'la campagne publiée du seed a sa date');
 select is((select publiee_le from public.campagne where slug = 'seed-deliberation'), null, 'une campagne non publiée n''en a pas');
@@ -43,7 +46,7 @@ set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-00000000000a","r
 select lives_ok($$select public.noter_connexion()$$, 'deuxième appel');
 reset role;
 select cmp_ok((select derniere_connexion_le from public.compte where pseudo = 'seed_alice'), '<', now() - interval '1 hour', 'au plus une écriture par jour');
-select is((select derniere_connexion_le from public.compte where pseudo = 'seed_bob') > now() - interval '1 minute', true, 'les autres comptes ne bougent pas');
+select is((select derniere_connexion_le from public.compte where pseudo = 'seed_bob'), (select derniere_connexion_le from bob_avant), 'les autres comptes ne bougent pas');
 
 -- Purge de debit : bornée.
 insert into public.debit (empreinte, action, le)
