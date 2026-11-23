@@ -200,3 +200,38 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .champ :is(select) { width: 100%; min-height: 44px; padding: 10px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
 .champ input.court { max-width: 8rem; }
 .empreinte { overflow-wrap: anywhere; }
+
+/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par Claude sont du texte. */
+.resultats :is(p, li, th, td, blockquote) { overflow-wrap: anywhere; }
+.resultats h2 { margin-top: 2.5rem; font-size: clamp(1.5rem, 3vw, 2.25rem); }
+.resultats .btns { margin-top: 1.5rem; }
+.podium { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; }
+.podium li { display: grid; gap: 4px; padding: 20px; background: var(--surface); border-radius: 8px; border-top: 4px solid var(--line); }
+.podium li[data-rang="1"] { border-top-color: var(--accent); }
+.podium__rang { color: var(--accent); font: 700 1.5rem var(--font-display); }
+.podium__nom { font-size: 1.15rem; }
+.tableau--serre table { min-width: 0; }
+.tableau--serre :is(th, td) { padding: 10px 8px; font-size: .95rem; }
+.tableau--serre :is(th, td):first-child { white-space: nowrap; }
+.tableau--notes table { min-width: 48rem; }
+.tableau--notes thead th { min-width: 7rem; }
+.tableau--notes tbody th { position: sticky; left: 0; background: var(--bg); min-width: 6rem; }
+.tableau:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
+.mention { display: block; margin-top: 4px; color: var(--muted); font-size: .85rem; font-weight: 400; }
+.jure { display: grid; grid-template-columns: 72px 1fr; gap: 16px 20px; padding: 20px; background: var(--surface); border-radius: 8px; }
+.jure + .jure { margin-top: 1rem; }
+.jure__tete { align-self: start; display: grid; justify-items: center; padding: 6px 4px 4px; background: #f1ece4; border-radius: 12px 12px 4px 4px; }
+.jure__tete .mascotte { width: 100%; height: auto; }
+.jure__corps > * + * { margin-top: .75rem; }
+.jure__corps .criteres { margin-top: 1rem; }
+.verdict { display: inline-block; padding: 2px 12px; border: 1px solid var(--muted); border-radius: 999px; font-size: .9rem; font-weight: 600; }
+.verdict[data-verdict="convaincu"] { border-color: var(--accent); color: var(--accent); }
+.replique { margin: 0; padding: 4px 0 4px 16px; border-left: 4px solid var(--accent); font-style: italic; }
+.replique p { margin: 0; }
+.preuves { margin: 0; padding-left: 1.25em; }
+.preuves li + li { margin-top: .5rem; }
+.preuves code { font: .9em var(--font-display); color: var(--accent); }
+.resultats .audit + .audit { margin-top: 1rem; }
+.resultats .audit h3 { font-size: 1.1rem; }
+.resultats .audit h4 { margin-top: 1rem; font-size: 1rem; }
+@media (max-width: 30rem) { .jure { grid-template-columns: 1fr; } .jure__tete { width: 72px; } }
