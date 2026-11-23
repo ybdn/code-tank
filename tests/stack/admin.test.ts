@@ -364,7 +364,9 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     // Aperçu du classement : la ligne existe, mais son score Claude et ses notes restent cachés.
     const apercu = await appeler('GET', `/api/admin/campagnes/${slug}/classement`, orga)
     expect(apercu.statut).toBe(200)
-    expect(apercu.json).toEqual([expect.objectContaining({ participation_id: pA, vote_verrouille: false, score_claude: null, notes: null, rang: null })])
+    const lignes = apercu.json as unknown as LigneApercu[]
+    expect(lignes.every((l) => !l.vote_verrouille && l.score_claude === null && l.notes === null && l.rang === null)).toBe(true)
+    expect(lignes.find((l) => l.participation_id === pA)).toBeDefined()
     expect(apercu.texte).not.toMatch(/REPLIQUE-SECRETE|JUSTIFICATION-SECRETE/)
     expect(html).toContain('Aperçu du classement')
     expect(html).toContain('Vote du Boss non verrouillé : score Claude caché.')
@@ -397,7 +399,8 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect(html).toContain('src/a.ts:3')
 
     // Aperçu : vote verrouillé, notes visibles ; un seul juré a rendu son audit, donc pas encore de score Claude ni de rang.
-    const [ligne] = (await appeler('GET', `/api/admin/campagnes/${slug}/classement`, orga)).json as unknown as LigneApercu[]
+    const ligne = ((await appeler('GET', `/api/admin/campagnes/${slug}/classement`, orga)).json as unknown as LigneApercu[])
+      .find((l) => l.participation_id === pA)
     expect(ligne).toMatchObject({ participation_id: pA, vote_verrouille: true, note_boss: 8, score_claude: null, score_final: null, rang: null })
     expect(ligne!.notes).toMatchObject({ outillage: 6 })
     expect(html).toContain('Audits incomplets')
