@@ -53,6 +53,20 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"debit": {
+                  Row: {
+                    "action": string,"empreinte": string,"le": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "action": string,"empreinte": string,"le"?: string
+                  }
+                  Update: {
+                    "action"?: string,"empreinte"?: string,"le"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"decision": {
                   Row: {
                     "campagne_id": string,"id": string,"justification": string,"participation_id": string,"prise_le": string,"type": Database["public"]['Enums']["decision_type"]
@@ -314,6 +328,9 @@ isOneToOne: false
 "changer_statut_campagne":
 { Args: { "p_campagne_id": string,"p_statut": Database["public"]['Enums']["campagne_statut"] }; Returns: undefined
                            },
+"consommer_debit":
+{ Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
+                           },
 "decider_compte":
 { Args: { "p_compte_id": string,"p_etat": Database["public"]['Enums']["compte_etat"] }; Returns: undefined
                            },
@@ -328,6 +345,9 @@ isOneToOne: false
                            },
 "masquer_replique":
 { Args: { "p_audit_id": string }; Returns: undefined
+                           },
+"regler_contact_reutilisation":
+{ Args: { "p_accord": boolean,"p_campagne_id": string }; Returns: undefined
                            },
 "retirer_depot":
 { Args: { "p_campagne_id": string }; Returns: undefined
