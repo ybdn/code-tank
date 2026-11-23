@@ -62,6 +62,24 @@ describe('limite de débit', () => {
     expect((await appeler('POST', '/api/compte/verification', u, undefined, ip())).statut).toBe(200)
   })
 
+  it('changement d\'adresse (PATCH /api/compte) : passe par le plafond du renvoi, et rien n\'est écrit une fois refusé', async () => {
+    const u = await candidat()
+    const a = ip()
+    const adresse = (n: number) => `change-${n}-${randomBytes(4).toString('hex')}@example.org`
+    // Une modification sans changement d'adresse n'entame pas le plafond.
+    for (let i = 0; i < 3; i++) expect((await appeler('PATCH', '/api/compte', u, { motivation: `Je code ${i}.` }, a)).statut).toBe(200)
+    const cinq: string[] = []
+    for (let i = 0; i < 5; i++) {
+      cinq.push(adresse(i))
+      expect((await appeler('PATCH', '/api/compte', u, { email_contact: cinq[i] }, a)).statut).toBe(200)
+    }
+    const refus = await appeler('PATCH', '/api/compte', u, { email_contact: adresse(6) }, a)
+    expect(refus.statut).toBe(429)
+    expect(Number(refus.retryAfter)).toBeGreaterThan(0)
+    expect((await admin.from('compte').select('email_contact').eq('id', u.id).single()).data?.email_contact).toBe(cinq[4])
+    expect((await appeler('PATCH', '/api/compte', u, { email_contact: adresse(7) }, ip())).statut).toBe(200)
+  })
+
   it('confirmation d\'e-mail : 30 par heure ; deux requêtes simultanées au dernier créneau n\'en laissent passer qu\'une', async () => {
     const a = ip()
     for (let i = 0; i < 29; i++) expect((await appeler('POST', '/api/compte/verifier', undefined, { jeton: 'x' }, a)).statut).toBe(200)

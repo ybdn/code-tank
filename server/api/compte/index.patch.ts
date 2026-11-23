@@ -16,6 +16,8 @@ export default defineEventHandler(async (event) => {
   // Lecture et écriture par la session de l'utilisateur : la RLS décide.
   const { data: avant } = await client.from('compte').select('email_contact').eq('id', user.id).maybeSingle()
   if (!avant) throw createError({ statusCode: 404, statusMessage: 'Compte introuvable.' })
+  // Un changement d'adresse fait envoyer un lien à un tiers possible : il passe par la limite du renvoi, avant toute écriture.
+  if (patch.email_contact && patch.email_contact !== avant.email_contact) await limiter(event, 'verification')
   const { error } = await client.from('compte').update(patch).eq('id', user.id)
   if (error) {
     if (error.code === '23505') {
