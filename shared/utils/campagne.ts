@@ -1,4 +1,4 @@
-export type Critere = { cle: string; libelle: string; poids: number; jure: string }
+export type Critere = { cle: string; libelle: string; poids: number; jure: string; calcule?: boolean }
 export type Campagne = {
   id: string; slug: string; titre: string; theme: string; brief: string; criteres: Critere[]; statut: string
   ouverture_inscriptions: string; cloture_depot: string; date_resultats: string; max_participants: number

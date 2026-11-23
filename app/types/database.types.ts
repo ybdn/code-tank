@@ -197,6 +197,20 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
+                },"verrou": {
+                  Row: {
+                    "detenteur": string,"expire_le": string,"nom": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "detenteur": string,"expire_le": string,"nom": string
+                  }
+                  Update: {
+                    "detenteur"?: string,"expire_le"?: string,"nom"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"vote_boss": {
                   Row: {
                     "commentaire": string | null,"note": number,"participation_id": string,"verrouille_le": string | null
@@ -274,6 +288,32 @@ isOneToOne: true
 isOneToOne: true
       referencedRelation: "participation"
       referencedColumns: ["id"]
+    }
+                  ]
+                },"mon_vote_boss": {
+                  Row: {
+                    "campagne_id": string,"commentaire": string | null,"note": number
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "participation_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "participation_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "classement"
+      referencedColumns: ["campagne_id"]
+    },{
+      foreignKeyName: "participation_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "places_campagne"
+      referencedColumns: ["campagne_id"]
     }
                   ]
                 },"places_campagne": {
@@ -355,11 +395,17 @@ isOneToOne: false
 "objets_abandonnes":
 { Args: { "p_age_h": number,"p_limite": number }; Returns: string[]
                            },
+"prendre_verrou":
+{ Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
+                           },
 "purger_debit":
 { Args: { "p_age_h": number,"p_limite": number }; Returns: number
                            },
 "regler_contact_reutilisation":
 { Args: { "p_accord": boolean,"p_campagne_id": string }; Returns: undefined
+                           },
+"rendre_verrou":
+{ Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean
                            },
 "retirer_depot":
 { Args: { "p_campagne_id": string }; Returns: undefined
