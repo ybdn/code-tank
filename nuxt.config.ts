@@ -36,6 +36,8 @@ export default defineNuxtConfig({
       link: [{ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
     },
   },
+  // Entretien et rapport d'un candidat : jamais mis en cache, ni par le navigateur ni par un relais.
+  routeRules: { '/campagnes/*/resultat': { headers: { 'cache-control': 'private, no-store' } } },
   // Les polices restent des fichiers : un data: URI serait refusé par font-src 'self'.
   vite: { build: { assetsInlineLimit: 0 } },
   security: {

@@ -4,6 +4,8 @@ const campagne = await useCampagne(slug)
 useHead({ title: campagne.value.titre })
 const criteres = computed(() => campagne.value.criteres as Critere[])
 const ouverte = computed(() => ['inscriptions', 'depot'].includes(campagne.value.statut))
+const enDeliberation = computed(() => STATUTS_DELIBERATION.includes(campagne.value.statut))
+const resultatsPublies = computed(() => STATUTS_RESULTATS.includes(campagne.value.statut))
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
@@ -32,12 +34,14 @@ async function charger() {
   etatCompte.value = compte.data?.etat ?? null
   inscrit.value = Boolean(participation.data)
 }
+// Délibération et résultats ont leur écran : ni places ni inscription à lire.
+const avecInscription = computed(() => !enDeliberation.value && !resultatsPublies.value)
 onMounted(async () => {
-  await charger()
+  if (avecInscription.value) await charger()
   pret.value = true
 })
 watch(user, async () => {
-  if (pret.value) await charger()
+  if (pret.value && avecInscription.value) await charger()
 })
 
 async function sinscrire() {
@@ -70,7 +74,9 @@ async function sedesinscrire() {
 </script>
 
 <template>
-  <section class="section">
+  <CampagneDeliberation v-if="enDeliberation" :titre="campagne.titre" :theme="campagne.theme" />
+  <CampagneClassement v-else-if="resultatsPublies" :campagne="campagne" />
+  <section v-else class="section">
     <div class="wrap texte">
       <p class="etat" :data-statut="campagne.statut">{{ LIBELLE_STATUT[campagne.statut] }}</p>
       <h1>{{ campagne.titre }}</h1>

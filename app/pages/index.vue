@@ -87,13 +87,7 @@ const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'c
           </ul>
           <p class="note">Critères et poids par défaut ; ils sont publiés à l'ouverture de chaque campagne.</p>
         </div>
-        <div class="plateau" role="img" aria-label="Les cinq jurés assis sur le plateau : Sudo, Refacto, Lint et Pitch, quatre créatures coiffées chacune de leur chapeau, et, au centre, Le Boss, le juré humain en casquette">
-          <span class="lampes" aria-hidden="true"><i v-for="j in jures" :key="j.nom" /></span>
-          <div v-for="j in jures" :key="j.nom" class="siege">
-            <div class="siege__dos"><MascottePixel :jure="j.jure" /></div>
-            <div class="siege__table" />
-          </div>
-        </div>
+        <PlateauJury />
       </div>
     </section>
   </div>
