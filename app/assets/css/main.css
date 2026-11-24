@@ -48,10 +48,11 @@ main:focus { outline: none; }
 
 .nav { border-bottom: 1px solid var(--line); }
 .nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 68px; }
-.logo { display: inline-flex; align-items: center; gap: 10px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.1rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
-.logo .mascotte { width: 28px; height: 28px; }
-.logo__nom { display: grid; line-height: 1.05; }
-.logo__par { margin-top: 3px; font: 400 .68rem/1 var(--font-display); letter-spacing: .02em; color: var(--muted); }
+.logo { display: inline-flex; align-items: center; gap: 12px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.25rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
+/* 42 px = 3 px par case ; les deux rangées vides du haut (sol commun des mascottes) remontent de 3 px pour caler le dessin sur le texte. */
+.logo .mascotte { width: 42px; height: 42px; flex: none; translate: 0 -3px; }
+.logo__nom { display: grid; justify-items: start; line-height: 1; }
+.logo__par { margin-top: 5px; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
 .nav__links { display: flex; gap: 0 24px; margin-right: auto; }
 .nav__links a, .legal-links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
 .legal-links a:hover { text-decoration: underline; }
@@ -130,7 +131,9 @@ main:focus { outline: none; }
 .legal tr:last-child td { border-bottom: 0; }
 
 .footer { border-top: 1px solid var(--line); padding-block: 32px; color: var(--muted); }
-.footer__bar { display: flex; flex-wrap: wrap; justify-content: space-between; gap: 8px 32px; }
+.footer__bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px 32px; }
+.footer__marque { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+.footer .logo { color: var(--ink); }
 .footer p { margin: 0; align-self: center; }
 .legal-links { display: flex; flex-wrap: wrap; gap: 4px 20px; }
 
@@ -471,3 +474,8 @@ h1 + .parcours { margin-top: 2rem; }
 /* Les liens découpés en cases (clip-path) perdent leur contour extérieur : le focus se dessine à l'intérieur. */
 :is(.indicateurs a, .taches a, .panneaux__nav a):focus-visible { outline-offset: -5px; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
+@media (max-width: 24rem) {
+  .logo { gap: 8px; font-size: 1.02rem; }
+  .logo .mascotte { width: 28px; height: 28px; translate: 0 -2px; }
+  .nav .btn { padding: 0 14px; }
+}

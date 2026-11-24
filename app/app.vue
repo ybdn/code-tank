@@ -24,7 +24,10 @@ onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
     <main id="contenu" tabindex="-1"><NuxtLayout><NuxtPage /></NuxtLayout></main>
     <footer class="footer">
       <div class="wrap footer__bar">
-        <p>Code Tank by ybdn.io, le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
+        <div class="footer__marque">
+          <NuxtLink class="logo" to="/"><MascottePixel jure="sudo" /><span class="logo__nom">Code Tank <span class="logo__par">by ybdn.io</span></span></NuxtLink>
+          <p>Le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
+        </div>
         <nav aria-label="Informations légales" class="legal-links">
           <NuxtLink to="/charte">Charte</NuxtLink>
           <NuxtLink to="/confidentialite">Confidentialité</NuxtLink>
