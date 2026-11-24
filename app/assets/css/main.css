@@ -460,3 +460,5 @@ h1 + .parcours { margin-top: 2rem; }
 /* Les liens découpés en cases (clip-path) perdent leur contour extérieur : le focus se dessine à l'intérieur. */
 :is(.indicateurs a, .taches a, .panneaux__nav a):focus-visible { outline-offset: -5px; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
+/* La marque : « Code Tank by ybdn.io », l'éditeur en retrait. */
+.logo__par { margin-left: 2px; font-weight: 400; font-size: .78em; color: var(--muted); letter-spacing: -.02em; }

@@ -8,7 +8,7 @@ const user = useSupabaseUser()
     <a class="skip" href="#contenu">Aller au contenu</a>
     <header class="nav">
       <div class="wrap nav__bar">
-        <NuxtLink class="logo" to="/"><MascottePixel jure="sudo" />Code Tank</NuxtLink>
+        <NuxtLink class="logo" to="/"><MascottePixel jure="sudo" /><span>Code Tank <span class="logo__par">by ybdn.io</span></span></NuxtLink>
         <nav aria-label="Principal" class="nav__links">
           <a href="/#campagnes">Campagnes</a>
           <a href="/#jury">Jury</a>
@@ -21,7 +21,7 @@ const user = useSupabaseUser()
     <main id="contenu" tabindex="-1"><NuxtLayout><NuxtPage /></NuxtLayout></main>
     <footer class="footer">
       <div class="wrap footer__bar">
-        <p>Code Tank, le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
+        <p>Code Tank by ybdn.io, le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
         <nav aria-label="Informations légales" class="legal-links">
           <NuxtLink to="/charte">Charte</NuxtLink>
           <NuxtLink to="/confidentialite">Confidentialité</NuxtLink>
