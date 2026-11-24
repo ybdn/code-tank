@@ -146,6 +146,15 @@ main:focus { outline: none; }
 /* Sommaire : des cibles de 44 px, sans espace entre elles. */
 .legal .toc li + li { margin-top: 0; }
 .legal .toc a { display: inline-flex; align-items: center; min-height: 44px; }
+/* Grand écran : titre sur toute la largeur, sommaire collant à gauche, texte à droite. */
+@media (min-width: 64rem) {
+  .legal { max-width: 68rem; display: grid; grid-template-columns: 15rem minmax(0, 44rem); column-gap: 64px; align-items: start; }
+  .legal > :first-child { grid-column: 1 / -1; }
+  .legal .toc { position: sticky; top: 24px; font-size: .92rem; }
+  .legal .toc a { color: var(--muted); text-decoration: none; }
+  .legal .toc a:hover { color: var(--ink); text-decoration: underline; }
+  .legal > :last-child { grid-column: 2; }
+}
 .legal .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 .legal table { width: 100%; border-collapse: collapse; text-align: left; min-width: 34rem; }
 .legal :is(th, td) { padding: 12px 16px; vertical-align: top; border-bottom: 1px solid var(--line); }
@@ -153,9 +162,10 @@ main:focus { outline: none; }
 
 .footer { border-top: 1px solid var(--line); padding-block: 32px; color: var(--muted); }
 .footer__bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px 32px; }
-.footer__marque { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+/* Marque en colonne (logo, puis la phrase), liens à droite ; tout passe en colonne quand la place manque. */
+.footer__marque { display: grid; justify-items: start; gap: 16px; }
 .footer .logo { color: var(--ink); }
-.footer p { margin: 0; align-self: center; }
+.footer p { margin: 0; font-size: .92rem; }
 .legal-links { display: flex; flex-wrap: wrap; gap: 4px 20px; }
 
 /* Formulaires et état du compte. */
