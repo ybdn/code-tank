@@ -37,8 +37,7 @@ const rebours = (iso: string) => {
           </InvitePrompt>
           <h1 id="hero-h">Ton code face au jury</h1>
           <p class="lead">
-            Un thème imposé, le même pour tous. Tu déposes ton projet, cinq jurés le notent, et chaque note cite le
-            fichier et la ligne qui la justifient.
+            Une campagne te plaît&nbsp;? Inscris-toi, dépose ton code et passe devant nos cinq jurés.
           </p>
           <p class="btns">
             <NuxtLink class="btn btn--primary" :to="ouverte ? `/campagnes/${ouverte.slug}` : '/compte'">{{ ouverte ? 'Voir la campagne ouverte' : 'Créer mon compte' }}</NuxtLink>
