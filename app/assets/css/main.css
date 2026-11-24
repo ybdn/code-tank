@@ -430,3 +430,29 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 @media (max-width: 60rem) { .place { order: -1; position: static; } }
 @media (max-width: 30rem) { .frise[data-publique] li { font-size: .68rem; } }
 h1 + .parcours { margin-top: 2rem; }
+
+/* Détails relevés en parcourant le site de bout en bout. */
+:root { color-scheme: dark; }
+.section--clair { color-scheme: light; }
+.texte > * + .btns { margin-top: 1.5rem; }
+.texte > h2 { margin-top: 2.75rem; font-size: clamp(1.5rem, 2.8vw, 2.1rem); }
+.champ input[type=file]::file-selector-button { min-height: 40px; margin-right: 14px; padding: 0 18px; border: 1px solid var(--line); border-radius: 999px; background: var(--surface); color: var(--ink); font: 500 .95rem var(--font-text); cursor: pointer; }
+.champ input[type=file]::file-selector-button:hover { border-color: var(--ink); }
+.champ input[type=radio] { width: 22px; height: 22px; accent-color: var(--accent); }
+.deconnexion { padding-top: 1.5rem; border-top: 1px solid var(--line); }
+.parcours li[data-etat="fait"]:last-child { border-top-color: var(--accent); }
+.place .btns .btn:not(.btn--primary) { flex: 0 1 auto; }
+.terminal .dates div { display: grid; grid-template-columns: minmax(9rem, 12rem) 1fr; gap: 4px 16px; }
+@media (max-width: 30rem) { .terminal .dates div { grid-template-columns: 1fr; } }
+.terminal .dates dt { color: var(--muted); }
+.redepot > summary { font-weight: 600; }
+.tableau tbody th { white-space: nowrap; }
+.tableau tr[data-moi] :is(th, td) { background: rgb(255 74 31 / .1); }
+.moi { margin-left: 8px; padding: 1px 8px; background: var(--accent); color: var(--accent-ink); font: 700 .75rem var(--font-display); vertical-align: 2px; }
+.verdict-final { display: grid; gap: 10px; max-width: 36rem; padding: 24px; background: var(--trame), var(--surface); clip-path: var(--pixel); box-shadow: inset 0 4px 0 var(--line); }
+.verdict-final[data-rang="1"] { box-shadow: inset 0 4px 0 var(--accent); }
+.verdict-final p { margin: 0; }
+.verdict-final__rang { font-size: 1.1rem; color: var(--muted); }
+.verdict-final__rang strong { display: block; color: var(--accent); font: 700 clamp(3rem, 8vw, 4.5rem)/1 var(--font-display); letter-spacing: -.06em; }
+.verdict-final__score { color: var(--muted); }
+.verdict-final__score strong { color: var(--ink); font: 700 1.75rem var(--font-display); }

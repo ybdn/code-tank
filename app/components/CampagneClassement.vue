@@ -56,10 +56,10 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
               </tr>
             </thead>
             <tbody>
-              <tr v-for="l in lignes" :key="l.pseudo">
+              <tr v-for="l in lignes" :key="l.pseudo" :data-moi="l.pseudo === pseudo ? '' : undefined">
                 <td>{{ l.rang ?? '—' }}<span v-if="l.rang === null" class="sr-only"> non classé</span></td>
                 <th scope="row">
-                  {{ l.pseudo }}
+                  {{ l.pseudo }}<span v-if="l.pseudo === pseudo" class="moi">toi</span>
                   <span v-if="l.disqualifie" class="mention">Disqualifié. Justification publique de l'organisateur : {{ l.justification }}</span>
                   <span v-else-if="l.rang === null" class="mention">Non classé.</span>
                   <span v-if="l.justification_departage" class="mention">Départagé à égalité par l'organisateur : {{ l.justification_departage }}</span>

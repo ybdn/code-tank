@@ -182,11 +182,20 @@ async function retirer() {
         </template>
 
         <template v-if="depotOuvert(campagne)">
-          <h2>{{ reception || recu ? 'Redéposer' : 'Déposer ton code' }}</h2>
-          <p v-if="reception || recu">Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>
-          <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="Boolean(reception || recu)" :reutilisation="accord" @envoyer="deposer" />
+          <details v-if="reception || recu" class="bloc redepot" :open="etape > 0 || Object.keys(erreurs).length > 0">
+            <summary>Redéposer une nouvelle version</summary>
+            <div class="bloc__corps">
+              <p>Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>
+              <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" redepot :reutilisation="accord" @envoyer="deposer" />
+            </div>
+          </details>
+          <template v-else>
+            <h2>Déposer ton code</h2>
+            <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="false" :reutilisation="accord" @envoyer="deposer" />
+          </template>
         </template>
-        <p v-else>Le dépôt n'est pas ouvert pour cette campagne.</p>
+        <p v-else-if="STATUTS_RESULTATS.includes(campagne.statut)" class="btns"><NuxtLink class="btn btn--primary" :to="`/campagnes/${slug}/resultat`">Voir mon entretien et mon rapport</NuxtLink></p>
+        <p v-else>Le dépôt est clos pour cette campagne.</p>
 
         <template v-if="peutRetirer">
           <h2>Retirer mon dépôt</h2>

@@ -37,18 +37,24 @@ const mascotte = (jure: string) => jure as Jure
       <p v-else-if="error || !data" role="alert" class="avis avis--erreur">Ton entretien ne peut pas être lu pour le moment. Réessaie dans un instant.</p>
 
       <template v-else>
-        <p v-if="data.ligne" class="lead">
-          <template v-if="data.ligne.disqualifie">Ton dépôt a été disqualifié.</template>
-          <template v-else-if="data.ligne.rang !== null">Tu termines {{ ordinal(data.ligne.rang) }}.</template>
-          <template v-else>Ton dépôt n'est pas classé.</template>
-        </p>
+        <div v-if="data.ligne" class="verdict-final" :data-rang="data.ligne.rang ?? undefined">
+          <p class="verdict-final__rang">
+            <template v-if="data.ligne.disqualifie">Ton dépôt a été disqualifié.</template>
+            <template v-else-if="data.ligne.rang !== null">Tu termines <strong>{{ ordinal(data.ligne.rang) }}</strong></template>
+            <template v-else>Ton dépôt n'est pas classé.</template>
+          </p>
+          <template v-if="data.ligne.score_final !== null">
+            <p class="verdict-final__score"><strong>{{ formaterNombre(data.ligne.score_final) }}</strong> sur 100</p>
+            <JaugePixel :valeur="data.ligne.score_final" :max="100" />
+          </template>
+        </div>
         <p v-if="data.ligne?.disqualifie" class="avis">Justification de l'organisateur, publique : {{ data.ligne.justification }}</p>
         <p v-if="data.ligne?.justification_departage" class="avis">À égalité de score, l'organisateur t'a départagé. Justification publique : {{ data.ligne.justification_departage }}</p>
 
         <template v-if="data.demande">
           <h2>Ta demande</h2>
           <!-- Texte du candidat : rendu comme du texte, jamais comme du HTML. -->
-          <p class="brief">{{ data.demande }}</p>
+          <blockquote class="replique"><p>{{ data.demande }}</p></blockquote>
         </template>
 
         <h2>L'entretien</h2>

@@ -11,7 +11,7 @@ const ETATS: Record<Etat, string> = {
   email_a_verifier: 'Vérifie ton e-mail : ton compte attend le clic sur le lien que nous t\'avons envoyé.',
   verifie: 'En attente d\'autorisation : ton e-mail est vérifié, l\'organisateur autorise chaque compte à la main.',
   liste_attente: 'Liste d\'attente : le nombre de comptes est atteint. L\'organisateur choisit qui monte, ce n\'est pas l\'ordre d\'arrivée.',
-  autorise: 'Compte autorisé : tu pourras t\'inscrire à une campagne dès qu\'une sera ouverte.',
+  autorise: 'Compte autorisé : tu peux t\'inscrire à toute campagne ouverte.',
   refuse: 'Ta candidature n\'a pas été retenue.',
   ferme: 'Ton compte est fermé.',
 }
@@ -148,7 +148,7 @@ async function renvoyer() {
       <template v-else-if="!compte">
         <p class="lead">Tu es connecté avec GitHub. Crée ton compte : le profil, la charte et ta majorité.</p>
         <FormulaireProfil creation :erreurs="erreurs" :occupe="occupe" @envoyer="creer" />
-        <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+        <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
       </template>
 
       <template v-else-if="compte.etat === 'refuse' || compte.etat === 'ferme'">
@@ -158,13 +158,14 @@ async function renvoyer() {
           Pour exercer tes droits sur tes données :
           <a href="mailto:support@ybdn.io?subject=Code%20Tank%20%E2%80%94%20Mes%20donn%C3%A9es">support@ybdn.io</a>.
         </p>
-        <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+        <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
         <SuppressionCompte :pseudo="compte.pseudo" />
       </template>
 
       <template v-else>
         <h2>État</h2>
         <p class="etat etat--console" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
+        <p v-if="compte.etat === 'autorise'" class="btns"><NuxtLink class="btn btn--primary" to="/#campagnes">Voir les campagnes</NuxtLink></p>
         <template v-if="compte.etat === 'liste_attente'">
           <p>Tous les 12 mois, nous te demandons par e-mail si tu attends toujours une place. Tu peux le confirmer ici, à tout moment.</p>
           <p class="btns"><button class="btn btn--primary" type="button" :disabled="occupe" @click="confirmerAttente">Je suis toujours en attente</button></p>
@@ -187,7 +188,7 @@ async function renvoyer() {
           :occupe="occupe"
           @envoyer="modifier"
         />
-        <p class="btns"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+        <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
         <SuppressionCompte :pseudo="compte.pseudo" />
       </template>
     </div>
