@@ -1,5 +1,5 @@
 // Les mascottes sont des données : grilles de 24 × 24, alignées par le bas, avec la même ligne de sol pour les cinq, en aplats.
-// Chaque lettre est une couleur de la palette du personnage, E comprise. Les quatre agents (Sudo, Refacto, Lint, Pitch) sont des hackers à capuche dont le visage est un écran de terminal ; Le Boss, humain, est en sweat noir.
+// Chaque lettre est une couleur de la palette du personnage, E comprise. Les quatre agents (Sudo, Refacto, Lint, Pitch) sont des hackers à capuche dont le visage est un écran de terminal ; Le Boss, l'humain, porte la même capuche en sweat noir, écran vide, et une couronne qui flotte au-dessus (4 rangées de plus, tracées hors de la case).
 export type Jure = 'sudo' | 'refacto' | 'lint' | 'pitch' | 'boss'
 
 export const MASCOTTES: Record<Jure, { palette: Record<string, string>; grille: string[] }> = {
@@ -120,22 +120,27 @@ export const MASCOTTES: Record<Jure, { palette: Record<string, string>; grille: 
     ],
   },
   boss: {
-    palette: { C: '#1f2024', c: '#3a3c42', k: '#5d6068', S: '#c99470', H: '#2a1f18', E: '#14100e', n: '#a8754f', N: '#a8754f', B: '#4a372a', m: '#8f5a40', o: '#34363c', d: '#222327', s: '#d4d6da' },
+    // Capuche et écran vides comme les agents, sweat noir ; la couronne flotte sur 4 rangées au-dessus de la grille.
+    palette: { o: '#34363c', d: '#222327', E: '#0b0f0c', s: '#d4d6da', y: '#ffd866', Y: '#c9a23e', r: '#ff4a1f' },
     grille: [
+      '........y..yy..y........',
+      '........yy.yy.yy........',
+      '........yyyyyyyy........',
+      '........YYYrrYYY........',
       '........................',
-      '........cccccccc........',
-      '.......CCccccccCC.......',
-      '......CCCCCCCCCCCC......',
-      '......CCCCkkkkCCCC......',
-      '......HSSSSSSSSSSH......',
-      '.....SHSHHHSSHHHSHS.....',
-      '.....SSSSEESSEESSSS.....',
-      '......SSSSSSnSSSSS......',
-      '......SSSSSSnSSSSS......',
-      '......BSSBBBBBBSSB......',
-      '......BBBBmmmmBBBB......',
-      '.......BBBBBBBBBB.......',
-      '....oooooNNNNNNooooo....',
+      '.........oooooo.........',
+      '.......oooooooooo.......',
+      '.....oooooooooooooo.....',
+      '....oooooooooooooooo....',
+      '...oooEEEEEEEEEEEEooo...',
+      '...ooEEEEEEEEEEEEEEoo...',
+      '...ooEEEEEEEEEEEEEEoo...',
+      '...ooEEEEEEEEEEEEEEoo...',
+      '...ooEEEEEEEEEEEEEEoo...',
+      '...ooEEEEEEEEEEEEEEoo...',
+      '...oooEEEEEEEEEEEEooo...',
+      '....oooooooooooooooo....',
+      '.....oooooooooooooo.....',
       '...dooooosoooosoooood...',
       '..ddooooosoooosooooodd..',
       '..ddooooosddddsooooodd..',
