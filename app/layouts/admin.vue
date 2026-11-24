@@ -8,6 +8,16 @@ const ONGLETS = [
   { to: '/admin/campagnes', libelle: 'Campagnes' },
   { to: '/admin/reglages', libelle: 'Réglages' },
 ]
+// En onglets défilants (écran étroit), l'onglet ouvert peut être hors de vue : on le centre.
+const onglets = useTemplateRef<HTMLElement>('onglets')
+function montrerActif() {
+  const n = onglets.value
+  const a = n?.querySelector<HTMLElement>('.actif')
+  if (n && a && n.scrollWidth > n.clientWidth) n.scrollLeft += a.getBoundingClientRect().left - n.getBoundingClientRect().left - (n.clientWidth - a.offsetWidth) / 2
+}
+onMounted(montrerActif)
+const route = useRoute()
+watch(() => route.path, () => nextTick(montrerActif))
 </script>
 
 <template>
@@ -15,7 +25,7 @@ const ONGLETS = [
     <div class="console">
       <div class="wrap console__bar">
         <p class="console__titre"><MascottePixel jure="boss" /><span>Console du Boss</span></p>
-        <nav class="console__onglets" aria-label="Administration">
+        <nav ref="onglets" class="console__onglets" aria-label="Administration">
           <NuxtLink
             v-for="(o, i) in ONGLETS"
             :key="o.to"

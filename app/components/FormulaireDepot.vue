@@ -11,7 +11,7 @@ const props = defineProps<{
 const emit = defineEmits<{ envoyer: [fichier: File, corps: Record<string, unknown>] }>()
 
 // Recopié mot pour mot de SPECS § 9. Pas de case de consentement : l'envoi est fondé sur la charte.
-const INFORMATION_CLAUDE = 'Ton code et ta présentation seront envoyés à l\'API Claude d\'Anthropic pour être analysés. Anthropic ne s\'en sert pas pour entraîner ses modèles et les efface sous 30 jours, sauf si son système de modération les signale comme contraires à sa politique d\'usage (conservation jusqu\'à 2 ans). Côté Code Tank, ton code est effacé 30 jours après la publication des résultats. Ne dépose aucun secret ni code confidentiel. Ton code doit être open source avec sa licence, ou déposé avec l\'accord écrit de son propriétaire (voir la charte). Pour exercer tes droits : support@ybdn.io.'
+const INFORMATION_CLAUDE = 'Ton code et ta présentation seront envoyés à l\'API Claude d\'Anthropic pour être analysés. Anthropic ne s\'en sert pas pour entraîner ses modèles et les efface sous 30 jours, sauf si son système de modération les signale comme contraires à sa politique d\'usage (conservation jusqu\'à 2 ans). Côté Code Tank, ton code est effacé 30 jours après la publication des résultats. Ne dépose aucun secret ni code confidentiel. Ton code doit être open source avec sa licence, ou déposé avec l\'accord écrit de son propriétaire (voir la charte). Pour exercer tes droits\u00a0: support@ybdn.io.'
 
 const f = reactive({
   presentation: '',
@@ -87,7 +87,7 @@ const champ = (n: ChampDepot, aide?: string) => ({
 
     <div class="champ">
       <label for="demande">La demande (facultatif)</label>
-      <p id="aide-demande" class="champ__aide">Ce que tu espères du jury, par exemple « Je vise 8/10, j'y ai passé trois nuits ». Affichée avec ton entretien, sans effet sur la note. 80 caractères au plus.</p>
+      <p id="aide-demande" class="champ__aide">Ce que tu espères du jury, par exemple «&nbsp;Je vise 8/10, j'y ai passé trois nuits&nbsp;». Affichée avec ton entretien, sans effet sur la note. 80 caractères au plus.</p>
       <input id="demande" v-model="f.demande" type="text" maxlength="80" v-bind="champ('demande', 'aide-demande')">
       <p v-if="toutes.demande" id="err-demande" class="champ__erreur">{{ toutes.demande }}</p>
     </div>
@@ -140,7 +140,7 @@ const champ = (n: ChampDepot, aide?: string) => ({
 
     <div role="status" aria-live="polite">
       <template v-if="etape">
-        <label for="avancement" class="champ__aide">Étape {{ etape }} sur 3 : {{ ETAPES[etape] }}…</label>
+        <label for="avancement" class="champ__aide">Étape {{ etape }} sur 3&nbsp;: {{ ETAPES[etape] }}…</label>
         <progress id="avancement" class="avancement" max="3" :value="etape" />
       </template>
     </div>

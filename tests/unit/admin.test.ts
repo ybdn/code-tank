@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CRITERES_PAR_DEFAUT, MODELES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, prochaineEcheance, tachesAdmin, validerCampagne, validerReglages, versChampLocal,
+  CRITERES_PAR_DEFAUT, MODELES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, libellerStatuts, prochaineEcheance, tachesAdmin, validerCampagne, validerReglages, versChampLocal,
   type CampagneTableau, type TableauDeBord,
 } from '../../shared/utils/admin'
 
@@ -104,15 +104,15 @@ describe('contradictionsIa : seul `declaree: false` du contrôle des zips compte
   })
   it('une trace non couverte est une contradiction, avec son lieu', () => {
     expect(contradictionsIa([trace({ declaree: true }), trace({ outil: 'cursor', fichier: '.cursor/rules', ligne: 4, occurrences: 1, declaree: false })]))
-      .toEqual(['Trace non couverte par la déclaration : cursor · dossier : .cursor/rules:4, 1 occurrence.'])
+      .toEqual(['Trace non couverte par la déclaration\u00a0: cursor · dossier\u00a0: .cursor/rules:4, 1 occurrence.'])
   })
 })
 
 describe('libelleElement : jamais « [object Object] »', () => {
   it('alerte d\'intégrité, trace, texte', () => {
-    expect(libelleElement({ type: 'postinstall', fichier: 'package.json', ligne: 12 })).toBe('postinstall : package.json:12')
-    expect(libelleElement({ type: 'eval', fichier: 'a.js' })).toBe('eval : a.js')
-    expect(libelleElement(trace())).toBe('claude · dossier : .claude/settings.json, 2 occurrences')
+    expect(libelleElement({ type: 'postinstall', fichier: 'package.json', ligne: 12 })).toBe('postinstall\u00a0: package.json:12')
+    expect(libelleElement({ type: 'eval', fichier: 'a.js' })).toBe('eval\u00a0: a.js')
+    expect(libelleElement(trace())).toBe('claude · dossier\u00a0: .claude/settings.json, 2 occurrences')
     expect(libelleElement('texte')).toBe('texte')
     expect(libelleElement({ inconnu: 1 })).toBe('{"inconnu":1}')
   })
@@ -124,6 +124,11 @@ describe('étapes', () => {
     expect(etapeSuivante('prete')).toBe('publiee')
     expect(etapeSuivante('archivee')).toBeNull()
   })
+  it('le refus de transition de la base nomme les statuts par leur libellé', () => {
+    expect(libellerStatuts('Transition de statut interdite : de depot à inscriptions.'))
+      .toBe('Transition de statut interdite\u00a0: de «\u00a0Dépôt ouvert\u00a0» à «\u00a0Inscriptions ouvertes\u00a0».')
+    expect(libellerStatuts('Le vote est verrouillé : il ne se modifie plus.')).toBe('Le vote est verrouillé : il ne se modifie plus.')
+  })
 })
 
 describe('tachesAdmin : ce qui attend l\'organisateur', () => {
@@ -132,7 +137,7 @@ describe('tachesAdmin : ce qui attend l\'organisateur', () => {
     id: 'c', slug: 'minuteur', titre: 'Minuteur', statut: 'depot', ouverture_inscriptions: '2026-12-01T09:00:00.000Z', cloture_depot: '2026-12-15T09:00:00.000Z',
     date_resultats: '2026-12-31T09:00:00.000Z', max_participants: 10, inscrits: 0, receptions_en_attente: 0, receptions_refusees: 0, depots: 0, votes_verrouilles: 0, ...c,
   })
-  const tableau = (campagnes: CampagneTableau[], comptes: Record<string, number> = {}): TableauDeBord => ({ comptes, plafond_comptes: null, plafond_depense_usd: 50, campagnes })
+  const tableau = (campagnes: CampagneTableau[], comptes: Record<string, number> = {}, brouillons: TableauDeBord['brouillons'] = []): TableauDeBord => ({ comptes, plafond_comptes: null, plafond_depense_usd: 50, campagnes, brouillons })
 
   it('rien à faire : liste vide', () => {
     expect(tachesAdmin(tableau([campagne({})]), MAINTENANT)).toEqual([])
@@ -144,9 +149,11 @@ describe('tachesAdmin : ce qui attend l\'organisateur', () => {
   })
   it('dates dépassées : brouillon à ouvrir, dépôt clos, résultats à publier', () => {
     const t = tachesAdmin(tableau([
-      campagne({ slug: 'a', statut: 'brouillon', ouverture_inscriptions: '2026-12-09T09:00:00.000Z' }),
       campagne({ slug: 'b', statut: 'inscriptions', cloture_depot: '2026-12-10T12:00:00.000Z' }),
       campagne({ slug: 'c', statut: 'prete', date_resultats: '2026-12-01T00:00:00.000Z', depots: 2, votes_verrouilles: 2 }),
+    ], {}, [
+      { slug: 'a', titre: 'Minuteur', ouverture_inscriptions: '2026-12-09T09:00:00.000Z' },
+      { slug: 'z', titre: 'Plus tard', ouverture_inscriptions: '2026-12-20T09:00:00.000Z' },
     ]), MAINTENANT)
     expect(t.map((x) => x.lien)).toEqual(['/admin/campagnes/a?panneau=etape', '/admin/campagnes/b?panneau=etape', '/admin/campagnes/c?panneau=etape'])
     expect(t.every((x) => x.urgent)).toBe(true)
@@ -157,9 +164,9 @@ describe('tachesAdmin : ce qui attend l\'organisateur', () => {
       campagne({ slug: 'b', statut: 'deliberation', depots: 3, votes_verrouilles: 1, receptions_en_attente: 1 }),
     ]), MAINTENANT)
     expect(t.map((x) => [x.urgent, x.texte])).toEqual([
-      [true, 'Minuteur : 2 votes du Boss restent à verrouiller.'],
-      [false, 'Minuteur : tous les votes sont verrouillés, tu peux passer à la relecture.'],
-      [false, 'Minuteur : 1 envoi attend le contrôle du dépôt.'],
+      [true, 'Minuteur\u00a0: 2 votes du Boss restent à verrouiller.'],
+      [false, 'Minuteur\u00a0: tous les votes sont verrouillés, tu peux passer à la relecture.'],
+      [false, 'Minuteur\u00a0: 1 envoi attend le contrôle du dépôt.'],
     ])
   })
   it('prochaine échéance selon l\'étape', () => {

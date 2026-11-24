@@ -2,12 +2,12 @@
 const ETATS = ['autorise', 'refuse', 'liste_attente'] as const
 
 const AVIS = {
-  autorise: { sujet: 'Code Tank : ton compte est autorisé', texte: 'L\'organisateur a autorisé ton compte. Tu peux maintenant t\'inscrire à une campagne ouverte :' },
+  autorise: { sujet: 'Code Tank\u00a0: ton compte est autorisé', texte: 'L\'organisateur a autorisé ton compte. Tu peux maintenant t\'inscrire à une campagne ouverte\u00a0:' },
   liste_attente: {
-    sujet: 'Code Tank : ta candidature est sur la liste d\'attente',
-    texte: 'Le nombre de comptes autorisés est atteint : ta candidature est sur la liste d\'attente. L\'organisateur choisit qui monte, ce n\'est pas l\'ordre d\'arrivée. Tu peux suivre l\'état de ton compte ici :',
+    sujet: 'Code Tank\u00a0: ta candidature est sur la liste d\'attente',
+    texte: 'Le nombre de comptes autorisés est atteint\u00a0: ta candidature est sur la liste d\'attente. L\'organisateur choisit qui monte, ce n\'est pas l\'ordre d\'arrivée. Tu peux suivre l\'état de ton compte ici\u00a0:',
   },
-  refuse: { sujet: 'Code Tank : ta candidature', texte: 'Ta candidature n\'a pas été retenue. Pour exercer tes droits sur tes données, écris à support@ybdn.io. Ton compte :' },
+  refuse: { sujet: 'Code Tank\u00a0: ta candidature', texte: 'Ta candidature n\'a pas été retenue. Pour exercer tes droits sur tes données, écris à support@ybdn.io. Ton compte\u00a0:' },
 }
 
 export default defineEventHandler(async (event) => {

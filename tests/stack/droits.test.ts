@@ -133,7 +133,8 @@ describe('limite de débit', () => {
   })
 
   it('la table ne contient aucune adresse IP en clair, seulement leur empreinte à clé secrète', async () => {
-    const { data } = await admin.from('debit').select('*')
+    // Les plus récentes d'abord : PostgREST plafonne à 1 000 lignes, et la table locale grossit de passe en passe.
+    const { data } = await admin.from('debit').select('*').order('le', { ascending: false })
     const texte = JSON.stringify(data)
     for (const i of ipsUtilisees) expect(texte).not.toContain(i)
     expect(ipsUtilisees.length).toBeGreaterThan(5)

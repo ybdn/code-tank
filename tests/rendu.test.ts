@@ -11,6 +11,7 @@ const requetes: string[] = []
 const base = { id: 'c1', theme: 'Un minuteur', brief: 'Brief.', ouverture_inscriptions: '2026-12-01T00:00:00Z', cloture_depot: '2026-12-15T00:00:00Z', date_resultats: '2026-12-31T00:00:00Z', max_participants: 10 }
 const criteres = [{ cle: 'tests', libelle: 'Tests', poids: 60, jure: 'lint' }, { cle: 'brief', libelle: 'Réponse au brief', poids: 40, jure: 'pitch' }]
 const campagnes: Record<string, object> = {
+  ouverte: { ...base, slug: 'ouverte', titre: 'Campagne ouverte', statut: 'inscriptions', criteres },
   attente: { ...base, slug: 'attente', titre: 'Campagne en délibération', statut: 'deliberation', criteres },
   prete: { ...base, slug: 'prete', titre: 'Campagne prête', statut: 'prete', criteres },
   finale: { ...base, slug: 'finale', titre: 'Campagne publiée <script>alert(1)</script>', statut: 'publiee', criteres },
@@ -24,7 +25,7 @@ const classements: Record<string, object[]> = {
     ligne('<img src=x onerror=alert(1)>', 1), ligne('bob', 2), ligne('chloé', 3, { justification_departage: '<b>Départage</b> décidé' }), ligne('dan', 4),
     ligne('eve', null, { disqualifie: true, justification: '<script>alert(2)</script> triche', score_final: null }),
   ],
-  c2: [ligne('ada', 1), ligne('bob', 2)],
+  c2: [ligne('ada', 1, { notes: { tests: 8.5, brief: null } }), ligne('bob', 2)],
 }
 
 const faux = createServer((req, res) => {
@@ -75,6 +76,13 @@ describe('classement public', () => {
     expect(html).toContain('Réponse au brief (40 %)')
   })
 
+  it('écrit les notes par critère à la française, et « — » pour une note absente', async () => {
+    const html = await $fetch<string>('/campagnes/duo')
+    expect(html).toContain('<td>8,5</td>')
+    expect(html).not.toContain('<td>8.5</td>')
+    expect(html).toContain('<td>—</td>')
+  })
+
   it('n\'a pas de podium avec deux classés', async () => {
     const html = await $fetch<string>('/campagnes/duo')
     expect(html).not.toContain('Le podium')
@@ -95,5 +103,31 @@ describe('entretien et rapport', () => {
 
   it('avant publication, la page n\'ouvre rien', async () => {
     expect(await $fetch<string>('/campagnes/attente/resultat')).toContain('pas encore publiés')
+  })
+})
+
+// Typographie : l'espace avant « : ; ? ! » » et après « « » est insécable (U+00A0), écrite à la source.
+// Une espace ordinaire laisse le navigateur couper la ligne juste avant la ponctuation.
+const DEFAUT = / [:;?!»]|« /
+const extraits = (texte: string) => [...texte.matchAll(new RegExp(DEFAUT, 'g'))].map((m) => texte.slice(Math.max(0, m.index - 30), m.index + 10))
+
+describe('espace insécable dans les textes', () => {
+  // Chaque page porte un texte témoin : une page d'erreur passerait le contrôle sans rien prouver.
+  it.each([
+    ['/', 'Le Boss'], ['/campagnes/ouverte', 'Thème imposé'], ['/campagnes/attente', 'Le jury délibère'], ['/campagnes/finale', 'Le podium'],
+    ['/campagnes/finale/resultat', 'Connecte-toi'], ['/charte', 'Charte'], ['/confidentialite', 'Politique de confidentialité'], ['/mentions-legales', 'Mentions légales'],
+  ])('%s', async (page, temoin) => {
+    const html = await $fetch<string>(page)
+    expect(html).toContain(temoin)
+    const attributs = [...html.matchAll(/\s(?:aria-label|title|placeholder|alt|content)="([^"]*)"/g)].map((m) => m[1])
+    const texte = [html.replace(/<(script|style|code|pre)\b[\s\S]*?<\/\1>/g, ' ').replace(/<[^>]+>/g, ' '), ...attributs].join('\n')
+      .replace(/&nbsp;|&#160;|&#xa0;/gi, ' ')
+    expect(extraits(texte)).toEqual([])
+  })
+
+  it.each(['charte', 'mentions-legales', 'politique-de-confidentialite'])('content/%s.md', async (nom) => {
+    const { readFile } = await import('node:fs/promises')
+    const md = (await readFile(`${racine}content/${nom}.md`, 'utf8')).replace(/`[^`]*`/g, ' ')
+    expect(extraits(md)).toEqual([])
   })
 })

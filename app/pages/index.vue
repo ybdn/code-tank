@@ -11,8 +11,8 @@ useSeoMeta({
 const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
   { nom: 'Sudo', jure: 'sudo', role: 'Sécurité, gestion des erreurs et cas limites', points: '25 points' },
   { nom: 'Refacto', jure: 'refacto', role: 'Structure, découpage, lisibilité et nommage', points: '25 points' },
-  { nom: 'Le Boss', jure: 'boss', role: 'Le juré humain : il lit ton code, ta présentation et ton README, et note sans voir les notes des quatre autres.', points: 'Un tiers du score' },
-  { nom: 'Lint', jure: 'lint', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par Claude ; Lint la commente sans la modifier.", points: '25 points' },
+  { nom: 'Le Boss', jure: 'boss', role: 'Le juré humain\u00a0: il lit ton code, ta présentation et ton README, et note sans voir les notes des quatre autres.', points: 'Un tiers du score' },
+  { nom: 'Lint', jure: 'lint', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par Claude\u00a0; Lint la commente sans la modifier.", points: '25 points' },
   { nom: 'Pitch', jure: 'pitch', role: 'Réponse au brief, originalité et finition', points: '25 points' },
 ]
 
@@ -31,9 +31,9 @@ const rebours = (iso: string) => {
     <section class="section hero" aria-labelledby="hero-h">
       <div class="wrap hero__grille">
         <div class="hero__in">
-          <p v-if="compteSupprime" role="status" class="avis">Ton compte est supprimé. Tes données personnelles sont effacées ; seule reste, s'il y en a une, ta ligne anonyme d'un classement publié.</p>
+          <p v-if="compteSupprime" role="status" class="avis">Ton compte est supprimé. Tes données personnelles sont effacées&nbsp;; seule reste, s'il y en a une, ta ligne anonyme d'un classement publié.</p>
           <InvitePrompt :commande="`$ code-tank ${ouverte ? `--campagne ${ouverte.slug}` : '--prochaine'}`">
-            {{ ouverte ? `${ouverte.titre} : dépôt ouvert jusqu'au ${formaterDate(ouverte.cloture_depot)}` : 'la prochaine campagne arrive' }}
+            {{ ouverte ? `${ouverte.titre}\u00a0: dépôt ouvert jusqu'au ${formaterDate(ouverte.cloture_depot)}` : 'la prochaine campagne arrive' }}
           </InvitePrompt>
           <h1 id="hero-h">Concours de code jugé par Claude</h1>
           <p class="lead">
@@ -58,7 +58,7 @@ const rebours = (iso: string) => {
           <li v-for="c in campagnes" :key="c.slug" class="carte">
             <p v-if="depotOuvert(c)" class="carte__rebours">{{ rebours(c.cloture_depot) }}</p>
             <h3><NuxtLink :to="`/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></h3>
-            <p>Thème : {{ c.theme }}</p>
+            <p>Thème&nbsp;: {{ c.theme }}</p>
             <FriseEtapes :statut="c.statut" publique compacte />
             <p v-if="depotOuvert(c)" class="carte__dates">Dépôt jusqu'au {{ formaterDate(c.cloture_depot) }}</p>
           </li>
@@ -100,7 +100,7 @@ const rebours = (iso: string) => {
             <p>{{ j.role }}</p>
           </li>
         </ul>
-        <p class="note">Critères et poids par défaut ; ils sont publiés à l'ouverture de chaque campagne.</p>
+        <p class="note">Critères et poids par défaut&nbsp;; ils sont publiés à l'ouverture de chaque campagne.</p>
       </div>
     </section>
   </div>

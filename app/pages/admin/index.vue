@@ -45,7 +45,7 @@ const etat = computed(() => {
             <li v-for="t in taches" :key="t.texte" :data-urgent="t.urgent ? '' : undefined">
               <NuxtLink :to="t.lien">
                 <span class="taches__signe" aria-hidden="true">{{ t.urgent ? '!' : '·' }}</span>
-                <span><span v-if="t.urgent" class="sr-only">Urgent : </span>{{ t.texte }}</span>
+                <span><span v-if="t.urgent" class="sr-only">Urgent&nbsp;: </span>{{ t.texte }}</span>
                 <span class="taches__fleche" aria-hidden="true">→</span>
               </NuxtLink>
             </li>
@@ -57,7 +57,7 @@ const etat = computed(() => {
           <ul class="plateau-mini" aria-hidden="true">
             <li v-for="j in (['sudo', 'refacto', 'lint', 'pitch', 'boss'] as const)" :key="j"><MascottePixel :jure="j" /></li>
           </ul>
-          <p class="note-claire">Quatre jurés Claude et toi. Plafond de dépense de l'API par campagne : <strong>{{ dollars.format(data.plafond_depense_usd) }}</strong>. <NuxtLink to="/admin/reglages">Réglages</NuxtLink></p>
+          <p class="note-claire">Quatre jurés Claude et toi. Plafond de dépense de l'API par campagne&nbsp;: <strong>{{ dollars.format(data.plafond_depense_usd) }}</strong>. <NuxtLink to="/admin/reglages">Réglages</NuxtLink></p>
         </section>
       </div>
 
@@ -67,13 +67,13 @@ const etat = computed(() => {
         <li v-for="c in data.campagnes" :key="c.id" class="carte">
           <h3><NuxtLink :to="`/admin/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></h3>
           <FriseEtapes :statut="c.statut" />
-          <p v-if="prochaineEcheance(c)" class="carte__dates">{{ prochaineEcheance(c)!.libelle }} : {{ formaterDate(prochaineEcheance(c)!.date) }}</p>
+          <p v-if="prochaineEcheance(c)" class="carte__dates">{{ prochaineEcheance(c)!.libelle }}&nbsp;: {{ formaterDate(prochaineEcheance(c)!.date) }}</p>
           <dl class="jauges">
             <div>
               <dt>Inscrits</dt><dd>{{ c.inscrits }}/{{ c.max_participants }}</dd>
               <JaugePixel :valeur="c.inscrits" :max="c.max_participants" />
             </div>
-            <div v-if="c.statut !== 'brouillon'">
+            <div>
               <dt>Dépôts<template v-if="c.receptions_refusees"> · {{ c.receptions_refusees }} refusé{{ c.receptions_refusees > 1 ? 's' : '' }}</template></dt>
               <dd>{{ c.depots }}/{{ c.inscrits }}</dd>
               <JaugePixel :valeur="c.depots" :max="c.inscrits" />

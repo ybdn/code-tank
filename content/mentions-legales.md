@@ -4,14 +4,14 @@
 
 Mentions exigées par l'article 1-1 de la loi du 21 juin 2004 pour la confiance dans l'économie numérique (rédaction de 2024).
 
-Site : `code-tank.ybdn.io`
+Site&nbsp;: `code-tank.ybdn.io`
 
 ## 1. Éditeur du site
 
-- Éditeur : EI - YOANN BAUDRIN, exerçant sous la marque ybdn.io
-- Numéro d'identification : SIREN 994 347 979, SIRET du siège 994 347 979 00019
-- Adresse : 11 rue de la Sellerie, C612 - 95300 Pontoise - France
-- Contact : support@ybdn.io
+- Éditeur&nbsp;: EI - YOANN BAUDRIN, exerçant sous la marque ybdn.io
+- Numéro d'identification&nbsp;: SIREN 994 347 979, SIRET du siège 994 347 979 00019
+- Adresse&nbsp;: 11 rue de la Sellerie, C612 - 95300 Pontoise - France
+- Contact&nbsp;: support@ybdn.io
 
 ## 2. Directeur de la publication
 
@@ -19,10 +19,10 @@ Yoann BAUDRIN.
 
 ## 3. Hébergeur
 
-- Société : Vercel Inc., société de droit du Delaware
-- Pays : États-Unis
-- Adresse : 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis
-- Contact : privacy@vercel.com
+- Société&nbsp;: Vercel Inc., société de droit du Delaware
+- Pays&nbsp;: États-Unis
+- Adresse&nbsp;: 440 N Barranca Ave #4133, Covina, CA 91723, États-Unis
+- Contact&nbsp;: privacy@vercel.com
 
 ## 4. Propriété intellectuelle
 

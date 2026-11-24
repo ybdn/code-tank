@@ -9,7 +9,7 @@ export default defineEventHandler(async (event) => {
   const dossier = `${campagne.id}/${participation.id}/`
   const chemin = typeof corps.chemin === 'string' ? corps.chemin : ''
   if (!chemin.startsWith(dossier) || !/^[0-9a-f-]{36}\.zip$/.test(chemin.slice(dossier.length))) {
-    throw createError({ statusCode: 422, statusMessage: 'Envoi inconnu : recommence le dépôt.' })
+    throw createError({ statusCode: 422, statusMessage: 'Envoi inconnu\u00a0: recommence le dépôt.' })
   }
   const fichier = chemin.slice(dossier.length)
   const { data: objets, error: erreurStockage } = await service.storage.from('depots').list(dossier.slice(0, -1), { search: fichier })
@@ -18,7 +18,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Impossible de vérifier ton envoi. Réessaie dans un instant.' })
   }
   if (!objets.some((o) => o.name === fichier)) {
-    throw createError({ statusCode: 422, statusMessage: 'Ton archive n\'est pas arrivée : recommence l\'envoi.' })
+    throw createError({ statusCode: 422, statusMessage: 'Ton archive n\'est pas arrivée\u00a0: recommence l\'envoi.' })
   }
 
   // Une nouvelle réception remplace l'ancienne ; le dépôt déjà accepté, lui, reste valable jusqu'au prochain contrôle.

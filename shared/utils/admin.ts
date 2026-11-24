@@ -11,9 +11,9 @@ export const MODELES = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-
 export type ModeleJure = (typeof MODELES)[number]
 export const MODELE_PAR_DEFAUT: ModeleJure = 'claude-sonnet-5-5'
 export const LIBELLE_MODELE: Record<ModeleJure, string> = {
-  'claude-opus-5-5': 'Opus : le plus cher',
-  'claude-sonnet-5-5': 'Sonnet : coût moyen, par défaut',
-  'claude-haiku-5-5': 'Haiku : le moins cher, analyse plus légère',
+  'claude-opus-5-5': 'Opus\u00a0: le plus cher',
+  'claude-sonnet-5-5': 'Sonnet\u00a0: coût moyen, par défaut',
+  'claude-haiku-5-5': 'Haiku\u00a0: le moins cher, analyse plus légère',
 }
 export type ModelesJures = Record<(typeof JURES)[number], ModeleJure>
 export const MODELES_PAR_DEFAUT: ModelesJures = { sudo: MODELE_PAR_DEFAUT, refacto: MODELE_PAR_DEFAUT, lint: MODELE_PAR_DEFAUT, pitch: MODELE_PAR_DEFAUT }
@@ -58,10 +58,15 @@ export const STATUT_ADMIN: Record<string, string> = {
   archivee: 'Archivée',
 }
 
+// La base nomme les statuts par leur clé (« de depot à inscriptions ») : l'administration les relaie par leur libellé.
+export const libellerStatuts = (message: string) =>
+  message.replace(/^Transition de statut interdite : de (\w+) à (\w+)\.$/, (_, de: string, a: string) =>
+    `Transition de statut interdite\u00a0: de «\u00a0${STATUT_ADMIN[de] ?? de}\u00a0» à «\u00a0${STATUT_ADMIN[a] ?? a}\u00a0».`)
+
 // Ce que déclenche le passage à l'étape suivante, dit tel quel dans la confirmation.
 export const EFFET_ETAPE: Record<string, string> = {
   inscriptions: 'La campagne devient publique et les candidats autorisés peuvent s\'inscrire et déposer. Les poids des critères doivent totaliser 100.',
-  depot: 'La campagne passe en phase de dépôt : inscriptions et dépôt restent ouverts jusqu\'à la clôture.',
+  depot: 'La campagne passe en phase de dépôt\u00a0: inscriptions et dépôt restent ouverts jusqu\'à la clôture.',
   deliberation: 'Les dépôts, retraits et désinscriptions sont fermés. Le vote du Boss s\'ouvre. Ce site ne lance pas les audits Claude.',
   prete: 'Tu passes à la relecture des alertes et des répliques. Rien n\'est encore visible des candidats.',
   publiee: 'Les résultats, les entretiens, les rapports et le classement deviennent visibles. La base refuse tant qu\'un vote du Boss n\'est pas verrouillé. Un e-mail part une seule fois à chaque participant ayant un dépôt et une adresse vérifiée, sans aucun score.',
@@ -75,9 +80,12 @@ export const etapeSuivante = (statut: string): Etape | null => ETAPES[ETAPES.ind
 const format = new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 })
+// « 4 déc. 2026, 15:53 » : forme courte, à l'heure de Paris, pour les colonnes des tableaux d'administration.
+const court = new Intl.DateTimeFormat('fr-FR', { dateStyle: 'medium', timeStyle: 'short', timeZone: 'Europe/Paris' })
+export const formaterDateCourte = (iso: string) => court.format(new Date(iso))
 // « 2026-12-01T09:30 » : la valeur d'un champ datetime-local.
 export const versChampLocal = (iso: string) => format.format(new Date(iso)).replace(' ', 'T')
-// Inverse. Le décalage est recalculé à l'instant trouvé pour tomber juste autour du changement d'heure.
+// Inverse de versChampLocal. Le décalage est recalculé à l'instant trouvé pour tomber juste autour du changement d'heure.
 export function depuisChampLocal(local: string): string {
   if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}$/.test(local)) return ''
   const t = Date.parse(`${local}:00Z`)
@@ -104,7 +112,7 @@ const MAX_PARTICIPANTS = 1000
 export function validerCampagne(corps: Record<string, unknown>): { campagne: CorpsCampagne; erreurs: ErreursCampagne } {
   const e: ErreursCampagne = {}
   const slug = texte(corps.slug)
-  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) || slug.length > 60) e.slug = 'Le slug fait 60 caractères au plus : minuscules, chiffres et tirets (exemple : minuteur-de-pause).'
+  if (!/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug) || slug.length > 60) e.slug = 'Le slug fait 60 caractères au plus\u00a0: minuscules, chiffres et tirets (exemple\u00a0: minuteur-de-pause).'
   const titre = texte(corps.titre)
   if (titre.length < 1 || titre.length > 120) e.titre = 'Le titre fait entre 1 et 120 caractères.'
   const theme = texte(corps.theme)
@@ -124,7 +132,7 @@ export function validerCampagne(corps: Record<string, unknown>): { campagne: Cor
     cles.add(cle)
     if (libelle.length < 1 || libelle.length > 100) { e.criteres = 'Chaque critère a un libellé de 1 à 100 caractères.'; break }
     if (typeof poids !== 'number' || !Number.isInteger(poids) || poids < 0 || poids > 100) { e.criteres = 'Chaque poids est un entier de 0 à 100.'; break }
-    if (!(JURES as readonly string[]).includes(jure)) { e.criteres = 'Chaque critère a un juré : Sudo, Refacto, Lint ou Pitch.'; break }
+    if (!(JURES as readonly string[]).includes(jure)) { e.criteres = 'Chaque critère a un juré\u00a0: Sudo, Refacto, Lint ou Pitch.'; break }
     criteres.push({ cle, libelle, poids, jure, ...(c.calcule === true ? { calcule: true as const } : {}) })
   }
   if (!e.criteres && (criteres.length < 1 || criteres.length > 12)) e.criteres = 'Une campagne a de 1 à 12 critères.'
@@ -186,7 +194,7 @@ export function validerReglages(corps: Record<string, unknown>): { reglages: Cor
 export function contradictionsIa(traces: unknown): string[] {
   return (Array.isArray(traces) ? traces : [])
     .filter((t) => (t as { declaree?: unknown } | null)?.declaree === false)
-    .map((t) => `Trace non couverte par la déclaration : ${libelleElement(t)}.`)
+    .map((t) => `Trace non couverte par la déclaration\u00a0: ${libelleElement(t)}.`)
 }
 
 // Texte lisible d'une trace, d'une alerte ou d'un fichier exclu (jamais « [object Object] »).
@@ -198,7 +206,7 @@ export function libelleElement(a: unknown): string {
   const lieu = typeof o.fichier === 'string' ? `${o.fichier}${typeof o.ligne === 'number' ? `:${o.ligne}` : ''}` : ''
   if (!nom && !lieu) return JSON.stringify(a)
   const n = typeof o.occurrences === 'number' ? `, ${o.occurrences} occurrence${o.occurrences > 1 ? 's' : ''}` : ''
-  return [nom, lieu].filter(Boolean).join(' : ') + n
+  return [nom, lieu].filter(Boolean).join('\u00a0: ') + n
 }
 
 // --- Types des réponses de l'API ------------------------------------------------------------
@@ -261,6 +269,8 @@ export type CampagneTableau = {
 }
 export type TableauDeBord = {
   comptes: Record<string, number>; plafond_comptes: number | null; plafond_depense_usd: number; campagnes: CampagneTableau[]
+  // Hors de « campagnes en cours » : seulement pour la tâche « date d'ouverture passée ».
+  brouillons: { slug: string; titre: string; ouverture_inscriptions: string }[]
 }
 export type Tache = { urgent: boolean; texte: string; lien: string }
 
@@ -274,27 +284,29 @@ export function tachesAdmin(t: TableauDeBord, maintenant = Date.now()): Tache[] 
   const attente = t.comptes.liste_attente ?? 0
   if (attente) taches.push({ urgent: false, texte: `${pluriel(attente, 'compte est', 'comptes sont')} en liste d'attente.`, lien: '/admin/comptes?panneau=liste_attente' })
 
+  const passee = (iso: string) => Date.parse(iso) <= maintenant
+  for (const b of t.brouillons) {
+    if (passee(b.ouverture_inscriptions)) {
+      taches.push({ urgent: true, texte: `${b.titre}\u00a0: la date d'ouverture est passée, la campagne est encore en brouillon.`, lien: `/admin/campagnes/${b.slug}?panneau=etape` })
+    }
+  }
   for (const c of t.campagnes) {
     const page = `/admin/campagnes/${c.slug}`
-    const passee = (iso: string) => Date.parse(iso) <= maintenant
-    if (c.statut === 'brouillon' && passee(c.ouverture_inscriptions)) {
-      taches.push({ urgent: true, texte: `${c.titre} : la date d'ouverture est passée, la campagne est encore en brouillon.`, lien: `${page}?panneau=etape` })
-    }
     if ((c.statut === 'inscriptions' || c.statut === 'depot') && passee(c.cloture_depot)) {
-      taches.push({ urgent: true, texte: `${c.titre} : le dépôt est clos, passe en délibération.`, lien: `${page}?panneau=etape` })
+      taches.push({ urgent: true, texte: `${c.titre}\u00a0: le dépôt est clos, passe en délibération.`, lien: `${page}?panneau=etape` })
     }
     if (c.receptions_en_attente) {
-      taches.push({ urgent: false, texte: `${c.titre} : ${pluriel(c.receptions_en_attente, 'envoi attend', 'envois attendent')} le contrôle du dépôt.`, lien: `${page}?panneau=depots` })
+      taches.push({ urgent: false, texte: `${c.titre}\u00a0: ${pluriel(c.receptions_en_attente, 'envoi attend', 'envois attendent')} le contrôle du dépôt.`, lien: `${page}?panneau=depots` })
     }
     const aVoter = c.depots - c.votes_verrouilles
     if ((c.statut === 'deliberation' || c.statut === 'prete') && aVoter > 0) {
-      taches.push({ urgent: true, texte: `${c.titre} : ${pluriel(aVoter, 'vote du Boss reste', 'votes du Boss restent')} à verrouiller.`, lien: `${page}?panneau=depots` })
+      taches.push({ urgent: true, texte: `${c.titre}\u00a0: ${pluriel(aVoter, 'vote du Boss reste', 'votes du Boss restent')} à verrouiller.`, lien: `${page}?panneau=depots` })
     }
     if (c.statut === 'deliberation' && c.depots > 0 && aVoter === 0) {
-      taches.push({ urgent: false, texte: `${c.titre} : tous les votes sont verrouillés, tu peux passer à la relecture.`, lien: `${page}?panneau=etape` })
+      taches.push({ urgent: false, texte: `${c.titre}\u00a0: tous les votes sont verrouillés, tu peux passer à la relecture.`, lien: `${page}?panneau=etape` })
     }
     if (c.statut === 'prete' && passee(c.date_resultats)) {
-      taches.push({ urgent: true, texte: `${c.titre} : la date des résultats est passée, publie-les.`, lien: `${page}?panneau=etape` })
+      taches.push({ urgent: true, texte: `${c.titre}\u00a0: la date des résultats est passée, publie-les.`, lien: `${page}?panneau=etape` })
     }
   }
   return taches.sort((a, b) => Number(b.urgent) - Number(a.urgent))

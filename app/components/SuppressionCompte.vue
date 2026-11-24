@@ -29,29 +29,30 @@ async function supprimer() {
 </script>
 
 <template>
-  <section aria-labelledby="suppression-titre">
+  <!-- texte : même rythme et même titre de section que le reste de la page de compte. -->
+  <section class="texte" aria-labelledby="suppression-titre">
     <h2 id="suppression-titre">Supprimer mon compte</h2>
-    <p>La suppression est immédiate et ne se défait pas. Elle efface ton compte, avec tout ce qui te concerne :</p>
+    <p>La suppression est immédiate et ne se défait pas. Elle efface ton compte, avec tout ce qui te concerne&nbsp;:</p>
     <ul>
-      <li>ton vrai nom, ton e-mail, ta motivation, le dépôt cité et les données lues sur GitHub ;</li>
-      <li>tes inscriptions, tes dépôts et leurs archives, ta présentation, ta demande au jury et tes déclarations ;</li>
+      <li>ton vrai nom, ton e-mail, ta motivation, le dépôt cité et les données lues sur GitHub&nbsp;;</li>
+      <li>tes inscriptions, tes dépôts et leurs archives, ta présentation, ta demande au jury et tes déclarations&nbsp;;</li>
       <li>tes rapports et tes entretiens.</li>
     </ul>
     <p>
-      Seule reste, pour une campagne dont les résultats sont publiés, ta ligne du classement, sous le nom « candidat supprimé »,
+      Seule reste, pour une campagne dont les résultats sont publiés, ta ligne du classement, sous le nom «&nbsp;candidat supprimé&nbsp;»,
       avec ses scores et ses notes. Elle ne contient plus rien qui permette de t'identifier. Une campagne non publiée ne garde rien de toi.
     </p>
     <form class="form" novalidate @submit.prevent="supprimer">
       <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
       <div class="champ">
-        <label for="confirmation-pseudo">Pour confirmer, saisis ton pseudo : {{ pseudo }}</label>
+        <label for="confirmation-pseudo">Pour confirmer, saisis ton pseudo&nbsp;: {{ pseudo }}</label>
         <input
           id="confirmation-pseudo" ref="champ" v-model="saisie" type="text" autocomplete="off" autocapitalize="off" spellcheck="false"
           :aria-invalid="erreur ? 'true' : undefined" :aria-describedby="erreur ? 'err-confirmation-pseudo' : undefined"
         >
         <p v-if="erreur" id="err-confirmation-pseudo" role="alert" class="champ__erreur">{{ erreur }}</p>
       </div>
-      <p class="btns"><button class="btn" type="submit" :disabled="occupe">Supprimer définitivement mon compte</button></p>
+      <p class="btns"><button class="btn btn--danger" type="submit" :disabled="occupe">{{ occupe ? 'Suppression en cours…' : 'Supprimer définitivement mon compte' }}</button></p>
     </form>
   </section>
 </template>
