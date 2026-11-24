@@ -20,7 +20,7 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
 <template>
   <section class="section" aria-labelledby="classement-h">
     <div class="wrap texte resultats">
-      <p class="etat">{{ LIBELLE_STATUT[campagne.statut] }}</p>
+      <FriseEtapes :statut="campagne.statut" publique />
       <h1 id="classement-h">{{ campagne.titre }}</h1>
       <p class="lead">Thème imposé : {{ campagne.theme }}</p>
 
@@ -36,6 +36,7 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
               <span class="podium__rang">{{ ordinal(l.rang!) }}</span>
               <strong class="podium__nom">{{ l.pseudo }}</strong>
               <span>{{ formaterNombre(l.score_final) }} sur 100</span>
+              <JaugePixel :valeur="l.score_final ?? 0" :max="100" />
             </li>
           </ol>
         </template>

@@ -22,7 +22,7 @@ const mascotte = (jure: string) => jure as Jure
 <template>
   <section class="section" aria-labelledby="resultat-h">
     <div class="wrap texte resultats">
-      <p class="etat">{{ campagne.titre }}</p>
+      <p><NuxtLink class="retour" :to="`/campagnes/${slug}`">← {{ campagne.titre }}</NuxtLink></p>
       <h1 id="resultat-h">Ton entretien avec le jury</h1>
 
       <p v-if="!publie">Les résultats de cette campagne ne sont pas encore publiés. <NuxtLink :to="`/campagnes/${slug}`">Retour à la campagne</NuxtLink></p>
@@ -61,8 +61,11 @@ const mascotte = (jure: string) => jure as Jure
               <blockquote v-if="sortie(j.jure)!.replique" class="replique"><p>{{ sortie(j.jure)!.replique }}</p></blockquote>
             </template>
             <p v-else class="note-claire">Ce juré n'a pas rendu d'audit pour ton dépôt.</p>
-            <ul class="criteres">
-              <li v-for="c in critereDe(j.jure)" :key="c.cle"><span>{{ c.libelle }}</span><span>{{ noteDe(c) ?? '—' }} sur 10</span></li>
+            <ul class="criteres criteres--notes">
+              <li v-for="c in critereDe(j.jure)" :key="c.cle">
+                <span>{{ c.libelle }}</span><span>{{ noteDe(c) ?? '—' }} sur 10</span>
+                <JaugePixel v-if="noteDe(c) !== null" :valeur="Number(noteDe(c))" :max="10" :cases="10" />
+              </li>
             </ul>
           </div>
         </article>

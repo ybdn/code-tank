@@ -21,3 +21,11 @@ export const formaterDate = (iso: string) => format.format(new Date(iso))
 // Le dépôt est ouvert avant la clôture pendant les phases « inscriptions » et « dépôt » (elles se chevauchent).
 export const depotOuvert = (c: { statut: string; cloture_depot: string }, maintenant = Date.now()) =>
   ['inscriptions', 'depot'].includes(c.statut) && maintenant < Date.parse(c.cloture_depot)
+
+// Ce que le public voit du cycle : « prête » reste la délibération, « archivée » garde ses résultats.
+export const ETAPES_PUBLIQUES = ['inscriptions', 'depot', 'deliberation', 'publiee'] as const
+export const LIBELLE_ETAPE_PUBLIQUE: Record<string, string> = { inscriptions: 'Inscriptions', depot: 'Dépôt', deliberation: 'Délibération', publiee: 'Résultats' }
+export const etapePublique = (statut: string) => ({ prete: 'deliberation', archivee: 'publiee' } as Record<string, string>)[statut] ?? statut
+
+// Jours entiers restants avant une date (0 : c'est aujourd'hui ; négatif : passée).
+export const joursAvant = (iso: string, maintenant = Date.now()) => Math.ceil((Date.parse(iso) - maintenant) / 86_400_000)

@@ -17,6 +17,13 @@ const ETATS: Record<Etat, string> = {
 }
 const pret = ref(false)
 const compte = ref<Compte | null>(null)
+// Le parcours d'un candidat, du premier clic à l'autorisation : fait, en cours (la première étape non faite), à venir.
+const parcours = computed(() => {
+  const faits = [Boolean(user.value), Boolean(compte.value), Boolean(compte.value?.email_verifie_le), compte.value?.etat === 'autorise']
+  const courant = faits.indexOf(false)
+  return ['Connexion GitHub', 'Profil', 'E-mail vérifié', 'Compte autorisé'].map((libelle, i) => ({ libelle, etat: faits[i] ? 'fait' : i === courant ? 'courant' : undefined }))
+})
+const bloque = computed(() => compte.value?.etat === 'refuse' || compte.value?.etat === 'ferme')
 const occupe = ref(false)
 const erreurs = ref<ErreursProfil>({})
 const message = ref('')
@@ -26,6 +33,8 @@ async function charger() {
   const { data, error } = await supabase
     .from('compte')
     .select('vrai_nom, pseudo, email_contact, motivation, depot_cite_url, email_verifie_le, etat')
+    // Le sien seulement : l'organisateur lit tous les comptes (RLS), maybeSingle échouerait sur plusieurs lignes.
+    .eq('id', user.value!.sub)
     .maybeSingle()
   if (error) alerte.value = 'Impossible de lire ton compte pour le moment.'
   compte.value = data as Compte | null
@@ -113,6 +122,12 @@ async function renvoyer() {
   <section class="section">
     <div class="wrap texte">
       <h1>Mon compte</h1>
+      <ol v-if="!bloque" class="parcours" aria-label="Ton parcours">
+        <li v-for="(e, i) in parcours" :key="e.libelle" :data-etat="e.etat" :aria-current="e.etat === 'courant' ? 'step' : undefined">
+          <span class="parcours__num" aria-hidden="true">{{ e.etat === 'fait' ? '✓' : String(i + 1).padStart(2, '0') }}</span>
+          <span>{{ e.libelle }}<span v-if="e.etat === 'fait'" class="sr-only"> : fait</span></span>
+        </li>
+      </ol>
 
       <div role="status" aria-live="polite">
         <p v-if="message" class="avis">{{ message }}</p>
@@ -138,7 +153,7 @@ async function renvoyer() {
 
       <template v-else-if="compte.etat === 'refuse' || compte.etat === 'ferme'">
         <h2>État</h2>
-        <p class="etat" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
+        <p class="etat etat--console" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
         <p>
           Pour exercer tes droits sur tes données :
           <a href="mailto:support@ybdn.io?subject=Code%20Tank%20%E2%80%94%20Mes%20donn%C3%A9es">support@ybdn.io</a>.
@@ -149,7 +164,7 @@ async function renvoyer() {
 
       <template v-else>
         <h2>État</h2>
-        <p class="etat" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
+        <p class="etat etat--console" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
         <template v-if="compte.etat === 'liste_attente'">
           <p>Tous les 12 mois, nous te demandons par e-mail si tu attends toujours une place. Tu peux le confirmer ici, à tout moment.</p>
           <p class="btns"><button class="btn btn--primary" type="button" :disabled="occupe" @click="confirmerAttente">Je suis toujours en attente</button></p>
