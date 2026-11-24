@@ -50,6 +50,15 @@ watch(user, async () => {
   if (pret.value) await charger()
 })
 
+// Après un envoi ou un retrait, le message en haut de page est loin du bouton : on l'amène à l'écran.
+// Pas pour la case de réutilisation : son état coché suffit, et le saut éloignerait de la case.
+const statut = useTemplateRef<HTMLElement>('statut')
+const erreurGlobale = useTemplateRef<HTMLElement>('erreurGlobale')
+async function montrerAvis() {
+  await nextTick()
+  ;(alerte.value ? erreurGlobale.value : message.value ? statut.value : null)?.scrollIntoView({ block: 'nearest' })
+}
+
 const messageServeur = (e: unknown, defaut: string) => (e as { data?: { statusMessage?: string } }).data?.statusMessage ?? defaut
 
 async function deposer(fichier: File, corps: Record<string, unknown>) {
@@ -65,7 +74,7 @@ async function deposer(fichier: File, corps: Record<string, unknown>) {
     const { error } = await supabase.storage.from('depots')
       .uploadToSignedUrl(chemin, token, fichier.slice(0, fichier.size, 'application/zip'), { contentType: 'application/zip' })
     if (error) {
-      alerte.value = 'Le stockage a refusé l\'archive : elle dépasse 20 Mo, n\'est pas un zip, ou l\'envoi a été interrompu. Réessaie.'
+      alerte.value = 'Le stockage a refusé l\'archive\u00a0: elle dépasse 20 Mo, n\'est pas un zip, ou l\'envoi a été interrompu. Réessaie.'
       return
     }
     // 3. Le serveur enregistre la réception et efface l'ancienne archive.
@@ -79,6 +88,7 @@ async function deposer(fichier: File, corps: Record<string, unknown>) {
     if (!Object.keys(erreurs.value).length) alerte.value = messageServeur(e, 'Le dépôt a échoué. Réessaie dans un instant.')
   } finally {
     etape.value = 0
+    await montrerAvis()
   }
 }
 
@@ -94,8 +104,17 @@ async function regler(e: Event) {
     alerte.value = error.code === 'P0001' ? error.message : 'Le réglage n\'a pas pu être enregistré. Réessaie dans un instant.'
     return
   }
-  message.value = voulu ? 'Noté : l\'organisateur pourra te contacter au sujet d\'une réutilisation.' : 'Noté : l\'organisateur ne te contactera pas au sujet d\'une réutilisation.'
+  message.value = voulu ? 'Noté\u00a0: l\'organisateur pourra te contacter au sujet d\'une réutilisation.' : 'Noté\u00a0: l\'organisateur ne te contactera pas au sujet d\'une réutilisation.'
   await charger()
+}
+
+// Le bouton cliqué disparaît : le focus va à « Annuler » (choix sans risque), puis revient au bouton.
+const boutonRetrait = useTemplateRef<HTMLButtonElement>('boutonRetrait')
+const boutonAnnuler = useTemplateRef<HTMLButtonElement>('boutonAnnuler')
+async function demanderRetrait(v: boolean) {
+  confirmer.value = v
+  await nextTick()
+  ;(v ? boutonAnnuler : boutonRetrait).value?.focus()
 }
 
 async function retirer() {
@@ -103,25 +122,26 @@ async function retirer() {
   message.value = alerte.value = ''
   try {
     await $fetch(`/api/campagnes/${slug}/depot`, { method: 'DELETE' })
-    message.value = 'Dépôt retiré. Tu es toujours inscrit : tu peux redéposer avant la clôture.'
+    message.value = 'Dépôt retiré. Tu es toujours inscrit\u00a0: tu peux redéposer avant la clôture.'
   } catch (e) {
     alerte.value = messageServeur(e, 'Le retrait a échoué.')
   }
   confirmer.value = false
   occupe.value = false
   await charger()
+  await montrerAvis()
 }
 </script>
 
 <template>
   <section class="section">
-    <div class="wrap texte">
+    <div class="wrap texte texte--etroit">
       <p><NuxtLink class="retour" :to="`/campagnes/${slug}`">← {{ campagne.titre }}</NuxtLink></p>
       <h1>Mon dépôt</h1>
       <InvitePrompt v-if="depotOuvert(campagne)" commande="$ code-tank deposer">dépôt ouvert jusqu'au {{ formaterDate(campagne.cloture_depot) }}</InvitePrompt>
 
-      <div role="status" aria-live="polite"><p v-if="message" class="avis">{{ message }}</p></div>
-      <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
+      <div ref="statut" role="status" aria-live="polite"><p v-if="message" class="avis">{{ message }}</p></div>
+      <p v-if="alerte" ref="erreurGlobale" role="alert" class="avis avis--erreur">{{ alerte }}</p>
 
       <p v-if="!pret">Chargement…</p>
       <template v-else-if="!user">
@@ -172,8 +192,8 @@ async function retirer() {
         <template v-if="reception || recu">
           <h2>Réutilisation de ton code</h2>
           <p>
-            Participer ne donne aucun droit sur ton code : toute réutilisation passe par un accord écrit séparé. Cette case dit seulement
-            si l'organisateur peut te contacter pour en parler. Tu peux la modifier à tout moment, même après la clôture ; elle n'a aucun effet sur ta note.
+            Participer ne donne aucun droit sur ton code&nbsp;: toute réutilisation passe par un accord écrit séparé. Cette case dit seulement
+            si l'organisateur peut te contacter pour en parler. Tu peux la modifier à tout moment, même après la clôture&nbsp;; elle n'a aucun effet sur ta note.
           </p>
           <div class="champ champ--case">
             <input id="reutilisation" type="checkbox" :checked="accord" :disabled="occupe || etape > 0" @change="regler">
@@ -199,12 +219,12 @@ async function retirer() {
 
         <template v-if="peutRetirer">
           <h2>Retirer mon dépôt</h2>
-          <p v-if="!confirmer" class="btns"><button class="btn" type="button" :disabled="occupe || etape > 0" @click="confirmer = true">Retirer mon dépôt</button></p>
+          <p v-if="!confirmer" class="btns"><button ref="boutonRetrait" class="btn" type="button" :disabled="occupe || etape > 0" @click="demanderRetrait(true)">Retirer mon dépôt</button></p>
           <div v-else class="avis" role="group" aria-labelledby="retrait-titre">
             <p id="retrait-titre">Ton dépôt et son archive seront supprimés. Tu resteras inscrit.</p>
             <p class="btns">
               <button class="btn btn--primary" type="button" :disabled="occupe" @click="retirer">Confirmer le retrait</button>
-              <button class="btn" type="button" :disabled="occupe" @click="confirmer = false">Annuler</button>
+              <button ref="boutonAnnuler" class="btn" type="button" :disabled="occupe" @click="demanderRetrait(false)">Annuler</button>
             </p>
           </div>
         </template>

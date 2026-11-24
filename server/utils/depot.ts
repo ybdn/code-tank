@@ -20,7 +20,7 @@ export async function contexteParticipation(event: H3Event) {
 export async function contexteDepot(event: H3Event) {
   const c = await contexteParticipation(event)
   const { data: compte } = await c.client.from('compte').select('etat').eq('id', c.user.id).maybeSingle()
-  if (compte?.etat !== 'autorise') throw createError({ statusCode: 403, statusMessage: 'Ton compte n\'est pas autorisé : tu ne peux pas déposer.' })
+  if (compte?.etat !== 'autorise') throw createError({ statusCode: 403, statusMessage: 'Ton compte n\'est pas autorisé\u00a0: tu ne peux pas déposer.' })
   if (!STATUTS_DEPOT.includes(c.campagne.statut)) throw createError({ statusCode: 409, statusMessage: 'Le dépôt n\'est pas ouvert pour cette campagne.' })
   if (Date.now() >= Date.parse(c.campagne.cloture_depot)) throw createError({ statusCode: 409, statusMessage: 'La date limite de dépôt est passée.' })
   return c

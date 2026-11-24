@@ -5,7 +5,7 @@ export default defineEventHandler(async (event) => {
   if (compte.email_verifie_le) throw createError({ statusCode: 409, statusMessage: 'Ton adresse est déjà vérifiée.' })
   // Une adresse écrite sans passer par le site (jetable, malformée, plusieurs adresses) ne reçoit rien.
   if (!adresseUtilisable(compte.email_contact)) {
-    throw createError({ statusCode: 422, statusMessage: 'Cette adresse n\'est pas acceptée : corrige-la dans ton profil.' })
+    throw createError({ statusCode: 422, statusMessage: 'Cette adresse n\'est pas acceptée\u00a0: corrige-la dans ton profil.' })
   }
   await limiter(event, 'verification')
   try {

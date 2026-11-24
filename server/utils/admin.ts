@@ -51,12 +51,12 @@ export function lu<T>(r: { data: T | null; error: { message: string } | null }, 
   return r.data
 }
 
-// Erreur d'une écriture : les refus voulus de la base (P0001) sont affichés tels quels, les autres traduits.
+// Erreur d'une écriture : les refus voulus de la base (P0001) sont affichés, statuts en libellés ; les autres traduits.
 export function erreurAdmin(error: { code?: string; message: string }, secours: string) {
   if (error.code === '23505') return createError({ statusCode: 409, statusMessage: 'Cette valeur existe déjà.' })
   if (error.code === '23514') return createError({ statusCode: 422, statusMessage: 'La base refuse ces valeurs (dates, nombres ou longueurs).' })
   if (error.code === '42501') return createError({ statusCode: 409, statusMessage: 'La base refuse cette écriture à ce stade de la campagne.' })
-  return erreurFonction(error, secours)
+  return erreurFonction({ ...error, message: libellerStatuts(error.message) }, secours)
 }
 
 export const corpsObjet = async (event: H3Event): Promise<Record<string, unknown>> => {

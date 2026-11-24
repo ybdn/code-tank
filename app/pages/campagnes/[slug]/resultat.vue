@@ -27,11 +27,11 @@ const mascotte = (jure: string) => jure as Jure
 
       <p v-if="!publie">Les résultats de cette campagne ne sont pas encore publiés. <NuxtLink :to="`/campagnes/${slug}`">Retour à la campagne</NuxtLink></p>
       <template v-else-if="error?.statusCode === 401">
-        <p>Connecte-toi avec ton compte pour voir ton entretien et ton rapport : ils ne sont visibles que de toi.</p>
+        <p>Connecte-toi avec ton compte pour voir ton entretien et ton rapport&nbsp;: ils ne sont visibles que de toi.</p>
         <p class="btns"><NuxtLink class="btn btn--primary" to="/compte">Se connecter</NuxtLink></p>
       </template>
       <template v-else-if="error?.statusCode === 404">
-        <p>Tu n'as pas d'entretien dans cette campagne : tu n'y as pas déposé de code, ou tu es connecté avec un autre compte.</p>
+        <p>Tu n'as pas d'entretien dans cette campagne&nbsp;: tu n'y as pas déposé de code, ou tu es connecté avec un autre compte.</p>
         <p class="btns"><NuxtLink class="btn" :to="`/campagnes/${slug}`">Voir le classement</NuxtLink></p>
       </template>
       <p v-else-if="error || !data" role="alert" class="avis avis--erreur">Ton entretien ne peut pas être lu pour le moment. Réessaie dans un instant.</p>
@@ -48,8 +48,8 @@ const mascotte = (jure: string) => jure as Jure
             <JaugePixel :valeur="data.ligne.score_final" :max="100" />
           </template>
         </div>
-        <p v-if="data.ligne?.disqualifie" class="avis">Justification de l'organisateur, publique : {{ data.ligne.justification }}</p>
-        <p v-if="data.ligne?.justification_departage" class="avis">À égalité de score, l'organisateur t'a départagé. Justification publique : {{ data.ligne.justification_departage }}</p>
+        <p v-if="data.ligne?.disqualifie" class="avis">Justification de l'organisateur, publique&nbsp;: {{ data.ligne.justification }}</p>
+        <p v-if="data.ligne?.justification_departage" class="avis">À égalité de score, l'organisateur t'a départagé. Justification publique&nbsp;: {{ data.ligne.justification_departage }}</p>
 
         <template v-if="data.demande">
           <h2>Ta demande</h2>
@@ -69,7 +69,7 @@ const mascotte = (jure: string) => jure as Jure
             <p v-else class="note-claire">Ce juré n'a pas rendu d'audit pour ton dépôt.</p>
             <ul class="criteres criteres--notes">
               <li v-for="c in critereDe(j.jure)" :key="c.cle">
-                <span>{{ c.libelle }}</span><span>{{ noteDe(c) ?? '—' }} sur 10</span>
+                <span>{{ c.libelle }}</span><span>{{ formaterNombre(noteDe(c)) }}&nbsp;sur&nbsp;10</span>
                 <JaugePixel v-if="noteDe(c) !== null" :valeur="Number(noteDe(c))" :max="10" :cases="10" />
               </li>
             </ul>
@@ -95,10 +95,10 @@ const mascotte = (jure: string) => jure as Jure
         <h2>Ton rapport</h2>
         <article v-for="c in data.criteres" :key="c.cle" class="audit" :aria-labelledby="`critere-${c.cle}`">
           <h3 :id="`critere-${c.cle}`">{{ c.libelle }}</h3>
-          <p class="note-claire">{{ c.calcule ? 'Note calculée par un script' : `Note de ${nom(c.jure)}` }} · poids {{ c.poids }} % · <strong>{{ noteDe(c) ?? '—' }} sur 10</strong></p>
+          <p class="note-claire">{{ c.calcule ? 'Note calculée par un script' : `Note de ${nom(c.jure)}` }} · poids&nbsp;{{ c.poids }}&nbsp;% · <strong>{{ formaterNombre(noteDe(c)) }}&nbsp;sur&nbsp;10</strong></p>
           <template v-if="audit(c)">
             <p>{{ audit(c)!.justification }}</p>
-            <ul v-if="audit(c)!.preuves.length" class="preuves" :aria-label="`Preuves : ${c.libelle}`">
+            <ul v-if="audit(c)!.preuves.length" class="preuves" :aria-label="`Preuves\u00a0: ${c.libelle}`">
               <li v-for="(p, i) in audit(c)!.preuves" :key="i"><code>{{ p.fichier }}:{{ p.ligne }}</code> {{ p.constat }}</li>
             </ul>
           </template>
@@ -121,7 +121,7 @@ const mascotte = (jure: string) => jure as Jure
 
         <section v-if="manipulations.length" class="avis" aria-labelledby="manipulation-h">
           <h2 id="manipulation-h">Un passage adressé au jury</h2>
-          <p>Un relevé n'est pas une décision : une disqualification n'existe que si l'organisateur la confirme, et elle s'affiche alors avec sa justification publique.</p>
+          <p>Un relevé n'est pas une décision&nbsp;: une disqualification n'existe que si l'organisateur la confirme, et elle s'affiche alors avec sa justification publique.</p>
           <div v-for="j in manipulations" :key="j.jure">
             <h3>Relevé par {{ nom(j.jure) }}</h3>
             <ul class="preuves">

@@ -32,16 +32,33 @@ const saisie = reactive({
   justification: '',
 })
 const confirmation = ref<string | null>(null)
+// Le bouton cliqué disparaît : le focus va à « Annuler » (choix sans risque), puis revient au bouton d'origine.
+// Après une action confirmée réussie, il va au résumé de la participation, qui ne disparaît jamais.
+const focaliser = async (id: string) => {
+  await nextTick()
+  document.getElementById(`${id}-${p.value.id}`)?.focus()
+}
+function ouvrir(cle: string) {
+  confirmation.value = cle
+  focaliser(`annuler-${cle}`)
+}
+function annuler() {
+  const cle = confirmation.value
+  confirmation.value = null
+  focaliser(`declencheur-${cle}`)
+}
 
 async function agir(requete: () => Promise<unknown>, ok: string) {
+  const cle = confirmation.value
   const r = await lancer(requete, ok)
   confirmation.value = null
   if (r) emit('change')
+  if (cle) await focaliser(r ? 'resume' : `declencheur-${cle}`)
   return r
 }
 const enregistrerVote = () =>
   agir(() => $fetch(`/api/admin/participations/${p.value.id}/vote`, { method: 'PUT', body: { note: saisie.note, commentaire: saisie.commentaire } }), 'Vote enregistré, pas encore verrouillé.')
-const verrouiller = () => agir(() => $fetch(`/api/admin/participations/${p.value.id}/verrouillage`, { method: 'POST' }), 'Vote verrouillé : les audits sont maintenant lisibles.')
+const verrouiller = () => agir(() => $fetch(`/api/admin/participations/${p.value.id}/verrouillage`, { method: 'POST' }), 'Vote verrouillé\u00a0: les audits sont maintenant lisibles.')
 const demasquer = (id: string) => agir(() => $fetch(`/api/admin/audits/${id}/demasquage`, { method: 'POST' }), 'Réplique démasquée.')
 const masquer = (id: string) => agir(() => $fetch(`/api/admin/audits/${id}/masquage`, { method: 'POST' }), 'Réplique masquée.')
 async function decider() {
@@ -49,7 +66,7 @@ async function decider() {
   if (r) saisie.justification = ''
 }
 async function telecharger() {
-  const r = await lancer(() => $fetch<{ url: string }>(`/api/admin/participations/${p.value.id}/archive`), 'Téléchargement lancé : le lien n\'est valable que 60 secondes.')
+  const r = await lancer(() => $fetch<{ url: string }>(`/api/admin/participations/${p.value.id}/archive`), 'Téléchargement lancé\u00a0: le lien n\'est valable que 60 secondes.')
   if (r) window.location.assign(r.url)
 }
 const champ = (n: string, aide?: string) => ({
@@ -60,22 +77,21 @@ const champ = (n: string, aide?: string) => ({
 
 <template>
   <details class="bloc">
-    <summary>
-      <strong>{{ p.pseudo }}</strong>
-      : réception {{ p.reception ? ETAT_RECEPTION[p.reception.etat] : 'aucune' }}, dépôt {{ p.depot ? 'accepté' : 'aucun' }}, vote {{ etatVote }}<template v-if="nbAlertes">, <strong>{{ nbAlertes }} alerte{{ nbAlertes > 1 ? 's' : '' }}</strong></template>
+    <summary :id="`resume-${p.id}`">
+      <strong>{{ p.pseudo }}</strong>&nbsp;: réception {{ p.reception ? ETAT_RECEPTION[p.reception.etat] : 'aucune' }}, dépôt {{ p.depot ? 'accepté' : 'aucun' }}, vote {{ etatVote }}<template v-if="nbAlertes">, <strong>{{ nbAlertes }} alerte{{ nbAlertes > 1 ? 's' : '' }}</strong></template>
     </summary>
 
     <div class="bloc__corps">
       <div role="status" aria-live="polite"><p v-if="message" class="avis">{{ message }}</p></div>
       <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
 
-      <p>Vrai nom : {{ p.vrai_nom || '—' }}. Inscrit le {{ formaterDate(p.inscrit_le) }}.</p>
+      <p>Vrai nom&nbsp;: {{ p.vrai_nom || '—' }}. Inscrit le {{ formaterDate(p.inscrit_le) }}.</p>
 
       <h3>Réception</h3>
       <p v-if="!p.reception">Aucun envoi reçu.</p>
       <template v-else>
         <p>
-          État : <strong>{{ ETAT_RECEPTION[p.reception.etat] }}</strong>, reçue le {{ formaterDate(p.reception.recue_le) }}<template v-if="p.reception.traitee_le">, traitée le {{ formaterDate(p.reception.traitee_le) }}</template>.
+          État&nbsp;: <strong>{{ ETAT_RECEPTION[p.reception.etat] }}</strong>, reçue le {{ formaterDate(p.reception.recue_le) }}<template v-if="p.reception.traitee_le">, traitée le {{ formaterDate(p.reception.traitee_le) }}</template>.
         </p>
         <ul v-if="p.reception.motifs_refus.length">
           <li v-for="(m, n) in p.reception.motifs_refus" :key="n">{{ m.message ?? m.code }}</li>
@@ -102,15 +118,15 @@ const champ = (n: string, aide?: string) => ({
 
         <h3>Alertes</h3>
         <div v-for="(c, n) in contradictions" :key="n" class="avis avis--erreur" role="note">
-          <strong>Contradiction avec la déclaration.</strong> {{ c }} Demande une explication au candidat : on ne sanctionne jamais sur un détecteur.
+          <strong>Contradiction avec la déclaration.</strong> {{ c }} Demande une explication au candidat&nbsp;: on ne sanctionne jamais sur un détecteur.
         </div>
         <p v-if="p.depot.alerte_manipulation" class="avis avis--erreur"><strong>Manipulation.</strong> Une phrase visant le jury a été relevée dans le dépôt (accepté, signalé).</p>
         <template v-if="p.depot.alertes_integrite.length">
-          <p><strong>Intégrité :</strong></p>
+          <p><strong>Intégrité&nbsp;:</strong></p>
           <ul><li v-for="(a, n) in p.depot.alertes_integrite" :key="n">{{ libelleElement(a) }}</li></ul>
         </template>
         <template v-if="p.depot.traces_ia.length">
-          <p><strong>Traces d'outils d'IA relevées :</strong></p>
+          <p><strong>Traces d'outils d'IA relevées&nbsp;:</strong></p>
           <ul><li v-for="(t, n) in p.depot.traces_ia" :key="n">{{ libelleElement(t) }}</li></ul>
         </template>
         <p v-if="!nbAlertes && !p.depot.traces_ia.length" class="note-claire">Aucune alerte.</p>
@@ -118,7 +134,7 @@ const champ = (n: string, aide?: string) => ({
 
       <template v-if="p.depot?.archive || p.reception">
         <h3>Archive</h3>
-        <p id="regle-aucune-execution" class="note-claire">Aucun dépôt n'est exécuté, par personne : l'archive se lit comme une donnée, jamais on ne lance son contenu.</p>
+        <p id="regle-aucune-execution" class="note-claire">Aucun dépôt n'est exécuté, par personne&nbsp;: l'archive se lit comme une donnée, jamais on ne lance son contenu.</p>
         <p class="btns">
           <button class="btn" type="button" :disabled="occupe" aria-describedby="regle-aucune-execution" @click="telecharger">Télécharger l'archive<span class="sr-only"> de {{ p.pseudo }}</span></button>
         </p>
@@ -127,11 +143,11 @@ const champ = (n: string, aide?: string) => ({
       <template v-if="p.depot">
         <h3>Vote du Boss</h3>
         <p v-if="!p.vote?.verrouille_le" class="note-claire">
-          Vote à l'aveugle : tant qu'il n'est pas verrouillé, la note de Claude, le rapport et la case de réutilisation sont absents, car la base les refuse à ta session.
+          Vote à l'aveugle&nbsp;: tant qu'il n'est pas verrouillé, la note de Claude, le rapport et la case de réutilisation sont absents, car la base les refuse à ta session.
         </p>
 
         <template v-if="p.vote?.verrouille_le">
-          <p>Note : <strong>{{ p.vote.note }}/10</strong>, verrouillée le {{ formaterDate(p.vote.verrouille_le) }}.</p>
+          <p>Note&nbsp;: <strong>{{ p.vote.note }}/10</strong>, verrouillée le {{ formaterDate(p.vote.verrouille_le) }}.</p>
           <p v-if="p.vote.commentaire" class="brief">{{ p.vote.commentaire }}</p>
         </template>
         <template v-else>
@@ -149,14 +165,14 @@ const champ = (n: string, aide?: string) => ({
             </div>
             <p class="btns">
               <button class="btn" type="submit" :disabled="occupe">Enregistrer le vote</button>
-              <button v-if="p.vote && confirmation !== 'verrou'" class="btn btn--primary" type="button" :disabled="occupe" @click="confirmation = 'verrou'">Verrouiller le vote</button>
+              <button v-if="p.vote && confirmation !== 'verrou'" :id="`declencheur-verrou-${p.id}`" class="btn btn--primary" type="button" :disabled="occupe" @click="ouvrir('verrou')">Verrouiller le vote</button>
             </p>
           </form>
           <div v-if="confirmation === 'verrou'" class="avis" role="group" :aria-labelledby="`verrou-${p.id}`">
             <p :id="`verrou-${p.id}`">Un vote verrouillé ne se modifie plus. Le vote enregistré ({{ p.vote?.note }}/10) sera définitif, et les notes de Claude, les rapports et la case de réutilisation deviendront lisibles.</p>
             <p class="btns">
-              <button class="btn btn--primary" type="button" :disabled="occupe" @click="verrouiller">Verrouiller définitivement</button>
-              <button class="btn" type="button" :disabled="occupe" @click="confirmation = null">Annuler</button>
+              <button class="btn btn--primary" type="button" :disabled="occupe" @click="verrouiller">{{ occupe ? 'Verrouillage…' : 'Verrouiller définitivement' }}</button>
+              <button :id="`annuler-verrou-${p.id}`" class="btn" type="button" :disabled="occupe" @click="annuler">Annuler</button>
             </p>
           </div>
         </template>
@@ -164,8 +180,8 @@ const champ = (n: string, aide?: string) => ({
 
       <template v-if="p.apres">
         <h3>Après le verrouillage</h3>
-        <p>D'accord pour être contacté au sujet d'une réutilisation : <strong>{{ p.apres.contact_reutilisation === null ? '—' : p.apres.contact_reutilisation ? 'oui' : 'non' }}</strong>.</p>
-        <p v-if="p.apres.note_outillage !== null">Critère calculé par script (outillage et doc) : <strong>{{ p.apres.note_outillage }}/10</strong>.</p>
+        <p>D'accord pour être contacté au sujet d'une réutilisation&nbsp;: <strong>{{ p.apres.contact_reutilisation === null ? '—' : p.apres.contact_reutilisation ? 'oui' : 'non' }}</strong>.</p>
+        <p v-if="p.apres.note_outillage !== null">Critère calculé par script (outillage et doc)&nbsp;: <strong>{{ p.apres.note_outillage }}/10</strong>.</p>
         <p v-if="!p.apres.audits.length">Aucun audit enregistré pour ce dépôt.</p>
 
         <article v-for="a in p.apres.audits" :key="a.id" class="audit" :aria-labelledby="`audit-${a.id}`">
@@ -175,7 +191,7 @@ const champ = (n: string, aide?: string) => ({
             · {{ a.tentatives }} tentative{{ a.tentatives > 1 ? 's' : '' }} · coût {{ a.cout_usd === null ? '—' : `${a.cout_usd} $` }}
           </p>
           <template v-if="a.resultat">
-            <p v-if="a.resultat.verdict">Verdict : <strong>{{ a.resultat.verdict === 'convaincu' ? 'Convaincu' : a.resultat.verdict === 'pas_convaincu' ? 'Pas convaincu' : a.resultat.verdict }}</strong></p>
+            <p v-if="a.resultat.verdict">Verdict&nbsp;: <strong>{{ a.resultat.verdict === 'convaincu' ? 'Convaincu' : a.resultat.verdict === 'pas_convaincu' ? 'Pas convaincu' : a.resultat.verdict }}</strong></p>
             <p v-if="a.resultat.manipulation_detectee?.detectee" class="avis avis--erreur"><strong>Manipulation détectée par ce juré.</strong> {{ (a.resultat.manipulation_detectee.preuves ?? []).map(libelleElement).join(' · ') }}</p>
             <div v-if="a.resultat.criteres?.length" class="tableau" role="region" :aria-label="`Notes de ${NOM_JURE[a.jure] ?? a.jure}`" tabindex="0">
               <table>
@@ -200,20 +216,20 @@ const champ = (n: string, aide?: string) => ({
               <p><strong>À améliorer</strong></p>
               <ul><li v-for="(t, n) in a.resultat.a_ameliorer" :key="n">{{ t }}</li></ul>
             </template>
-            <p><strong>Réplique</strong> <template v-if="a.replique_masquee">(masquée : le candidat ne la verra pas)</template></p>
+            <p><strong>Réplique</strong> <template v-if="a.replique_masquee">(masquée&nbsp;: le candidat ne la verra pas)</template></p>
             <p class="brief">{{ a.resultat.replique ?? '—' }}</p>
             <p v-if="a.replique_masquee" class="btns">
               <button class="btn" type="button" :disabled="occupe" @click="demasquer(a.id)">Démasquer la réplique<span class="sr-only"> de {{ NOM_JURE[a.jure] ?? a.jure }}</span></button>
             </p>
             <template v-else>
               <p v-if="confirmation !== `masque-${a.id}`" class="btns">
-                <button class="btn" type="button" :disabled="occupe" @click="confirmation = `masque-${a.id}`">Masquer la réplique<span class="sr-only"> de {{ NOM_JURE[a.jure] ?? a.jure }}</span></button>
+                <button :id="`declencheur-masque-${a.id}-${p.id}`" class="btn" type="button" :disabled="occupe" @click="ouvrir(`masque-${a.id}`)">Masquer la réplique<span class="sr-only"> de {{ NOM_JURE[a.jure] ?? a.jure }}</span></button>
               </p>
               <div v-else class="avis" role="group" :aria-labelledby="`masque-${a.id}`">
-                <p :id="`masque-${a.id}`">Masquer cette réplique ? Les notes ne changent pas. Tu pourras la démasquer.</p>
+                <p :id="`masque-${a.id}`">Masquer cette réplique&nbsp;? Les notes ne changent pas. Tu pourras la démasquer.</p>
                 <p class="btns">
                   <button class="btn btn--primary" type="button" :disabled="occupe" @click="masquer(a.id)">Masquer</button>
-                  <button class="btn" type="button" :disabled="occupe" @click="confirmation = null">Annuler</button>
+                  <button :id="`annuler-masque-${a.id}-${p.id}`" class="btn" type="button" :disabled="occupe" @click="annuler">Annuler</button>
                 </p>
               </div>
             </template>
@@ -223,12 +239,12 @@ const champ = (n: string, aide?: string) => ({
 
         <h3>Décisions</h3>
         <ul v-if="p.decisions.length">
-          <li v-for="d in p.decisions" :key="d.id"><strong>{{ TYPES_DECISION[d.type] ?? d.type }}</strong>, le {{ formaterDate(d.prise_le) }} : {{ d.justification }}</li>
+          <li v-for="d in p.decisions" :key="d.id"><strong>{{ TYPES_DECISION[d.type] ?? d.type }}</strong>, le {{ formaterDate(d.prise_le) }}&nbsp;: {{ d.justification }}</li>
         </ul>
         <p v-else class="note-claire">Aucune décision.</p>
 
-        <form class="form" novalidate @submit.prevent="confirmation = 'decision'">
-          <p class="avis">La justification d'une disqualification et d'un départage est <strong>publique</strong> : elle figure au classement. Aucune décision ne s'annule.</p>
+        <form class="form" novalidate @submit.prevent="ouvrir('decision')">
+          <p class="avis">La justification d'une disqualification et d'un départage est <strong>publique</strong>&nbsp;: elle figure au classement. Aucune décision ne s'annule.</p>
           <div class="champ">
             <label :for="`type-${p.id}`">Type de décision</label>
             <select :id="`type-${p.id}`" v-model="saisie.type" required v-bind="champ('type')">
@@ -242,18 +258,18 @@ const champ = (n: string, aide?: string) => ({
             <textarea :id="`justification-${p.id}`" v-model="saisie.justification" rows="3" maxlength="2000" required v-bind="champ('justification')" />
             <p v-if="erreurs.justification" :id="`err-justification-${p.id}`" class="champ__erreur">{{ erreurs.justification }}</p>
           </div>
-          <p v-if="confirmation !== 'decision'" class="btns"><button class="btn" type="submit" :disabled="occupe || !saisie.type || !saisie.justification.trim()">Enregistrer la décision</button></p>
+          <p v-if="confirmation !== 'decision'" class="btns"><button :id="`declencheur-decision-${p.id}`" class="btn" type="submit" :disabled="occupe || !saisie.type || !saisie.justification.trim()">Enregistrer la décision</button></p>
         </form>
         <div v-if="confirmation === 'decision'" class="avis" role="group" :aria-labelledby="`decision-${p.id}`">
           <p :id="`decision-${p.id}`">
-            Enregistrer cette décision pour {{ p.pseudo }} ?
+            Enregistrer cette décision pour {{ p.pseudo }}&nbsp;?
             <template v-if="saisie.type !== 'fermeture_compte'">La justification sera publique.</template>
             <template v-else>Le compte sera fermé.</template>
             Elle ne pourra pas être annulée.
           </p>
           <p class="btns">
-            <button class="btn btn--primary" type="button" :disabled="occupe" @click="decider">Confirmer</button>
-            <button class="btn" type="button" :disabled="occupe" @click="confirmation = null">Annuler</button>
+            <button class="btn btn--primary" type="button" :disabled="occupe" @click="decider">{{ occupe ? 'Enregistrement…' : 'Confirmer' }}</button>
+            <button :id="`annuler-decision-${p.id}`" class="btn" type="button" :disabled="occupe" @click="annuler">Annuler</button>
           </p>
         </div>
       </template>

@@ -42,7 +42,7 @@ const champ = (n: string, aide: string) => ({
         </div>
         <div class="champ">
           <label for="plafond_comptes">Plafond de comptes</label>
-          <p id="aide-plafond" class="champ__aide">Comptes vérifiés ou autorisés au total. Au-delà, les nouveaux comptes vérifiés vont en liste d'attente. Vide : pas de plafond.</p>
+          <p id="aide-plafond" class="champ__aide">Comptes vérifiés ou autorisés au total. Au-delà, les nouveaux comptes vérifiés vont en liste d'attente. Vide&nbsp;: pas de plafond.</p>
           <input id="plafond_comptes" v-model.number="f.plafond_comptes" type="number" min="0" step="1" inputmode="numeric" v-bind="champ('plafond_comptes', 'aide-plafond')">
           <p v-if="toutes.plafond_comptes" id="err-plafond_comptes" class="champ__erreur">{{ toutes.plafond_comptes }}</p>
         </div>
@@ -52,7 +52,7 @@ const champ = (n: string, aide: string) => ({
           <input id="plafond_depense_usd" v-model.number="f.plafond_depense_usd" type="number" min="0.01" step="0.01" inputmode="decimal" required v-bind="champ('plafond_depense_usd', 'aide-depense')">
           <p v-if="toutes.plafond_depense_usd" id="err-plafond_depense_usd" class="champ__erreur">{{ toutes.plafond_depense_usd }}</p>
         </div>
-        <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">Enregistrer</button></p>
+        <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Enregistrement…' : 'Enregistrer' }}</button></p>
       </form>
     </div>
   </section>

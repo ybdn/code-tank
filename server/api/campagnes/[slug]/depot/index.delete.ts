@@ -12,7 +12,7 @@ export default defineEventHandler(async (event) => {
     if (error) throw erreurFonction(error, 'Retrait impossible.')
   } else if (!STATUTS_DEPOT.includes(campagne.statut)) {
     // Même règle que retirer_depot : plus de retrait une fois la délibération commencée.
-    throw createError({ statusCode: 409, statusMessage: 'Retrait impossible : la délibération a commencé.' })
+    throw createError({ statusCode: 409, statusMessage: 'Retrait impossible\u00a0: la délibération a commencé.' })
   }
   await solderReception(event, campagne.id, participation.id, [depot?.chemin_stockage, reception?.chemin_stockage])
   return { ok: true }

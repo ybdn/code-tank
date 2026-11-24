@@ -23,26 +23,34 @@ const ajout = useAction()
 const jury = useAction()
 const confirmerEtape = ref(false)
 const aAjouter = ref('')
+// Le bouton cliqué disparaît : le focus va à « Annuler » (choix sans risque), puis revient au bouton, ou au titre « Étape »
+// quand il n'y a plus d'étape à passer.
+const focaliserEtape = async (annuler: boolean) => {
+  await nextTick()
+  ;(document.getElementById(annuler ? 'etape-annuler' : 'etape-bouton') ?? document.getElementById('etape-titre-section'))?.focus()
+}
+watch(confirmerEtape, focaliserEtape)
 
 async function avancer() {
   const r = await statut.lancer(
     () => $fetch<{ courriels?: { envoyes: number; echecs: number; sansAdresseVerifiee: number } | null }>(`/api/admin/campagnes/${slug}/statut`, { method: 'POST', body: { statut: suite.value } }),
-    `Campagne passée à « ${STATUT_ADMIN[suite.value!]} ».`,
+    `Campagne passée à «\u00a0${STATUT_ADMIN[suite.value!]}\u00a0».`,
   )
   confirmerEtape.value = false
   const c = r?.courriels
   if (c) {
-    statut.message.value += ` E-mails de résultat : ${c.envoyes} envoyé${c.envoyes > 1 ? 's' : ''}, ${c.echecs} échec${c.echecs > 1 ? 's' : ''}, ${c.sansAdresseVerifiee} participant${c.sansAdresseVerifiee > 1 ? 's' : ''} sans adresse vérifiée. Il n'y a pas de bouton de renvoi : il créerait des doublons.`
+    statut.message.value += ` E-mails de résultat\u00a0: ${c.envoyes} envoyé${c.envoyes > 1 ? 's' : ''}, ${c.echecs} échec${c.echecs > 1 ? 's' : ''}, ${c.sansAdresseVerifiee} participant${c.sansAdresseVerifiee > 1 ? 's' : ''} sans adresse vérifiée. Il n'y a pas de bouton de renvoi\u00a0: il créerait des doublons.`
   } else if (r?.courriels === null) {
-    statut.message.value += ' Les destinataires des e-mails de résultat n\'ont pas pu être lus : aucun e-mail n\'est parti, et il n\'y a pas de bouton de renvoi.'
+    statut.message.value += ' Les destinataires des e-mails de résultat n\'ont pas pu être lus\u00a0: aucun e-mail n\'est parti, et il n\'y a pas de bouton de renvoi.'
   }
   if (r) await refresh()
+  await focaliserEtape(false)
 }
 const MESSAGES_JURY: Record<string, string> = {
-  lance: 'Jury lancé : il traite les dépôts reçus et les audits en cours.',
-  deja_en_cours: 'Le jury travaille déjà : rien à relancer pour l\'instant.',
-  non_configure: 'Le jury n\'est pas configuré sur ce site : l\'appel n\'a pas eu lieu.',
-  echec: 'Le jury n\'a pas répondu : réessaie dans un instant.',
+  lance: 'Jury lancé\u00a0: il traite les dépôts reçus et les audits en cours.',
+  deja_en_cours: 'Le jury travaille déjà\u00a0: rien à relancer pour l\'instant.',
+  non_configure: 'Le jury n\'est pas configuré sur ce site\u00a0: l\'appel n\'a pas eu lieu.',
+  echec: 'Le jury n\'a pas répondu\u00a0: réessaie dans un instant.',
 }
 async function relancerJury() {
   const r = await jury.lancer(() => $fetch<{ etat: string }>(`/api/admin/campagnes/${slug}/jury`, { method: 'POST' }), '')
@@ -66,24 +74,24 @@ async function ajouter() {
     <div class="wrap">
       <h1>{{ campagne.titre }}</h1>
       <FriseEtapes :statut="campagne.statut" />
-      <p class="lead">Thème : {{ campagne.theme }}</p>
+      <p class="lead">Thème&nbsp;: {{ campagne.theme }}</p>
       <p v-if="campagne.statut !== 'brouillon'"><NuxtLink :to="`/campagnes/${campagne.slug}`">Voir la page publique</NuxtLink></p>
 
       <PanneauxAdmin :panneaux="panneaux" libelle="Sections de la campagne">
         <template #etape>
-          <h2>Étape</h2>
+          <h2 id="etape-titre-section" tabindex="-1">Étape</h2>
           <div role="status" aria-live="polite"><p v-if="statut.message.value" class="avis">{{ statut.message.value }}</p></div>
           <p v-if="statut.alerte.value" role="alert" class="avis avis--erreur">{{ statut.alerte.value }}</p>
-          <p v-if="!suite">La campagne est archivée : il n'y a plus d'étape.</p>
+          <p v-if="!suite">La campagne est archivée&nbsp;: il n'y a plus d'étape.</p>
           <template v-else>
             <p v-if="!confirmerEtape" class="btns">
-              <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = true">Passer à « {{ STATUT_ADMIN[suite] }} »</button>
+              <button id="etape-bouton" class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = true">Passer à «&nbsp;{{ STATUT_ADMIN[suite] }}&nbsp;»</button>
             </p>
             <div v-else class="avis" role="group" aria-labelledby="etape-titre">
-              <p id="etape-titre"><strong>Passer à « {{ STATUT_ADMIN[suite] }} » ?</strong> {{ EFFET_ETAPE[suite] }} Cette étape ne se défait pas.</p>
+              <p id="etape-titre"><strong>Passer à «&nbsp;{{ STATUT_ADMIN[suite] }}&nbsp;»&nbsp;?</strong> {{ EFFET_ETAPE[suite] }} Cette étape ne se défait pas.</p>
               <p class="btns">
-                <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="avancer">Confirmer</button>
-                <button class="btn" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = false">Annuler</button>
+                <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="avancer">{{ statut.occupe.value ? 'Passage en cours…' : 'Confirmer' }}</button>
+                <button id="etape-annuler" class="btn" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = false">Annuler</button>
               </p>
             </div>
           </template>
@@ -99,11 +107,12 @@ async function ajouter() {
         <template #participants>
           <h2>Participants ({{ inscrits.length }} sur {{ campagne.max_participants }})</h2>
           <p v-if="!inscrits.length" class="note-claire">Personne n'est inscrit.</p>
-          <div v-else class="tableau" role="region" aria-label="Participants" tabindex="0">
-            <table>
-              <thead><tr><th scope="col">Pseudo</th><th scope="col">Vrai nom</th><th scope="col">Inscrit le</th></tr></thead>
-              <tbody>
-                <tr v-for="p in inscrits" :key="p.id"><th scope="row">{{ p.pseudo }}</th><td>{{ p.vrai_nom || '—' }}</td><td>{{ formaterDate(p.inscrit_le) }}</td></tr>
+          <div v-else class="tableau tableau--liste" role="region" aria-label="Participants" tabindex="0">
+            <!-- Rôles explicites : au téléphone, le tableau passe en fiches (display: block), qui sans eux perdraient la sémantique de tableau. -->
+            <table role="table">
+              <thead role="rowgroup"><tr role="row"><th scope="col" role="columnheader">Pseudo</th><th scope="col" role="columnheader">Vrai nom</th><th scope="col" role="columnheader">Inscrit le</th></tr></thead>
+              <tbody role="rowgroup">
+                <tr v-for="p in inscrits" :key="p.id" role="row"><th scope="row" role="rowheader">{{ p.pseudo }}</th><td role="cell" data-label="Vrai nom">{{ p.vrai_nom || '—' }}</td><td role="cell" data-label="Inscrit le">{{ formaterDateCourte(p.inscrit_le) }}</td></tr>
               </tbody>
             </table>
           </div>
@@ -123,7 +132,7 @@ async function ajouter() {
         </template>
         <template #depots>
           <h2>Dépôts et vote du Boss</h2>
-          <p class="note-claire">Aucun dépôt n'est exécuté, par personne : on lit, on ne lance rien.</p>
+          <p class="note-claire">Aucun dépôt n'est exécuté, par personne&nbsp;: on lit, on ne lance rien.</p>
           <p v-if="!inscrits.length" class="note-claire">Aucune participation.</p>
           <ParticipationAdmin v-for="p in inscrits" :key="p.id" :participation="p" :campagne="campagne" @change="refresh()" />
         </template>

@@ -39,7 +39,7 @@ export function validerDeclaration(corps: Record<string, unknown>): { declaratio
   const type_code = corps.type_code === 'open_source' || corps.type_code === 'proprietaire' ? corps.type_code : undefined
   if (!type_code) erreurs.type_code = 'Indique si ton code est open source ou propriétaire.'
   if (corps.declaration_code !== true) {
-    erreurs.declaration_code = 'Coche la déclaration : sans elle, ce code ne peut pas être déposé.'
+    erreurs.declaration_code = 'Coche la déclaration\u00a0: sans elle, ce code ne peut pas être déposé.'
   }
 
   const brut = Array.isArray(corps.outils_ia) ? corps.outils_ia : []
@@ -47,9 +47,9 @@ export function validerDeclaration(corps: Record<string, unknown>): { declaratio
   if (outils.length > MAX_OUTILS || outils.some((o) => o.length > MAX_NOM_OUTIL)) {
     erreurs.outils_ia = `Dix outils au plus, ${MAX_NOM_OUTIL} caractères chacun.`
   } else if (corps.aucun_outil === true && outils.length) {
-    erreurs.outils_ia = 'Tu as coché « aucun » et listé des outils : garde l\'un ou l\'autre.'
+    erreurs.outils_ia = 'Tu as coché «\u00a0aucun\u00a0» et listé des outils\u00a0: garde l\'un ou l\'autre.'
   } else if (corps.aucun_outil !== true && !outils.length) {
-    erreurs.outils_ia = 'Liste les outils d\'IA utilisés, ou coche « aucun ».'
+    erreurs.outils_ia = 'Liste les outils d\'IA utilisés, ou coche «\u00a0aucun\u00a0».'
   }
 
   return {

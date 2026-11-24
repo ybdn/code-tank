@@ -68,7 +68,7 @@ const retirer = (cle: string) => (f.criteres = f.criteres.filter((c) => c.cle !=
 
     <div class="champ">
       <label for="slug">Slug</label>
-      <p id="aide-slug" class="champ__aide">L'adresse publique : /campagnes/<em>slug</em>. Minuscules, chiffres et tirets.<template v-if="slugFige"> Figé : la campagne est visible.</template></p>
+      <p id="aide-slug" class="champ__aide">L'adresse publique&nbsp;: /campagnes/<em>slug</em>. Minuscules, chiffres et tirets.<template v-if="slugFige"> Figé&nbsp;: la campagne est visible.</template></p>
       <input id="slug" v-model="f.slug" type="text" maxlength="60" autocapitalize="none" spellcheck="false" :readonly="slugFige" required v-bind="champ('slug', 'aide-slug')">
       <p v-if="toutes.slug" id="err-slug" class="champ__erreur">{{ toutes.slug }}</p>
     </div>
@@ -92,7 +92,7 @@ const retirer = (cle: string) => (f.criteres = f.criteres.filter((c) => c.cle !=
     <fieldset class="groupe">
       <legend>Critères</legend>
       <p id="aide-criteres" class="champ__aide">
-        Les poids totalisent 100 avant l'ouverture des inscriptions. Le juré note ses critères, sauf celui marqué « calculé par script ».
+        Les poids totalisent 100 avant l'ouverture des inscriptions. Le juré note ses critères, sauf celui marqué «&nbsp;calculé par script&nbsp;».
         <template v-if="figees">Figés depuis le premier dépôt.</template>
       </p>
       <div class="tableau" role="region" aria-label="Critères" tabindex="0" :data-invalide="toutes.criteres ? '' : undefined">
@@ -117,13 +117,13 @@ const retirer = (cle: string) => (f.criteres = f.criteres.filter((c) => c.cle !=
                   <option v-for="j in JURES" :key="j" :value="j">{{ NOM_JURE[j] }}</option>
                 </select>
               </td>
-              <td><button v-if="!figees && f.criteres.length > 1" class="btn" type="button" @click="retirer(c.cle)">Retirer<span class="sr-only"> {{ c.cle }}</span></button></td>
+              <td><button v-if="!figees && f.criteres.length > 1" class="btn" type="button" @click="retirer(c.cle)">Retirer <span class="sr-only">{{ c.cle }}</span></button></td>
             </tr>
           </tbody>
           <tfoot>
             <tr>
               <th scope="row" colspan="2">Total des poids</th>
-              <td colspan="3" aria-live="polite">{{ total }} sur 100<template v-if="total !== 100"> : à corriger avant l'ouverture des inscriptions</template></td>
+              <td colspan="3" aria-live="polite">{{ total }} sur 100<template v-if="total !== 100">&nbsp;: à corriger avant l'ouverture des inscriptions</template></td>
             </tr>
           </tfoot>
         </table>
@@ -157,7 +157,7 @@ const retirer = (cle: string) => (f.criteres = f.criteres.filter((c) => c.cle !=
     <fieldset class="groupe">
       <legend>Modèle de chaque juré</legend>
       <p id="aide-modeles" class="champ__aide">
-        Le modèle Claude utilisé par les audits de ce juré : il décide du coût de la délibération.
+        Le modèle Claude utilisé par les audits de ce juré&nbsp;: il décide du coût de la délibération.
         <template v-if="modelesFiges">Figé depuis le passage en délibération.</template>
       </p>
       <div v-for="j in JURES" :key="j" class="champ">
@@ -169,6 +169,6 @@ const retirer = (cle: string) => (f.criteres = f.criteres.filter((c) => c.cle !=
       <p v-if="toutes.modeles" id="err-modeles" class="champ__erreur">{{ toutes.modeles }}</p>
     </fieldset>
 
-    <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ initial ? 'Enregistrer la campagne' : 'Créer le brouillon' }}</button></p>
+    <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Enregistrement…' : initial ? 'Enregistrer la campagne' : 'Créer le brouillon' }}</button></p>
   </form>
 </template>

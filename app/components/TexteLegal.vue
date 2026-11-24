@@ -14,7 +14,7 @@ const marked = new Marked({
     },
     table(token) {
       const legende = token.header.map((c) => c.text).join(', ')
-      return `<div class="tbl" role="region" tabindex="0" aria-label="Tableau : ${legende.replace(/"/g, '&quot;')}">${base.table.call(this, token)}</div>`
+      return `<div class="tbl" role="region" tabindex="0" aria-label="Tableau\u00a0: ${legende.replace(/"/g, '&quot;')}">${base.table.call(this, token)}</div>`
     },
   },
 })
