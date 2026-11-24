@@ -1,6 +1,9 @@
 <script setup lang="ts">
 const organisateur = useOrganisateur()
 const user = useSupabaseUser()
+// Le serveur ne voit pas toujours la session au rendu : le libellé ne change qu'après le montage, sans écart d'hydratation.
+const connecte = ref(false)
+onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
 </script>
 
 <template>
@@ -15,7 +18,7 @@ const user = useSupabaseUser()
           <NuxtLink to="/charte">Charte</NuxtLink>
           <NuxtLink v-if="organisateur" to="/admin">Administration</NuxtLink>
         </nav>
-        <NuxtLink class="btn btn--primary" to="/compte">{{ user ? 'Mon compte' : 'Créer mon compte' }}</NuxtLink>
+        <NuxtLink class="btn btn--primary" to="/compte">{{ connecte ? 'Mon compte' : 'Créer mon compte' }}</NuxtLink>
       </div>
     </header>
     <main id="contenu" tabindex="-1"><NuxtLayout><NuxtPage /></NuxtLayout></main>

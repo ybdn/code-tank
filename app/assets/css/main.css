@@ -47,13 +47,24 @@ main:focus { outline: none; }
 .btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
 
 .nav { border-bottom: 1px solid var(--line); }
-.nav__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 24px; min-height: 72px; padding-block: 8px; }
-.logo { display: inline-flex; align-items: center; gap: 12px; font-weight: 700; font-size: 1.15rem; text-decoration: none; letter-spacing: -.04em; }
+.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 68px; }
+.logo { display: inline-flex; align-items: center; gap: 10px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.1rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
 .logo .mascotte { width: 28px; height: 28px; }
-.nav__links { display: flex; flex-wrap: wrap; gap: 4px 20px; margin-right: auto; }
-.nav__links a, .legal-links a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
-.nav__links a:hover, .legal-links a:hover { text-decoration: underline; }
-.nav a.router-link-exact-active { text-decoration: underline; text-decoration-color: var(--accent); text-decoration-thickness: 2px; }
+.logo__par { margin-left: 6px; font: 400 .7rem var(--font-display); letter-spacing: 0; color: var(--muted); }
+.nav__links { display: flex; gap: 0 24px; margin-right: auto; }
+.nav__links a, .legal-links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
+.legal-links a:hover { text-decoration: underline; }
+.nav__links a { color: var(--muted); }
+.nav__links a:hover, .nav__links a.router-link-exact-active { color: var(--ink); }
+/* Le lien actif porte la même barre en cases que les onglets de la console. */
+.nav__links a.router-link-exact-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 3px; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px); }
+.nav .btn { flex: none; min-height: 40px; padding: 0 18px; font-size: .92rem; }
+@media (max-width: 52rem) {
+  .nav__bar { flex-wrap: wrap; gap: 0 16px; padding-top: 10px; }
+  .nav .btn { margin-left: auto; }
+  .nav__links { order: 3; width: 100%; margin-right: 0; overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--line); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); padding-right: 24px; }
+}
+@media (max-width: 24rem) { .logo__par { display: none; } }
 
 .hero__in { display: grid; gap: 28px; justify-items: start; }
 .vide { margin: 24px 0 0; padding: 28px; border: 1px dashed var(--line); border-radius: 8px; color: var(--muted); max-width: 40rem; }
@@ -460,5 +471,3 @@ h1 + .parcours { margin-top: 2rem; }
 /* Les liens découpés en cases (clip-path) perdent leur contour extérieur : le focus se dessine à l'intérieur. */
 :is(.indicateurs a, .taches a, .panneaux__nav a):focus-visible { outline-offset: -5px; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
-/* La marque : « Code Tank by ybdn.io », l'éditeur en retrait. */
-.logo__par { margin-left: 2px; font-weight: 400; font-size: .78em; color: var(--muted); letter-spacing: -.02em; }
