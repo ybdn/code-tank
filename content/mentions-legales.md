@@ -1,7 +1,5 @@
 # Mentions légales de Code Tank
 
-> **PROJET, à faire relire par un avocat avant la mise en ligne.**
-
 Mentions exigées par l'article 1-1 de la loi du 21 juin 2004 pour la confiance dans l'économie numérique (rédaction de 2024).
 
 Site&nbsp;: `code-tank.ybdn.io`
