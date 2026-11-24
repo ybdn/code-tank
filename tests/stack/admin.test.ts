@@ -228,6 +228,7 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     const { data } = await admin.from('campagne').select('*').eq('slug', slug).single()
     id = data!.id
     expect(data).toMatchObject({ statut: 'brouillon', max_participants: 1 })
+    expect(data!.modeles).toEqual({ sudo: 'claude-sonnet-5-5', refacto: 'claude-sonnet-5-5', lint: 'claude-sonnet-5-5', pitch: 'claude-sonnet-5-5' })
     expect((await appeler('GET', `/api/campagnes/${slug}`)).statut).toBe(404) // la RLS cache le brouillon au public
     const liste = (await appeler('GET', '/api/admin/campagnes', orga)).json as unknown as { slug: string }[]
     expect(liste.map((c) => c.slug)).toContain(slug)
@@ -243,6 +244,13 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect(m.statut).toBe(200)
     expect((await admin.from('campagne').select('titre').eq('id', id).single()).data?.titre).toBe('Défi modifié')
     expect((await appeler('PATCH', '/api/admin/campagnes/inconnue', orga, corps('inconnue'))).statut).toBe(404)
+
+    // Un modèle par juré : choix valide enregistré, valeur hors liste refusée, corps sans `modeles` : valeur gardée.
+    const choisis = { sudo: 'claude-opus-5-5', refacto: 'claude-sonnet-5-5', lint: 'claude-haiku-5-5', pitch: 'claude-sonnet-5-5' }
+    expect((await appeler('PATCH', `/api/admin/campagnes/${slug}`, orga, corps(slug, { modeles: choisis }))).statut).toBe(200)
+    expect((await appeler('PATCH', `/api/admin/campagnes/${slug}`, orga, corps(slug, { modeles: { ...choisis, sudo: 'claude-opus-4-8' } }))).json.data.erreurs).toHaveProperty('modeles')
+    expect((await appeler('PATCH', `/api/admin/campagnes/${slug}`, orga, corps(slug, { titre: 'Défi modifié' }))).statut).toBe(200)
+    expect((await admin.from('campagne').select('modeles').eq('id', id).single()).data?.modeles).toEqual(choisis)
 
     const html = (await page(`/admin/campagnes/${slug}`, orga)).texte
     expect(html).toContain('Défi modifié')
@@ -342,6 +350,12 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     // Hors délibération, la base refuse d'écrire un vote.
     expect((await vote(7)).statut).toBe(409)
     expect((await statut('deliberation')).statut).toBe(200)
+    // Les modèles sont figés dès la délibération : une valeur inchangée passe, une autre est refusée par la base.
+    const figes = (await admin.from('campagne').select('modeles').eq('id', id).single()).data!.modeles
+    expect((await appeler('PATCH', `/api/admin/campagnes/${slug}`, orga, corps(slug, { max_participants: 3, modeles: figes }))).statut).toBe(200)
+    const change = await appeler('PATCH', `/api/admin/campagnes/${slug}`, orga, corps(slug, { max_participants: 3, modeles: { ...(figes as object), sudo: 'claude-haiku-5-5' } }))
+    expect(change.statut).toBeGreaterThanOrEqual(400)
+    expect((await admin.from('campagne').select('modeles').eq('id', id).single()).data!.modeles).toEqual(figes)
 
     expect((await vote(11)).json.data.erreurs).toHaveProperty('note')
     expect((await vote(7.5)).statut).toBe(422)

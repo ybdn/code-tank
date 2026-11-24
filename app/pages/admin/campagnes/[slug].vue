@@ -125,6 +125,7 @@ async function ajouter() {
         :initial="campagne"
         :figees="figees"
         :slug-fige="campagne.statut !== 'brouillon'"
+        :modeles-figes="ETAPES.indexOf(campagne.statut as Etape) >= ETAPES.indexOf('deliberation')"
         :erreurs="edition.erreurs.value"
         :occupe="edition.occupe.value"
         @envoyer="enregistrer"
