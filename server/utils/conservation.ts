@@ -44,12 +44,12 @@ const lu = <T>(r: { data: T | null; error: object | null }): T => {
 }
 
 const AVIS_ATTENTE = {
-  sujet: 'Code Tank : attends-tu toujours une place ?',
-  texte: `Ta candidature est sur la liste d'attente de Code Tank depuis plus d'un an. Pour la garder, confirme que tu attends toujours en ouvrant ton compte, puis en cliquant sur « Je suis toujours en attente » : sans réponse sous ${DELAIS.attenteReponseJours} jours, elle sera effacée.`,
+  sujet: 'Code Tank\u00a0: attends-tu toujours une place\u00a0?',
+  texte: `Ta candidature est sur la liste d'attente de Code Tank depuis plus d'un an. Pour la garder, confirme que tu attends toujours en ouvrant ton compte, puis en cliquant sur «\u00a0Je suis toujours en attente\u00a0»\u00a0: sans réponse sous ${DELAIS.attenteReponseJours} jours, elle sera effacée.`,
 }
 const AVIS_INACTIVITE = {
-  sujet: 'Code Tank : ton compte sera supprimé',
-  texte: `Tu ne t'es pas connecté à Code Tank depuis plus de ${DELAIS.inactiviteMois} mois. Sans connexion de ta part sous ${DELAIS.avertissementJours} jours, tes données seront supprimées ; si tu as participé à une campagne publiée, ta ligne du classement restera, sous « candidat supprimé ». Pour garder ton compte, ouvre-le simplement :`,
+  sujet: 'Code Tank\u00a0: ton compte sera supprimé',
+  texte: `Tu ne t'es pas connecté à Code Tank depuis plus de ${DELAIS.inactiviteMois} mois. Sans connexion de ta part sous ${DELAIS.avertissementJours} jours, tes données seront supprimées\u00a0; si tu as participé à une campagne publiée, ta ligne du classement restera, sous «\u00a0candidat supprimé\u00a0». Pour garder ton compte, ouvre-le simplement\u00a0:`,
 }
 
 type Compte = { id: string; email_contact: string }

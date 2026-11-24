@@ -27,13 +27,30 @@ const comptesPris = computed(() => autorises.value + parEtat('verifie').length)
 const plafondAtteint = computed(() => data.value.plafond !== null && comptesPris.value >= data.value.plafond)
 
 const choix = ref<{ id: string; etat: string } | null>(null)
+// Le bouton cliqué disparaît : le focus va à « Annuler » (choix sans risque), puis revient au bouton d'origine.
+// Une décision prise fait quitter la fiche de son groupe : le focus va au titre de ce groupe, qui reste.
+const focaliser = async (id: string) => {
+  await nextTick()
+  document.getElementById(id)?.focus()
+}
+function ouvrir(c: CompteAdmin, etat: string) {
+  choix.value = { id: c.id, etat }
+  focaliser(`annuler-${c.id}`)
+}
+function annuler() {
+  const v = choix.value
+  choix.value = null
+  if (v) focaliser(`action-${v.id}-${v.etat}`)
+}
 async function decider(c: CompteAdmin, etat: string) {
   const r = await lancer(() => $fetch<{ courriel: 'envoye' | 'echec' | 'non_verifiee' }>(`/api/admin/comptes/${c.id}/decision`, { method: 'POST', body: { etat } }), `Décision enregistrée pour ${c.pseudo}.`)
   choix.value = null
   if (r) {
-    message.value += { envoye: ' L\'e-mail de décision est parti.', echec: ' L\'e-mail de décision n\'a pas pu partir ; il n\'y a pas de renvoi, préviens le candidat toi-même.', non_verifiee: ' Aucun e-mail : son adresse n\'est pas vérifiée.' }[r.courriel]
+    message.value += { envoye: ' L\'e-mail de décision est parti.', echec: ' L\'e-mail de décision n\'a pas pu partir\u00a0; il n\'y a pas de renvoi, préviens le candidat toi-même.', non_verifiee: ' Aucun e-mail\u00a0: son adresse n\'est pas vérifiée.' }[r.courriel]
     await refresh()
   }
+  // En cas d'échec, l'erreur s'affiche en haut de page, loin de la fiche : on l'amène à l'écran.
+  await focaliser(r ? `g-${c.etat}` : alerte.value ? 'alerte-comptes' : `action-${c.id}-${etat}`)
 }
 
 const lien = (url: string) => (/^https:\/\//.test(url) ? url : undefined)
@@ -45,18 +62,18 @@ const date = (iso?: string | null) => (iso ? new Intl.DateTimeFormat('fr-FR', { 
     <div class="wrap">
       <h1>Comptes</h1>
       <p>
-        Comptes autorisés : <strong>{{ autorises }}</strong>. Plafond de comptes :
+        Comptes autorisés&nbsp;: <strong>{{ autorises }}</strong>. Plafond de comptes&nbsp;:
         <strong>{{ data.plafond === null ? 'aucun' : data.plafond }}</strong>
         <template v-if="data.plafond !== null"> ({{ comptesPris }} vérifiés ou autorisés comptent dans le plafond)</template>.
         <NuxtLink to="/admin/reglages">Modifier</NuxtLink>
       </p>
-      <p v-if="plafondAtteint" class="avis">Le plafond est atteint : autoriser un compte de plus le dépasse. La base le permet, c'est ton choix.</p>
+      <p v-if="plafondAtteint" class="avis">Le plafond est atteint&nbsp;: autoriser un compte de plus le dépasse. La base le permet, c'est ton choix.</p>
       <div role="status" aria-live="polite"><p v-if="message" class="avis">{{ message }}</p></div>
-      <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
+      <p v-if="alerte" id="alerte-comptes" role="alert" tabindex="-1" class="avis avis--erreur">{{ alerte }}</p>
 
       <PanneauxAdmin :panneaux="panneaux" libelle="États des comptes">
         <template v-for="g in GROUPES" :key="g.etat" #[g.etat]>
-          <h2 :id="`g-${g.etat}`">{{ g.titre }} ({{ parEtat(g.etat).length }})</h2>
+          <h2 :id="`g-${g.etat}`" tabindex="-1">{{ g.titre }} ({{ parEtat(g.etat).length }})</h2>
           <p v-if="!parEtat(g.etat).length" class="note-claire">Aucun compte.</p>
           <article v-for="c in parEtat(g.etat)" :key="c.id" class="fiche" :aria-labelledby="`c-${c.id}`">
             <h3 :id="`c-${c.id}`">{{ c.pseudo }}</h3>
@@ -80,18 +97,18 @@ const date = (iso?: string | null) => (iso ? new Intl.DateTimeFormat('fr-FR', { 
             </dl>
             <template v-if="ACTIONS[c.etat]">
               <p v-if="choix?.id !== c.id" class="btns">
-                <button v-for="a in ACTIONS[c.etat]" :key="a.etat" class="btn" :class="{ 'btn--primary': a.etat === 'autorise' }" type="button" :disabled="occupe" @click="choix = { id: c.id, etat: a.etat }">
-                  {{ a.libelle }}<span class="sr-only"> {{ c.pseudo }}</span>
+                <button v-for="a in ACTIONS[c.etat]" :id="`action-${c.id}-${a.etat}`" :key="a.etat" class="btn" :class="{ 'btn--primary': a.etat === 'autorise' }" type="button" :disabled="occupe" @click="ouvrir(c, a.etat)">
+                  {{ a.libelle }} <span class="sr-only">{{ c.pseudo }}</span>
                 </button>
               </p>
               <div v-else class="avis" role="group" :aria-labelledby="`conf-${c.id}`">
                 <p :id="`conf-${c.id}`">
-                  {{ ACTIONS[c.etat]!.find((a) => a.etat === choix!.etat)!.libelle }} : {{ c.pseudo }} ?
-                  <template v-if="choix.etat !== 'liste_attente'">Cette décision est définitive : la base ne permet pas de revenir en arrière.</template>
+                  {{ ACTIONS[c.etat]!.find((a) => a.etat === choix!.etat)!.libelle }}&nbsp;: {{ c.pseudo }}&nbsp;?
+                  <template v-if="choix.etat !== 'liste_attente'">Cette décision est définitive&nbsp;: la base ne permet pas de revenir en arrière.</template>
                 </p>
                 <p class="btns">
-                  <button class="btn btn--primary" type="button" :disabled="occupe" @click="decider(c, choix!.etat)">Confirmer</button>
-                  <button class="btn" type="button" :disabled="occupe" @click="choix = null">Annuler</button>
+                  <button class="btn btn--primary" type="button" :disabled="occupe" @click="decider(c, choix!.etat)">{{ occupe ? 'Enregistrement…' : 'Confirmer' }}</button>
+                  <button :id="`annuler-${c.id}`" class="btn" type="button" :disabled="occupe" @click="annuler">Annuler</button>
                 </p>
               </div>
             </template>

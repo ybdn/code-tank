@@ -37,8 +37,8 @@ export async function envoyerLienVerification(config: Config, compteId: string, 
   await transport(config.smtp).sendMail({
     from: EXPEDITEUR,
     to: email,
-    subject: 'Code Tank : vérifie ton adresse e-mail',
-    text: `Bonjour,\n\nPour vérifier ton adresse e-mail et continuer ta candidature, ouvre ce lien puis confirme. Il est valable 24 heures :\n\n${lien}\n\nSi tu n'as rien demandé, ignore ce message.\n\nCode Tank by ybdn.io`,
+    subject: 'Code Tank\u00a0: vérifie ton adresse e-mail',
+    text: `Bonjour,\n\nPour vérifier ton adresse e-mail et continuer ta candidature, ouvre ce lien puis confirme. Il est valable 24 heures\u00a0:\n\n${lien}\n\nSi tu n'as rien demandé, ignore ce message.\n\nCode Tank by ybdn.io`,
   })
 }
 
@@ -61,10 +61,10 @@ export async function envoyerResultats(config: Config, campagne: { slug: string;
   try {
     verifierSite(config)
     const smtp = transport(config.smtp)
-    const texte = `Bonjour,\n\nLes résultats de la campagne « ${campagne.titre} » viennent d'être publiés. Tu les retrouves sur la page de la campagne :\n\n${config.siteUrl}/campagnes/${campagne.slug}\n\nCode Tank by ybdn.io`
+    const texte = `Bonjour,\n\nLes résultats de la campagne «\u00a0${campagne.titre}\u00a0» viennent d'être publiés. Tu les retrouves sur la page de la campagne\u00a0:\n\n${config.siteUrl}/campagnes/${campagne.slug}\n\nCode Tank by ybdn.io`
     for (const to of adresses) {
       try {
-        await smtp.sendMail({ from: EXPEDITEUR, to, subject: `Code Tank : les résultats de « ${campagne.titre} » sont publiés`, text: texte })
+        await smtp.sendMail({ from: EXPEDITEUR, to, subject: `Code Tank\u00a0: les résultats de «\u00a0${campagne.titre}\u00a0» sont publiés`, text: texte })
         envoyes++
       } catch (e) {
         const code = (e as { code?: string }).code

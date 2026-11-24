@@ -62,10 +62,10 @@ const champ = (n: keyof ErreursProfil, aide?: string) => ({
     <div class="champ">
       <label for="pseudo">Pseudo</label>
       <p id="aide-pseudo" class="champ__aide">
-        <template v-if="pseudoFige">Figé : ton compte est autorisé, et l'organisateur l'a validé avec ce pseudo, qui est public.</template>
+        <template v-if="pseudoFige">Figé&nbsp;: ton compte est autorisé, et l'organisateur l'a validé avec ce pseudo, qui est public.</template>
         <template v-else>La seule chose publique (classement, résultats). Il peut être ton identifiant GitHub.</template>
       </p>
-      <input id="pseudo" v-model="f.pseudo" type="text" maxlength="30" :readonly="pseudoFige" required v-bind="champ('pseudo', 'aide-pseudo')">
+      <input id="pseudo" v-model="f.pseudo" type="text" autocomplete="nickname" autocapitalize="none" spellcheck="false" maxlength="30" :readonly="pseudoFige" required v-bind="champ('pseudo', 'aide-pseudo')">
       <p v-if="toutes.pseudo" id="err-pseudo" class="champ__erreur">{{ toutes.pseudo }}</p>
     </div>
 
@@ -78,7 +78,7 @@ const champ = (n: keyof ErreursProfil, aide?: string) => ({
 
     <div class="champ">
       <label for="motivation">Motivation</label>
-      <p id="aide-motivation" class="champ__aide">Trois lignes : ce que tu codes, pourquoi tu candidates.</p>
+      <p id="aide-motivation" class="champ__aide">Trois lignes&nbsp;: ce que tu codes, pourquoi tu candidates.</p>
       <textarea id="motivation" v-model="f.motivation" rows="4" maxlength="1000" required v-bind="champ('motivation', 'aide-motivation')" />
       <p v-if="toutes.motivation" id="err-motivation" class="champ__erreur">{{ toutes.motivation }}</p>
     </div>
@@ -86,7 +86,7 @@ const champ = (n: keyof ErreursProfil, aide?: string) => ({
     <div class="champ">
       <label for="depot_cite_url">Un dépôt dont tu es fier</label>
       <p id="aide-depot" class="champ__aide">Lien https:// vers un projet à toi.</p>
-      <input id="depot_cite_url" v-model="f.depot_cite_url" type="url" maxlength="300" required v-bind="champ('depot_cite_url', 'aide-depot')">
+      <input id="depot_cite_url" v-model="f.depot_cite_url" type="url" autocomplete="url" maxlength="300" required v-bind="champ('depot_cite_url', 'aide-depot')">
       <p v-if="toutes.depot_cite_url" id="err-depot_cite_url" class="champ__erreur">{{ toutes.depot_cite_url }}</p>
     </div>
 
@@ -103,6 +103,6 @@ const champ = (n: keyof ErreursProfil, aide?: string) => ({
       </div>
     </template>
 
-    <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ creation ? 'Créer mon compte' : 'Enregistrer' }}</button></p>
+    <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Envoi en cours…' : creation ? 'Créer mon compte' : 'Enregistrer' }}</button></p>
   </form>
 </template>
