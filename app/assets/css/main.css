@@ -52,7 +52,7 @@ main:focus { outline: none; }
 /* 42 px = 3 px par case ; les deux rangées vides du haut (sol commun des mascottes) remontent de 3 px pour caler le dessin sur le texte. */
 .logo .mascotte { width: 42px; height: 42px; flex: none; translate: 0 -3px; }
 .logo__nom { display: grid; justify-items: start; line-height: 1; }
-.logo__par { margin-top: 5px; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
+.logo__par { justify-self: end; margin-top: 5px; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
 .nav__links { display: flex; gap: 0 24px; margin-right: auto; }
 .nav__links a, .legal-links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
 .legal-links a:hover { text-decoration: underline; }
