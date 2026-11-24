@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ENCRE, MASCOTTES, type Jure } from './mascottes'
+import { MASCOTTES, type Jure } from './mascottes'
 
 const props = defineProps<{ jure: Jure }>()
 
@@ -11,7 +11,7 @@ const cases = computed(() => {
     for (let x = 0; x < ligne.length; x++) {
       const ch = ligne[x]!
       if (ch === '.') continue
-      const fill = ch === 'E' ? ENCRE : palette[ch]!
+      const fill = palette[ch]!
       const prec = out[out.length - 1]
       if (prec && prec.y === y && prec.x + prec.w === x && prec.fill === fill) prec.w++
       else out.push({ x, y, w: 1, fill })
@@ -22,7 +22,7 @@ const cases = computed(() => {
 </script>
 
 <template>
-  <svg class="mascotte" viewBox="0 0 14 14" shape-rendering="crispEdges" aria-hidden="true">
+  <svg class="mascotte" viewBox="0 0 24 24" shape-rendering="crispEdges" aria-hidden="true">
     <rect v-for="(c, i) in cases" :key="i" :x="c.x" :y="c.y" :width="c.w" height="1" :fill="c.fill" />
   </svg>
 </template>

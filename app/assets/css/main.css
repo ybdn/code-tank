@@ -59,11 +59,11 @@ main:focus { outline: none; }
 .nav { border-bottom: 1px solid var(--line); }
 .nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 68px; }
 .logo { display: inline-flex; align-items: center; gap: 12px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.25rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
-/* 42 px = 3 px par case. Calage optique mesuré : le chapeau au haut de « ybdn.io », les pieds sur la ligne de base de « Code Tank ». */
-.logo .mascotte { width: 42px; height: 42px; flex: none; translate: 0 -3.5px; }
+/* 48 px = 2 px par case (pixels entiers). Calage optique : les pieds sur la ligne de base de « Code Tank ». */
+.logo .mascotte { width: 48px; height: 48px; flex: none; translate: 0 -2px; }
 /* Au survol, la mascotte saute d'une case, comme sur le plateau. */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) { .logo:hover .mascotte { animation: saut .4s steps(1); } }
-@keyframes saut { 0%, 75% { transform: translateY(-3px); } }
+@keyframes saut { 0%, 75% { transform: translateY(-2px); } }
 .logo__nom { display: grid; justify-items: start; line-height: 1; }
 .logo__par { margin-bottom: .67em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
 .nav__links { display: flex; gap: 0 24px; margin-right: auto; }
@@ -110,8 +110,8 @@ main:focus { outline: none; }
 .siege__dos .mascotte { width: 92%; max-width: 108px; height: auto; }
 .siege__table { width: min(80px, 90%); height: 12px; border-radius: 50%; background: #e9dcc6; }
 
-/* Les mascottes respirent d'un pixel de leur grille (1/14 de la hauteur), en deux images. */
-@keyframes respire { to { transform: translateY(-7.1429%); } }
+/* Les mascottes respirent d'un pixel de leur grille (1/24 de la hauteur), en deux images. */
+@keyframes respire { to { transform: translateY(-4.1667%); } }
 @keyframes fondu { from { opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) {
   .siege .mascotte { overflow: visible; animation: respire 1.6s steps(2, jump-none) infinite; }
@@ -234,7 +234,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .champ input.court { max-width: 8rem; }
 .empreinte { overflow-wrap: anywhere; }
 
-/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par Claude sont du texte. */
+/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par les agents sont du texte. */
 .resultats :is(p, li, th, td, blockquote) { overflow-wrap: anywhere; }
 .resultats h2 { margin-top: 2.5rem; font-size: clamp(1.5rem, 3vw, 2.25rem); }
 .resultats .btns { margin-top: 1.5rem; }
@@ -545,7 +545,7 @@ h1 + .parcours { margin-top: 2rem; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
 @media (max-width: 24rem) {
   .logo { gap: 8px; font-size: 1rem; }
-  .logo .mascotte { width: 28px; height: 28px; translate: 0 -2px; }
+  .logo .mascotte { width: 24px; height: 24px; translate: 0 -1px; }
   .logo__par { margin-bottom: .3em; }
   .nav .btn { padding: 0 14px; }
 }

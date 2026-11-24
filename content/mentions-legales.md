@@ -26,7 +26,7 @@ Yoann BAUDRIN.
 
 ## 4. Propriété intellectuelle
 
-Le code source du site est publié sous licence AGPL-3.0. Les textes et les mascottes sont la création de l'éditeur. Le nom Code Tank est utilisé par l'éditeur pour désigner ce service. Le code déposé par les candidats reste la propriété de leurs auteurs.
+Le code source du site est publié sous licence AGPL-3.0. Les textes et les personnages originaux sont la création de l'éditeur. Le nom Code Tank est utilisé par l'éditeur pour désigner ce service. Le code déposé par les candidats reste la propriété de leurs auteurs.
 
 ## 5. Signalement d'une faille de sécurité
 

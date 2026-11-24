@@ -57,7 +57,7 @@ const etat = computed(() => {
           <ul class="plateau-mini" aria-hidden="true">
             <li v-for="j in (['sudo', 'refacto', 'lint', 'pitch', 'boss'] as const)" :key="j"><MascottePixel :jure="j" /></li>
           </ul>
-          <p class="note-claire">Quatre jurés Claude et toi. Plafond de dépense de l'API par campagne&nbsp;: <strong>{{ dollars.format(data.plafond_depense_usd) }}</strong>. <NuxtLink to="/admin/reglages">Réglages</NuxtLink></p>
+          <p class="note-claire">Quatre agents et toi. Plafond de dépense de l'API par campagne&nbsp;: <strong>{{ dollars.format(data.plafond_depense_usd) }}</strong>. <NuxtLink to="/admin/reglages">Réglages</NuxtLink></p>
         </section>
       </div>
 

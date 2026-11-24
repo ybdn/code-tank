@@ -111,7 +111,7 @@ const champ = (n: ChampDepot, aide?: string) => ({
       <div class="champ">
         <label for="outils">Outils utilisés</label>
         <input
-          id="outils" v-model="f.outils" type="text" maxlength="300" placeholder="Claude Code, Copilot" :disabled="f.aucun_outil"
+          id="outils" v-model="f.outils" type="text" maxlength="300" placeholder="Copilot, Cursor" :disabled="f.aucun_outil"
           v-bind="champ('outils_ia', 'aide-outils')"
         >
       </div>

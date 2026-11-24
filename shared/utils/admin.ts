@@ -20,7 +20,7 @@ export const MODELES_PAR_DEFAUT: ModelesJures = { sudo: MODELE_PAR_DEFAUT, refac
 
 export type CritereAdmin = Critere & { calcule?: true }
 
-// Critères par défaut du § 5 : total 100, dont 10 calculés par script (la note vient du scan de faits, pas de Claude).
+// Critères par défaut du § 5 : total 100, dont 10 calculés par script (la note vient du scan de faits, pas des agents).
 export const CRITERES_PAR_DEFAUT: CritereAdmin[] = [
   { cle: 'securite', libelle: 'Sécurité', poids: 15, jure: 'sudo' },
   { cle: 'erreurs', libelle: 'Gestion des erreurs et cas limites', poids: 10, jure: 'sudo' },
@@ -67,7 +67,7 @@ export const libellerStatuts = (message: string) =>
 export const EFFET_ETAPE: Record<string, string> = {
   inscriptions: 'La campagne devient publique et les candidats autorisés peuvent s\'inscrire et déposer. Les poids des critères doivent totaliser 100.',
   depot: 'La campagne passe en phase de dépôt\u00a0: inscriptions et dépôt restent ouverts jusqu\'à la clôture.',
-  deliberation: 'Les dépôts, retraits et désinscriptions sont fermés. Le vote du Boss s\'ouvre. Ce site ne lance pas les audits Claude.',
+  deliberation: 'Les dépôts, retraits et désinscriptions sont fermés. Le vote du Boss s\'ouvre. Ce site ne lance pas les audits des agents.',
   prete: 'Tu passes à la relecture des alertes et des répliques. Rien n\'est encore visible des candidats.',
   publiee: 'Les résultats, les entretiens, les rapports et le classement deviennent visibles. La base refuse tant qu\'un vote du Boss n\'est pas verrouillé. Un e-mail part une seule fois à chaque participant ayant un dépôt et une adresse vérifiée, sans aucun score.',
   archivee: 'La campagne passe en archivée. L\'effacement des archives n\'est pas automatisé par ce site.',

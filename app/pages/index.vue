@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import type { Jure } from '~/components/mascottes'
 
-useHead({ title: 'Le concours de code jugé par Claude' })
+useHead({ title: 'Le concours de code jugé par ybdn et ses agents' })
 useSeoMeta({
   description:
     'Un thème imposé, un zip à déposer, cinq jurés. Chaque note de ton rapport cite le fichier et la ligne qui la justifient.',
@@ -12,7 +12,7 @@ const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
   { nom: 'Sudo', jure: 'sudo', role: 'Sécurité, gestion des erreurs et cas limites', points: '25 points' },
   { nom: 'Refacto', jure: 'refacto', role: 'Structure, découpage, lisibilité et nommage', points: '25 points' },
   { nom: 'Le Boss', jure: 'boss', role: 'Le juré humain\u00a0: il lit ton code, ta présentation et ton README, et note sans voir les notes des quatre autres.', points: 'Un tiers du score' },
-  { nom: 'Lint', jure: 'lint', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par Claude\u00a0; Lint la commente sans la modifier.", points: '25 points' },
+  { nom: 'Lint', jure: 'lint', role: "Tests, outillage et documentation. La note d'outillage et doc est calculée par un script, pas par les agents\u00a0; Lint la commente sans la modifier.", points: '25 points' },
   { nom: 'Pitch', jure: 'pitch', role: 'Réponse au brief, originalité et finition', points: '25 points' },
 ]
 
@@ -35,7 +35,7 @@ const rebours = (iso: string) => {
           <InvitePrompt :commande="`$ code-tank ${ouverte ? `--campagne ${ouverte.slug}` : '--prochaine'}`">
             {{ ouverte ? `${ouverte.titre}\u00a0: dépôt ouvert jusqu'au ${formaterDate(ouverte.cloture_depot)}` : 'la prochaine campagne arrive' }}
           </InvitePrompt>
-          <h1 id="hero-h">Concours de code jugé par Claude</h1>
+          <h1 id="hero-h">Concours de code jugé par ybdn et ses agents</h1>
           <p class="lead">
             Un thème imposé, le même pour tous. Tu déposes ton projet, cinq jurés le notent, et chaque note cite le
             fichier et la ligne qui la justifient.

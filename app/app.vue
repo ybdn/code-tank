@@ -26,7 +26,7 @@ onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
       <div class="wrap footer__bar">
         <div class="footer__marque">
           <NuxtLink class="logo" to="/" aria-label="Code Tank by ybdn.io, accueil"><MascottePixel jure="sudo" /><span class="logo__nom" aria-hidden="true"><span class="logo__par">ybdn.io</span>Code Tank</span></NuxtLink>
-          <p>Le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
+          <p>Le concours de code jugé par ybdn et ses agents. Code source sous licence AGPL-3.0.</p>
         </div>
         <nav aria-label="Informations légales" class="legal-links">
           <NuxtLink to="/charte">Charte</NuxtLink>
