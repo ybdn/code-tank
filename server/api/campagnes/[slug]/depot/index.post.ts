@@ -38,5 +38,7 @@ export default defineEventHandler(async (event) => {
     throw createError({ statusCode: 500, statusMessage: 'Enregistrement impossible. Réessaie dans un instant.' })
   }
   await effacerArchives(event, campagne.id, participation.id, [], [chemin, depot?.chemin_stockage])
+  // Le jury traite la réception sans que le candidat attende : la réponse part tout de suite.
+  event.waitUntil(appelerJury(event, 'reception'))
   return { ok: true }
 })

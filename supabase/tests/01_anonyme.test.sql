@@ -1,7 +1,7 @@
 -- Accès anonyme et inventaire des droits. Les données viennent de seed.sql.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(22);
+select plan(23);
 
 -- Inventaire (superutilisateur) : RLS partout, et aucun privilège sans politique.
 select is_empty(
@@ -37,11 +37,12 @@ select throws_ok('select 1 from public.vote_boss', '42501', null, 'anon ne lit p
 select throws_ok('select 1 from public.decision', '42501', null, 'anon ne lit pas decision');
 select throws_ok('select 1 from public.mon_depot', '42501', null, 'anon ne lit pas mon_depot');
 select throws_ok('select 1 from public.rapport', '42501', null, 'anon ne lit pas rapport');
+select throws_ok('select 1 from public.mon_vote_boss', '42501', null, 'anon ne lit pas mon_vote_boss');
 select throws_ok('select 1 from public.contact_reutilisation_lisible', '42501', null, 'anon ne lit pas contact_reutilisation_lisible');
 
 select is(
   (select array_agg(slug order by slug) from public.campagne),
-  array['seed-deliberation', 'seed-ouverte', 'seed-publiee'],
+  array['seed-deliberation', 'seed-ouverte', 'seed-publiee', 'seed-resultats'],
   'anon lit les campagnes ouvertes, pas le brouillon');
 select throws_ok(
   $$insert into public.campagne (slug, titre, theme, brief, criteres, ouverture_inscriptions, cloture_depot, date_resultats, max_participants)
@@ -55,7 +56,7 @@ select is(
   (select count(*) from public.classement where campagne_id = '20000000-0000-4000-8000-000000000004'),
   6::bigint, 'anon lit le classement de la campagne publiée');
 select is_empty(
-  $$select 1 from public.classement where campagne_id <> '20000000-0000-4000-8000-000000000004'$$,
+  $$select 1 from public.classement where campagne_id not in ('20000000-0000-4000-8000-000000000004', '20000000-0000-4000-8000-000000000005')$$,
   'anon ne voit rien du classement des campagnes non publiées');
 select columns_are('public', 'classement',
   array['campagne_id', 'pseudo', 'score_claude', 'note_boss', 'score_final', 'justification',

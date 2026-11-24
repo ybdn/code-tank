@@ -114,7 +114,7 @@ confidentialité n'est tenue que pour les adresses qui reviennent.
 
 ## Conservation (tâches planifiées)
 
-`GET /api/cron/conservation`, appelée une fois par jour par le planificateur de Vercel (`vercel.json`, entrée `crons` seule :
+`GET /api/cron/conservation`, appelée une fois par jour par le planificateur de Vercel (`vercel.json`, entrée `crons` :
 03:17 UTC). Elle exige `Authorization: Bearer <CRON_SECRET>` ; sans le bon secret, ou si `CRON_SECRET` manque ou fait moins de
 32 caractères : **404**. Le secret est lu dans `process.env.CRON_SECRET` (le nom que Vercel envoie, sans préfixe `NUXT_`) et
 comparé en temps constant. La route utilise la clé de service. Chaque tâche est idempotente, bornée (constantes `DELAIS` et
@@ -142,6 +142,24 @@ les suivantes. Réponse et journal : des compteurs et des codes, jamais de pseud
 - **E-mails** : texte seul, lien vers `/compte`, envoyés seulement à une adresse utilisable ; un échec d'envoi ne marque personne,
   et une panne du SMTP arrête la boucle. Un échec d'envoi se retente le lendemain.
 - **Le planificateur ne règle rien chez Vercel** : définir `CRON_SECRET` dans le projet, puis déployer `vercel.json`.
+
+## Appel du jury
+
+Le jury (dépôt privé, second projet Vercel) traite les réceptions de dépôt et délibère ; le site le réveille par
+`POST <NUXT_JURY_URL>` avec `Authorization: Bearer <NUXT_JURY_SECRET>`, sans corps (`server/utils/jury.ts`, `appelerJury`).
+Le jury répond tout de suite : **202** (passage lancé) ou **409** (déjà en cours, grâce au bail `verrou` en base). L'appel n'est jamais
+bloquant : délai de 5 s, un échec est journalisé (code seulement) et n'empêche jamais l'action de l'utilisateur ; sans les deux
+variables, rien n'est appelé et un seul avertissement est journalisé.
+
+- **Après une réception** : `POST /api/campagnes/[slug]/depot` appelle le jury après l'enregistrement, hors de la réponse (`waitUntil`).
+- **Tâche quotidienne** : `/api/cron/conservation` appelle aussi le jury (tâche `jury` du bilan : `code`, le code HTTP reçu ; 0 si non configuré ou injoignable).
+- **« Relancer le jury »** : bouton de la page d'administration d'une campagne (non brouillon), `POST /api/admin/campagnes/[slug]/jury`,
+  organisateur seulement (404 sinon), **un appel par minute et par adresse** (`PLAFONDS.jury`, 429 au-delà). Réponse `{ etat }` :
+  `lance`, `deja_en_cours`, `non_configure` ou `echec`.
+- **Bail d'exclusion** : migration `20261126000001_verrou.sql`, table `verrou` (nom, détenteur, expiration), fonctions `prendre_verrou` et
+  `rendre_verrou` réservées au rôle de service. Le jury prend `prendre_verrou('jury', <uuid du passage>, 330)` avant tout travail.
+- **Tests** : pgTAP (`14_verrou.test.sql`) et `tests/stack/jury.test.ts` (faux jury HTTP local : appel après dépôt avec le bon secret, jury injoignable,
+  bouton refusé à un candidat, limite d'une minute, tâche quotidienne, vingt prises simultanées du bail).
 
 ## Droits du candidat
 
@@ -179,17 +197,23 @@ tests créent leurs utilisateurs par l'API d'administration et n'en ont pas beso
 
 ### Variables d'environnement (noms seulement, aucune valeur dans le dépôt)
 
+Supabase : l'intégration Supabase de la Marketplace Vercel fournit déjà les trois premières variables (noms `SUPABASE_*`),
+le site les lit telles quelles. Les noms `NUXT_PUBLIC_SUPABASE_URL`, `NUXT_PUBLIC_SUPABASE_KEY` et `NUXT_SUPABASE_SECRET_KEY`
+sont l'alternative locale (tests, pile locale) et **l'emportent** sur `SUPABASE_*` si les deux existent.
+
 | Variable | Rôle |
 |---|---|
-| `NUXT_PUBLIC_SUPABASE_URL` | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
-| `NUXT_PUBLIC_SUPABASE_KEY` | Clé publique (anon / publishable) |
-| `NUXT_SUPABASE_SECRET_KEY` | Clé de service, serveur seulement |
+| `SUPABASE_URL` (ou `NUXT_PUBLIC_SUPABASE_URL`) | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
+| `SUPABASE_PUBLISHABLE_KEY` (repli `SUPABASE_ANON_KEY` ; ou `NUXT_PUBLIC_SUPABASE_KEY`) | Clé publique (`sb_publishable_…` ou anon) |
+| `SUPABASE_SECRET_KEY` (repli `SUPABASE_SERVICE_ROLE_KEY` ; ou `NUXT_SUPABASE_SECRET_KEY`) | Clé de service, serveur seulement |
 | `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification, **32 caractères au moins** ; sans lui (ou trop court), aucun e-mail ne part |
 | `CRON_SECRET` | Secret du planificateur (variable de Vercel, **sans préfixe `NUXT_`**), 32 caractères au moins ; sans lui, `/api/cron/conservation` répond 404 |
 | `NUXT_SECRET_DEBIT` | Secret HMAC de l'empreinte des adresses IP (limite de débit), **32 caractères au moins** ; sans lui, les routes limitées répondent 503 |
 | `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
 | `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |
 | `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, la boîte mail sur 54425, sans identifiant) |
+| `NUXT_JURY_URL` | Facultatif : URL complète de `POST /api/jury` du projet Vercel du jury (dépôt privé), `/api/jury` inclus. Sans elle ou sans le secret, le site n'appelle rien (un avertissement au journal) |
+| `NUXT_JURY_SECRET` | Le secret de ce jury (`JURY_SECRET` de son projet), **32 caractères au moins** |
 | `NUXT_GITHUB_API` | Facultatif : base de l'API GitHub (`https://api.github.com` par défaut), changée par les tests |
 
 ## Base de données
@@ -216,6 +240,10 @@ Avec Colima, exporter `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` ava
 
 Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Ils ne contiennent que le texte publiable : la source complète, avec notes de rédaction, reste hors de ce dépôt. Les polices sont auto-hébergées
 (Space Mono et Plus Jakarta Sans, licence OFL) : le site n'appelle aucun service tiers.
+
+## Déploiement
+
+Vercel ne construit que `preprod` (préprod, `preprod.code-tank.ybdn.io`) et `prod` (`code-tank.ybdn.io`) ; `develop` se lance en local (`git.deploymentEnabled` dans `vercel.json`).
 
 ## Licence
 

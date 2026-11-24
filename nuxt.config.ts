@@ -1,5 +1,6 @@
 // L'URL de Supabase entre dans la CSP au build : elle doit être définie à ce moment-là.
-const urlSupabase = process.env.NUXT_PUBLIC_SUPABASE_URL
+// Même ordre que @nuxtjs/supabase (NUXT_* avant SUPABASE_* de l'intégration Vercel) : la CSP et le client lisent la même URL.
+const urlSupabase = process.env.NUXT_PUBLIC_SUPABASE_URL || process.env.SUPABASE_URL
 
 export default defineNuxtConfig({
   compatibilityDate: '2026-11-22',
@@ -17,6 +18,9 @@ export default defineNuxtConfig({
     versionCharte: '',
     siteUrl: '',
     githubApi: 'https://api.github.com',
+    // Jury (dépôt privé) : URL complète de POST /api/jury et secret partagé ; sans eux, le site n'appelle rien.
+    juryUrl: '',
+    jurySecret: '',
     smtp: { host: '', port: 587, user: '', pass: '' },
   },
   css: [
@@ -33,6 +37,8 @@ export default defineNuxtConfig({
       link: [{ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
     },
   },
+  // Entretien et rapport d'un candidat : jamais mis en cache, ni par le navigateur ni par un relais.
+  routeRules: { '/campagnes/*/resultat': { headers: { 'cache-control': 'private, no-store' } } },
   // Les polices restent des fichiers : un data: URI serait refusé par font-src 'self'.
   vite: { build: { assetsInlineLimit: 0 } },
   security: {
