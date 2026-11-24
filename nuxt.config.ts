@@ -32,7 +32,7 @@ export default defineNuxtConfig({
   app: {
     head: {
       htmlAttrs: { lang: 'fr' },
-      titleTemplate: '%s · Code Tank',
+      titleTemplate: '%s · Code Tank by ybdn.io',
       meta: [{ name: 'theme-color', content: '#18191b' }],
       link: [{ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
     },
