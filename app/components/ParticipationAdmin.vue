@@ -23,7 +23,7 @@ const nbAlertes = computed(() => {
   const d = p.value.depot
   return d ? Number(d.alerte_manipulation) + d.alertes_integrite.length + contradictions.value.length : 0
 })
-const etatVote = computed(() => (p.value.vote?.verrouille_le ? 'verrouillé' : p.value.vote ? 'enregistré, non verrouillé' : 'aucun'))
+const etatVote = computed(() => (p.value.vote?.verrouille_le ? 'verrouillé' : p.value.vote ? 'enregistré, non verrouillé' : 'pas encore noté'))
 
 const saisie = reactive({
   note: (p.value.vote?.note ?? '') as number | '',
