@@ -35,7 +35,7 @@ async function confirmer() {
         <p class="lead">Un dernier clic pour confirmer que cette adresse e-mail est bien la tienne.</p>
         <p class="btns"><button class="btn btn--primary" type="button" :disabled="occupe || !jeton" @click="confirmer">Confirmer mon adresse</button></p>
       </template>
-      <p><NuxtLink class="btn" to="/compte">Aller à mon compte</NuxtLink></p>
+      <p class="btns"><NuxtLink class="btn" :class="{ 'btn--primary': resultat === 'ok' }" to="/compte">Aller à mon compte</NuxtLink></p>
     </div>
   </section>
 </template>

@@ -20,9 +20,10 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
 <template>
   <section class="section" aria-labelledby="classement-h">
     <div class="wrap texte resultats">
-      <p class="etat">{{ LIBELLE_STATUT[campagne.statut] }}</p>
+      <FriseEtapes :statut="campagne.statut" publique />
       <h1 id="classement-h">{{ campagne.titre }}</h1>
       <p class="lead">Thème imposé : {{ campagne.theme }}</p>
+      <p v-if="campagne.statut === 'archivee'" class="note-claire">{{ LIBELLE_STATUT.archivee }}.</p>
 
       <p v-if="error" role="alert" class="avis avis--erreur">Le classement ne peut pas être lu pour le moment. Réessaie dans un instant.</p>
       <p v-else-if="!lignes.length" class="vide">Aucun dépôt n'a été classé dans cette campagne.</p>
@@ -36,6 +37,7 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
               <span class="podium__rang">{{ ordinal(l.rang!) }}</span>
               <strong class="podium__nom">{{ l.pseudo }}</strong>
               <span>{{ formaterNombre(l.score_final) }} sur 100</span>
+              <JaugePixel :valeur="l.score_final ?? 0" :max="100" />
             </li>
           </ol>
         </template>
@@ -55,10 +57,10 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
               </tr>
             </thead>
             <tbody>
-              <tr v-for="l in lignes" :key="l.pseudo">
+              <tr v-for="l in lignes" :key="l.pseudo" :data-moi="l.pseudo === pseudo ? '' : undefined">
                 <td>{{ l.rang ?? '—' }}<span v-if="l.rang === null" class="sr-only"> non classé</span></td>
                 <th scope="row">
-                  {{ l.pseudo }}
+                  {{ l.pseudo }}<span v-if="l.pseudo === pseudo" class="moi">toi</span>
                   <span v-if="l.disqualifie" class="mention">Disqualifié. Justification publique de l'organisateur : {{ l.justification }}</span>
                   <span v-else-if="l.rang === null" class="mention">Non classé.</span>
                   <span v-if="l.justification_departage" class="mention">Départagé à égalité par l'organisateur : {{ l.justification_departage }}</span>
