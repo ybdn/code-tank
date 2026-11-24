@@ -3,7 +3,7 @@ import { adresseUtilisable } from './jetable'
 import { creerJeton, SECRET_MIN } from './jeton'
 
 // Expéditeur de Code Tank (entreprise/identite.md).
-const EXPEDITEUR = 'Code Tank <code-tank@ybdn.io>'
+const EXPEDITEUR = 'Code Tank by ybdn.io <code-tank@ybdn.io>'
 
 type Config = { siteUrl: string; secretVerification: string; smtp: { host: string; port: number | string; user: string; pass: string } }
 
@@ -38,7 +38,7 @@ export async function envoyerLienVerification(config: Config, compteId: string, 
     from: EXPEDITEUR,
     to: email,
     subject: 'Code Tank : vérifie ton adresse e-mail',
-    text: `Bonjour,\n\nPour vérifier ton adresse e-mail et continuer ta candidature, ouvre ce lien puis confirme. Il est valable 24 heures :\n\n${lien}\n\nSi tu n'as rien demandé, ignore ce message.\n\nCode Tank`,
+    text: `Bonjour,\n\nPour vérifier ton adresse e-mail et continuer ta candidature, ouvre ce lien puis confirme. Il est valable 24 heures :\n\n${lien}\n\nSi tu n'as rien demandé, ignore ce message.\n\nCode Tank by ybdn.io`,
   })
 }
 
@@ -50,7 +50,7 @@ export const estPanneSmtp = (e: unknown) => ['ECONNECTION', 'ETIMEDOUT', 'ESOCKE
 export async function envoyerAvis(config: Config, to: string, sujet: string, texte: string) {
   verifierSite(config)
   if (!adresseUtilisable(to)) throw new Error('Adresse de contact inutilisable : aucun e-mail envoyé.')
-  await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}/compte\n\nCode Tank` })
+  await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}/compte\n\nCode Tank by ybdn.io` })
 }
 
 // E-mail de résultat à chaque adresse donnée, un par un. Texte seul, aucun score ni classement.
@@ -61,7 +61,7 @@ export async function envoyerResultats(config: Config, campagne: { slug: string;
   try {
     verifierSite(config)
     const smtp = transport(config.smtp)
-    const texte = `Bonjour,\n\nLes résultats de la campagne « ${campagne.titre} » viennent d'être publiés. Tu les retrouves sur la page de la campagne :\n\n${config.siteUrl}/campagnes/${campagne.slug}\n\nCode Tank`
+    const texte = `Bonjour,\n\nLes résultats de la campagne « ${campagne.titre} » viennent d'être publiés. Tu les retrouves sur la page de la campagne :\n\n${config.siteUrl}/campagnes/${campagne.slug}\n\nCode Tank by ybdn.io`
     for (const to of adresses) {
       try {
         await smtp.sendMail({ from: EXPEDITEUR, to, subject: `Code Tank : les résultats de « ${campagne.titre} » sont publiés`, text: texte })
