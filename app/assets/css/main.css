@@ -59,13 +59,14 @@ main:focus { outline: none; }
 .nav { border-bottom: 1px solid var(--line); }
 .nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 76px; }
 .logo { display: inline-flex; align-items: center; gap: 12px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.25rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
-/* 48 px = 2 px par case (pixels entiers). Calage optique : les pieds sur la ligne de base de « Code Tank ». */
-.logo .mascotte { width: 48px; height: 48px; flex: none; translate: 0 -2px; }
+/* 48 px = 2 px par case (pixels entiers), centrée dans la barre ; la couronne du Boss déborde au-dessus. */
+.logo .mascotte { width: 48px; height: 48px; flex: none; }
 /* Au survol, la mascotte saute d'une case, comme sur le plateau. */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) { .logo:hover .mascotte { animation: saut .4s steps(1); } }
 @keyframes saut { 0%, 75% { transform: translateY(-2px); } }
-.logo__nom { display: grid; justify-items: start; line-height: 1; }
-.logo__par { margin-bottom: .67em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
+/* « Code Tank » seul compte dans la hauteur, centré sur l'axe des liens ; « ybdn.io » se pose au-dessus. */
+.logo__nom { position: relative; display: block; line-height: 1; }
+.logo__par { position: absolute; left: 0; bottom: 100%; margin-bottom: .5em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
 .nav__links { display: flex; gap: 0 24px; margin-right: auto; }
 .nav__links a, .legal-links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
 @media (hover: hover) { .legal-links a:hover { text-decoration: underline; } .nav__links a:hover { color: var(--ink); } }
@@ -548,7 +549,7 @@ h1 + .parcours { margin-top: 2rem; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
 @media (max-width: 24rem) {
   .logo { gap: 8px; font-size: 1rem; }
-  .logo .mascotte { width: 24px; height: 24px; translate: 0 -1px; }
+  .logo .mascotte { width: 24px; height: 24px; }
   .logo__par { margin-bottom: .3em; }
   .nav .btn { padding: 0 14px; }
 }
