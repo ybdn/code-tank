@@ -6,7 +6,7 @@ Code Tank est un concours de code ouvert aux développeurs majeurs, à l'adresse
 
 ## 1. Qui est responsable du traitement
 
-- **Responsable du traitement**&nbsp;: EI - YOANN BAUDRIN, entreprise individuelle (nom commercial&nbsp;: ybdn.io).
+- **Responsable du traitement**&nbsp;: EI - YOANN BAUDRIN, entreprise individuelle.
 - **SIREN**&nbsp;: 994 347 979. **SIRET**&nbsp;: 994 347 979 00019.
 - **Adresse**&nbsp;: 11 rue de la Sellerie, C612 - 95300 Pontoise - France.
 - **Directeur de la publication**&nbsp;: Yoann BAUDRIN.

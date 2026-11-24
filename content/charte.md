@@ -8,7 +8,7 @@ Version&nbsp;: en vigueur à l'ouverture des comptes. Le numéro et la date de v
 
 ## 1. Qui organise
 
-Code Tank est organisé par EI - YOANN BAUDRIN, sous la marque ybdn.io.
+Code Tank est organisé par EI - YOANN BAUDRIN.
 
 - SIREN&nbsp;: 994 347 979
 - Adresse&nbsp;: 11 rue de la Sellerie, C612 - 95300 Pontoise - France

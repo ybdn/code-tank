@@ -8,7 +8,7 @@ Site&nbsp;: `code-tank.ybdn.io`
 
 ## 1. Éditeur du site
 
-- Éditeur&nbsp;: EI - YOANN BAUDRIN, exerçant sous la marque ybdn.io
+- Éditeur&nbsp;: EI - YOANN BAUDRIN
 - Numéro d'identification&nbsp;: SIREN 994 347 979, SIRET du siège 994 347 979 00019
 - Adresse&nbsp;: 11 rue de la Sellerie, C612 - 95300 Pontoise - France
 - Contact&nbsp;: support@ybdn.io
