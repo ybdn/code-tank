@@ -23,6 +23,7 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
       <FriseEtapes :statut="campagne.statut" publique />
       <h1 id="classement-h">{{ campagne.titre }}</h1>
       <p class="lead">Thème imposé : {{ campagne.theme }}</p>
+      <p v-if="campagne.statut === 'archivee'" class="note-claire">{{ LIBELLE_STATUT.archivee }}.</p>
 
       <p v-if="error" role="alert" class="avis avis--erreur">Le classement ne peut pas être lu pour le moment. Réessaie dans un instant.</p>
       <p v-else-if="!lignes.length" class="vide">Aucun dépôt n'a été classé dans cette campagne.</p>

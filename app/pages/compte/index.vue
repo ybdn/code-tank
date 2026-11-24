@@ -11,11 +11,14 @@ const ETATS: Record<Etat, string> = {
   email_a_verifier: 'Vérifie ton e-mail : ton compte attend le clic sur le lien que nous t\'avons envoyé.',
   verifie: 'En attente d\'autorisation : ton e-mail est vérifié, l\'organisateur autorise chaque compte à la main.',
   liste_attente: 'Liste d\'attente : le nombre de comptes est atteint. L\'organisateur choisit qui monte, ce n\'est pas l\'ordre d\'arrivée.',
-  autorise: 'Compte autorisé : tu peux t\'inscrire à toute campagne ouverte.',
+  autorise: 'Compte autorisé : tu peux t\'inscrire à une campagne dès qu\'elle est ouverte.',
   refuse: 'Ta candidature n\'a pas été retenue.',
   ferme: 'Ton compte est fermé.',
 }
 const pret = ref(false)
+// La campagne où s'inscrire, s'il y en a une : le bouton n'apparaît que dans ce cas.
+const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'campagnes' })
+const ouverte = computed(() => campagnes.value?.find((c) => depotOuvert(c)))
 const compte = ref<Compte | null>(null)
 // Le parcours d'un candidat, du premier clic à l'autorisation : fait, en cours (la première étape non faite), à venir.
 const parcours = computed(() => {
@@ -122,7 +125,7 @@ async function renvoyer() {
   <section class="section">
     <div class="wrap texte">
       <h1>Mon compte</h1>
-      <ol v-if="!bloque" class="parcours" aria-label="Ton parcours">
+      <ol v-if="pret && !bloque" class="parcours" aria-label="Ton parcours">
         <li v-for="(e, i) in parcours" :key="e.libelle" :data-etat="e.etat" :aria-current="e.etat === 'courant' ? 'step' : undefined">
           <span class="parcours__num" aria-hidden="true">{{ e.etat === 'fait' ? '✓' : String(i + 1).padStart(2, '0') }}</span>
           <span>{{ e.libelle }}<span v-if="e.etat === 'fait'" class="sr-only"> : fait</span></span>
@@ -165,7 +168,7 @@ async function renvoyer() {
       <template v-else>
         <h2>État</h2>
         <p class="etat etat--console" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
-        <p v-if="compte.etat === 'autorise'" class="btns"><NuxtLink class="btn btn--primary" to="/#campagnes">Voir les campagnes</NuxtLink></p>
+        <p v-if="compte.etat === 'autorise' && ouverte" class="btns"><NuxtLink class="btn btn--primary" :to="`/campagnes/${ouverte.slug}`">Voir la campagne ouverte</NuxtLink></p>
         <template v-if="compte.etat === 'liste_attente'">
           <p>Tous les 12 mois, nous te demandons par e-mail si tu attends toujours une place. Tu peux le confirmer ici, à tout moment.</p>
           <p class="btns"><button class="btn btn--primary" type="button" :disabled="occupe" @click="confirmerAttente">Je suis toujours en attente</button></p>

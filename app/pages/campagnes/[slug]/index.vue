@@ -107,7 +107,7 @@ async function sedesinscrire() {
 
         <aside class="place" aria-labelledby="place-h">
           <h2 id="place-h">Ta place</h2>
-          <p v-if="ouverte && jours >= 0" class="place__rebours"><strong>{{ jours > 0 ? `J-${jours}` : 'Dernier jour' }}</strong> avant la clôture du dépôt</p>
+          <p v-if="depotOuvert(campagne) && jours >= 0" class="place__rebours"><strong>{{ jours > 0 ? `J-${jours}` : 'Dernier jour' }}</strong> avant la clôture du dépôt</p>
           <dl class="place__dates">
             <div><dt>Inscriptions</dt><dd>{{ formaterDate(campagne.ouverture_inscriptions) }}</dd></div>
             <div><dt>Clôture du dépôt</dt><dd>{{ formaterDate(campagne.cloture_depot) }}</dd></div>

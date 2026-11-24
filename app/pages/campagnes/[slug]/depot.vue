@@ -182,7 +182,7 @@ async function retirer() {
         </template>
 
         <template v-if="depotOuvert(campagne)">
-          <details v-if="reception || recu" class="bloc redepot" :open="etape > 0 || Object.keys(erreurs).length > 0">
+          <details v-if="reception || recu" class="bloc redepot" :open="etape > 0 || Boolean(alerte) || Object.keys(erreurs).length > 0">
             <summary>Redéposer une nouvelle version</summary>
             <div class="bloc__corps">
               <p>Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>

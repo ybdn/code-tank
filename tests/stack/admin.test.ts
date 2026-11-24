@@ -377,6 +377,12 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
 
     // Un vote sans dépôt, une participation inconnue.
     expect((await appeler('PUT', `/api/admin/participations/${UUID}/vote`, orga, { note: 5 })).statut).toBe(409)
+
+    // Tableau de bord : un vote enregistré non verrouillé ne compte pas, et ni sa note ni son commentaire ne sortent.
+    const tdb = await appeler('GET', '/api/admin/tableau-de-bord', orga)
+    expect(tdb.statut).toBe(200)
+    expect(tdb.texte).not.toMatch(/Mieux que prévu|"note"|"commentaire"/)
+    expect((tdb.json as unknown as TableauDeBord).campagnes.find((c) => c.slug === slug)).toMatchObject({ depots: 2, votes_verrouilles: 0 })
   })
 
   it('verrouille le vote (définitif), puis les audits, la case de réutilisation et la note d\'outillage deviennent lisibles', async () => {
@@ -386,6 +392,8 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
     expect(modif.json.statusMessage).toContain('verrouillé')
     expect((await appeler('POST', `/api/admin/participations/${pA}/verrouillage`, orga)).statut).toBe(409)
     expect((await admin.from('vote_boss').select('note').eq('participation_id', pA).single()).data?.note).toBe(8)
+    const tdb = (await appeler('GET', '/api/admin/tableau-de-bord', orga)).json as unknown as TableauDeBord
+    expect(tdb.campagnes.find((c) => c.slug === slug)).toMatchObject({ depots: 2, votes_verrouilles: 1 })
 
     expect((await orga.client.from('audit').select('id').eq('depot_id', depotA.depotId)).data).toHaveLength(1)
     expect((await orga.client.from('contact_reutilisation_lisible').select('contact_reutilisation').eq('participation_id', pA)).data).toEqual([{ contact_reutilisation: true }])
