@@ -1,3 +1,6 @@
 {
+  "git": {
+    "deploymentEnabled": { "**": false, "preprod": true, "prod": true }
+  },
   "crons": [{ "path": "/api/cron/conservation", "schedule": "17 3 * * *" }]
 }
