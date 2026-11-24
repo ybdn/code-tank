@@ -8,6 +8,13 @@ useHead({ title: campagne.value.titre })
 const suite = computed(() => etapeSuivante(campagne.value.statut))
 const figees = computed(() => campagne.value.regles_figees_le !== null)
 const inscrits = computed(() => data.value.participations)
+const deposes = computed(() => inscrits.value.filter((p) => p.depot).length)
+const panneaux = computed(() => [
+  { id: 'etape', titre: campagne.value.statut === 'brouillon' ? 'Étape' : 'Étape et jury' },
+  { id: 'participants', titre: 'Participants', nb: inscrits.value.length },
+  { id: 'depots', titre: 'Dépôts et vote du Boss', nb: deposes.value },
+  { id: 'modifier', titre: 'Modifier la campagne' },
+])
 const ajoutables = computed(() => data.value.candidats.filter((c) => !inscrits.value.some((p) => p.compte_id === c.id)))
 
 const statut = useAction()
@@ -57,78 +64,85 @@ async function ajouter() {
 <template>
   <section class="section">
     <div class="wrap">
-      <p class="etat" :data-statut="campagne.statut">{{ STATUT_ADMIN[campagne.statut] }}</p>
       <h1>{{ campagne.titre }}</h1>
+      <FriseEtapes :statut="campagne.statut" />
       <p class="lead">Thème : {{ campagne.theme }}</p>
       <p v-if="campagne.statut !== 'brouillon'"><NuxtLink :to="`/campagnes/${campagne.slug}`">Voir la page publique</NuxtLink></p>
 
-      <h2>Étape</h2>
-      <div role="status" aria-live="polite"><p v-if="statut.message.value" class="avis">{{ statut.message.value }}</p></div>
-      <p v-if="statut.alerte.value" role="alert" class="avis avis--erreur">{{ statut.alerte.value }}</p>
-      <p v-if="!suite">La campagne est archivée : il n'y a plus d'étape.</p>
-      <template v-else>
-        <p v-if="!confirmerEtape" class="btns">
-          <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = true">Passer à « {{ STATUT_ADMIN[suite] }} »</button>
-        </p>
-        <div v-else class="avis" role="group" aria-labelledby="etape-titre">
-          <p id="etape-titre"><strong>Passer à « {{ STATUT_ADMIN[suite] }} » ?</strong> {{ EFFET_ETAPE[suite] }} Cette étape ne se défait pas.</p>
-          <p class="btns">
-            <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="avancer">Confirmer</button>
-            <button class="btn" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = false">Annuler</button>
-          </p>
-        </div>
-      </template>
+      <PanneauxAdmin :panneaux="panneaux" libelle="Sections de la campagne">
+        <template #etape>
+          <h2>Étape</h2>
+          <div role="status" aria-live="polite"><p v-if="statut.message.value" class="avis">{{ statut.message.value }}</p></div>
+          <p v-if="statut.alerte.value" role="alert" class="avis avis--erreur">{{ statut.alerte.value }}</p>
+          <p v-if="!suite">La campagne est archivée : il n'y a plus d'étape.</p>
+          <template v-else>
+            <p v-if="!confirmerEtape" class="btns">
+              <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = true">Passer à « {{ STATUT_ADMIN[suite] }} »</button>
+            </p>
+            <div v-else class="avis" role="group" aria-labelledby="etape-titre">
+              <p id="etape-titre"><strong>Passer à « {{ STATUT_ADMIN[suite] }} » ?</strong> {{ EFFET_ETAPE[suite] }} Cette étape ne se défait pas.</p>
+              <p class="btns">
+                <button class="btn btn--primary" type="button" :disabled="statut.occupe.value" @click="avancer">Confirmer</button>
+                <button class="btn" type="button" :disabled="statut.occupe.value" @click="confirmerEtape = false">Annuler</button>
+              </p>
+            </div>
+          </template>
 
-      <template v-if="campagne.statut !== 'brouillon'">
-        <h2>Jury</h2>
-        <p class="note-claire">Les dépôts reçus sont traités à chaque envoi, et le jury se réveille chaque jour. Ce bouton le relance tout de suite (une fois par minute au plus).</p>
-        <div role="status" aria-live="polite"><p v-if="jury.message.value" class="avis">{{ jury.message.value }}</p></div>
-        <p v-if="jury.alerte.value" role="alert" class="avis avis--erreur">{{ jury.alerte.value }}</p>
-        <p class="btns"><button class="btn" type="button" :disabled="jury.occupe.value" @click="relancerJury">Relancer le jury</button></p>
-      </template>
-
-      <h2>Participants ({{ inscrits.length }} sur {{ campagne.max_participants }})</h2>
-      <p v-if="!inscrits.length" class="note-claire">Personne n'est inscrit.</p>
-      <div v-else class="tableau" role="region" aria-label="Participants" tabindex="0">
-        <table>
-          <thead><tr><th scope="col">Pseudo</th><th scope="col">Vrai nom</th><th scope="col">Inscrit le</th></tr></thead>
-          <tbody>
-            <tr v-for="p in inscrits" :key="p.id"><th scope="row">{{ p.pseudo }}</th><td>{{ p.vrai_nom || '—' }}</td><td>{{ formaterDate(p.inscrit_le) }}</td></tr>
-          </tbody>
-        </table>
-      </div>
-      <form class="form" novalidate @submit.prevent="ajouter">
-        <div role="status" aria-live="polite"><p v-if="ajout.message.value" class="avis">{{ ajout.message.value }}</p></div>
-        <p v-if="ajout.alerte.value" role="alert" class="avis avis--erreur">{{ ajout.alerte.value }}</p>
-        <div class="champ">
-          <label for="ajout">Ajouter un participant hors quota</label>
-          <p id="aide-ajout" class="champ__aide">Compte autorisé, jusqu'à deux places au-delà de {{ campagne.max_participants }}. Possible pendant les inscriptions et le dépôt.</p>
-          <select id="ajout" v-model="aAjouter" aria-describedby="aide-ajout">
-            <option value="" disabled>Choisir un compte autorisé…</option>
-            <option v-for="c in ajoutables" :key="c.id" :value="c.id">{{ c.pseudo }} ({{ c.vrai_nom }})</option>
-          </select>
-        </div>
-        <p class="btns"><button class="btn" type="submit" :disabled="ajout.occupe.value || !aAjouter">Ajouter</button></p>
-      </form>
-
-      <h2>Dépôts et vote du Boss</h2>
-      <p class="note-claire">Aucun dépôt n'est exécuté, par personne : on lit, on ne lance rien.</p>
-      <p v-if="!inscrits.length" class="note-claire">Aucune participation.</p>
-      <ParticipationAdmin v-for="p in inscrits" :key="p.id" :participation="p" :campagne="campagne" @change="refresh()" />
-
-      <h2>Modifier la campagne</h2>
-      <p v-if="figees" class="avis">Le premier dépôt a figé le brief, le thème et les critères.</p>
-      <div role="status" aria-live="polite"><p v-if="edition.message.value" class="avis">{{ edition.message.value }}</p></div>
-      <p v-if="edition.alerte.value" role="alert" class="avis avis--erreur">{{ edition.alerte.value }}</p>
-      <FormulaireCampagne
-        :key="campagne.id"
-        :initial="campagne"
-        :figees="figees"
-        :slug-fige="campagne.statut !== 'brouillon'"
-        :erreurs="edition.erreurs.value"
-        :occupe="edition.occupe.value"
-        @envoyer="enregistrer"
-      />
+          <template v-if="campagne.statut !== 'brouillon'">
+            <h2>Jury</h2>
+            <p class="note-claire">Les dépôts reçus sont traités à chaque envoi, et le jury se réveille chaque jour. Ce bouton le relance tout de suite (une fois par minute au plus).</p>
+            <div role="status" aria-live="polite"><p v-if="jury.message.value" class="avis">{{ jury.message.value }}</p></div>
+            <p v-if="jury.alerte.value" role="alert" class="avis avis--erreur">{{ jury.alerte.value }}</p>
+            <p class="btns"><button class="btn" type="button" :disabled="jury.occupe.value" @click="relancerJury">Relancer le jury</button></p>
+          </template>
+        </template>
+        <template #participants>
+          <h2>Participants ({{ inscrits.length }} sur {{ campagne.max_participants }})</h2>
+          <p v-if="!inscrits.length" class="note-claire">Personne n'est inscrit.</p>
+          <div v-else class="tableau" role="region" aria-label="Participants" tabindex="0">
+            <table>
+              <thead><tr><th scope="col">Pseudo</th><th scope="col">Vrai nom</th><th scope="col">Inscrit le</th></tr></thead>
+              <tbody>
+                <tr v-for="p in inscrits" :key="p.id"><th scope="row">{{ p.pseudo }}</th><td>{{ p.vrai_nom || '—' }}</td><td>{{ formaterDate(p.inscrit_le) }}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <form class="form" novalidate @submit.prevent="ajouter">
+            <div role="status" aria-live="polite"><p v-if="ajout.message.value" class="avis">{{ ajout.message.value }}</p></div>
+            <p v-if="ajout.alerte.value" role="alert" class="avis avis--erreur">{{ ajout.alerte.value }}</p>
+            <div class="champ">
+              <label for="ajout">Ajouter un participant hors quota</label>
+              <p id="aide-ajout" class="champ__aide">Compte autorisé, jusqu'à deux places au-delà de {{ campagne.max_participants }}. Possible pendant les inscriptions et le dépôt.</p>
+              <select id="ajout" v-model="aAjouter" aria-describedby="aide-ajout">
+                <option value="" disabled>Choisir un compte autorisé…</option>
+                <option v-for="c in ajoutables" :key="c.id" :value="c.id">{{ c.pseudo }} ({{ c.vrai_nom }})</option>
+              </select>
+            </div>
+            <p class="btns"><button class="btn" type="submit" :disabled="ajout.occupe.value || !aAjouter">Ajouter</button></p>
+          </form>
+        </template>
+        <template #depots>
+          <h2>Dépôts et vote du Boss</h2>
+          <p class="note-claire">Aucun dépôt n'est exécuté, par personne : on lit, on ne lance rien.</p>
+          <p v-if="!inscrits.length" class="note-claire">Aucune participation.</p>
+          <ParticipationAdmin v-for="p in inscrits" :key="p.id" :participation="p" :campagne="campagne" @change="refresh()" />
+        </template>
+        <template #modifier>
+          <h2>Modifier la campagne</h2>
+          <p v-if="figees" class="avis">Le premier dépôt a figé le brief, le thème et les critères.</p>
+          <div role="status" aria-live="polite"><p v-if="edition.message.value" class="avis">{{ edition.message.value }}</p></div>
+          <p v-if="edition.alerte.value" role="alert" class="avis avis--erreur">{{ edition.alerte.value }}</p>
+          <FormulaireCampagne
+            :key="campagne.id"
+            :initial="campagne"
+            :figees="figees"
+            :slug-fige="campagne.statut !== 'brouillon'"
+            :erreurs="edition.erreurs.value"
+            :occupe="edition.occupe.value"
+            @envoyer="enregistrer"
+          />
+        </template>
+      </PanneauxAdmin>
     </div>
   </section>
 </template>

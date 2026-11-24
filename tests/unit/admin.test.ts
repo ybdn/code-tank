@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, validerCampagne, validerReglages, versChampLocal,
+  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, prochaineEcheance, tachesAdmin, validerCampagne, validerReglages, versChampLocal,
+  type CampagneTableau, type TableauDeBord,
 } from '../../shared/utils/admin'
 
 const valide = () => ({
@@ -111,5 +112,49 @@ describe('étapes', () => {
     expect(etapeSuivante('brouillon')).toBe('inscriptions')
     expect(etapeSuivante('prete')).toBe('publiee')
     expect(etapeSuivante('archivee')).toBeNull()
+  })
+})
+
+describe('tachesAdmin : ce qui attend l\'organisateur', () => {
+  const MAINTENANT = Date.parse('2026-12-10T12:00:00.000Z')
+  const campagne = (c: Partial<CampagneTableau>): CampagneTableau => ({
+    id: 'c', slug: 'minuteur', titre: 'Minuteur', statut: 'depot', ouverture_inscriptions: '2026-12-01T09:00:00.000Z', cloture_depot: '2026-12-15T09:00:00.000Z',
+    date_resultats: '2026-12-31T09:00:00.000Z', max_participants: 10, inscrits: 0, receptions_en_attente: 0, receptions_refusees: 0, depots: 0, votes_verrouilles: 0, ...c,
+  })
+  const tableau = (campagnes: CampagneTableau[], comptes: Record<string, number> = {}): TableauDeBord => ({ comptes, plafond_comptes: null, plafond_depense_usd: 50, campagnes })
+
+  it('rien à faire : liste vide', () => {
+    expect(tachesAdmin(tableau([campagne({})]), MAINTENANT)).toEqual([])
+  })
+  it('comptes à décider (urgent) et liste d\'attente, avec le lien du bon panneau', () => {
+    const t = tachesAdmin(tableau([], { verifie: 2, liste_attente: 1, autorise: 5 }), MAINTENANT)
+    expect(t.map((x) => [x.urgent, x.lien])).toEqual([[true, '/admin/comptes?panneau=verifie'], [false, '/admin/comptes?panneau=liste_attente']])
+    expect(t[0]!.texte).toBe('2 comptes vérifiés attendent ta décision.')
+  })
+  it('dates dépassées : brouillon à ouvrir, dépôt clos, résultats à publier', () => {
+    const t = tachesAdmin(tableau([
+      campagne({ slug: 'a', statut: 'brouillon', ouverture_inscriptions: '2026-12-09T09:00:00.000Z' }),
+      campagne({ slug: 'b', statut: 'inscriptions', cloture_depot: '2026-12-10T12:00:00.000Z' }),
+      campagne({ slug: 'c', statut: 'prete', date_resultats: '2026-12-01T00:00:00.000Z', depots: 2, votes_verrouilles: 2 }),
+    ]), MAINTENANT)
+    expect(t.map((x) => x.lien)).toEqual(['/admin/campagnes/a?panneau=etape', '/admin/campagnes/b?panneau=etape', '/admin/campagnes/c?panneau=etape'])
+    expect(t.every((x) => x.urgent)).toBe(true)
+  })
+  it('délibération : votes à verrouiller, puis invitation à la relecture ; les urgences passent devant', () => {
+    const t = tachesAdmin(tableau([
+      campagne({ slug: 'a', statut: 'deliberation', depots: 3, votes_verrouilles: 3 }),
+      campagne({ slug: 'b', statut: 'deliberation', depots: 3, votes_verrouilles: 1, receptions_en_attente: 1 }),
+    ]), MAINTENANT)
+    expect(t.map((x) => [x.urgent, x.texte])).toEqual([
+      [true, 'Minuteur : 2 votes du Boss restent à verrouiller.'],
+      [false, 'Minuteur : tous les votes sont verrouillés, tu peux passer à la relecture.'],
+      [false, 'Minuteur : 1 envoi attend le contrôle du dépôt.'],
+    ])
+  })
+  it('prochaine échéance selon l\'étape', () => {
+    expect(prochaineEcheance(campagne({ statut: 'brouillon' }))?.libelle).toBe('Ouverture des inscriptions')
+    expect(prochaineEcheance(campagne({ statut: 'depot' }))?.libelle).toBe('Clôture du dépôt')
+    expect(prochaineEcheance(campagne({ statut: 'prete' }))?.libelle).toBe('Résultats')
+    expect(prochaineEcheance(campagne({ statut: 'publiee' }))).toBeNull()
   })
 })

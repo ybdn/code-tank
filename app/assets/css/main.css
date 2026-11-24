@@ -162,9 +162,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 
 /* Administration : sobre et dense. Les textes saisis par les candidats sont toujours du texte (overflow-wrap, pas de HTML). */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.admin__nav { display: flex; flex-wrap: wrap; gap: 0 20px; border-bottom: 1px solid var(--line); }
-.admin__nav a { display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; }
-.admin__nav a:hover { text-decoration: underline; }
 .admin :is(.section) { padding-block: clamp(32px, 5vw, 64px); }
 .admin h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); }
 .admin h2 { margin-top: 2.5rem; font-size: clamp(1.25rem, 2.5vw, 1.75rem); }
@@ -205,7 +202,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .resultats :is(p, li, th, td, blockquote) { overflow-wrap: anywhere; }
 .resultats h2 { margin-top: 2.5rem; font-size: clamp(1.5rem, 3vw, 2.25rem); }
 .resultats .btns { margin-top: 1.5rem; }
-.podium { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr)); gap: 16px; }
+.podium { list-style: none; margin: 1rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 12px; }
 .podium li { display: grid; gap: 4px; padding: 20px; background: var(--surface); border-radius: 8px; border-top: 4px solid var(--line); }
 .podium li[data-rang="1"] { border-top-color: var(--accent); }
 .podium__rang { color: var(--accent); font: 700 1.5rem var(--font-display); }
@@ -235,3 +232,100 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .resultats .audit h3 { font-size: 1.1rem; }
 .resultats .audit h4 { margin-top: 1rem; font-size: 1rem; }
 @media (max-width: 30rem) { .jure { grid-template-columns: 1fr; } .jure__tete { width: 72px; } }
+
+/* Console du Boss : l'administration reprend le plateau (cases, mono, accent), en plus dense. */
+.admin { --case: 6px; --pixel: polygon(0 var(--case), var(--case) var(--case), var(--case) 0, calc(100% - var(--case)) 0, calc(100% - var(--case)) var(--case), 100% var(--case), 100% calc(100% - var(--case)), calc(100% - var(--case)) calc(100% - var(--case)), calc(100% - var(--case)) 100%, var(--case) 100%, var(--case) calc(100% - var(--case)), 0 calc(100% - var(--case))); }
+.console { border-bottom: 1px solid var(--line); background: radial-gradient(circle, rgb(255 255 255 / .06) 1px, transparent 1.5px) 0 0 / 12px 12px, var(--surface); }
+.console__bar { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 32px; min-height: 64px; }
+.console__titre { display: flex; align-items: center; gap: 10px; margin: 0; font: 700 .95rem var(--font-display); letter-spacing: -.03em; }
+.console__titre .mascotte { width: 32px; height: 32px; }
+.console__onglets { display: flex; flex-wrap: wrap; gap: 0 4px; }
+.console__onglets a { position: relative; display: inline-flex; align-items: center; gap: 8px; min-height: 48px; padding: 0 12px; text-decoration: none; color: var(--muted); }
+.console__onglets a:hover { color: var(--ink); }
+.console__onglets a.actif { color: var(--ink); }
+.console__onglets a.actif::after { content: ''; position: absolute; left: 12px; right: 12px; bottom: 6px; height: 4px; background: repeating-linear-gradient(90deg, var(--accent) 0 8px, transparent 8px 10px); }
+.console__num { font: 700 .75rem var(--font-display); color: var(--accent); }
+
+.panneaux { display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); gap: 40px; align-items: start; margin-top: 2rem; }
+.panneaux__nav { position: sticky; top: 16px; display: grid; gap: 4px; }
+.panneaux__nav a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 12px 8px 16px; text-decoration: none; color: var(--muted); clip-path: var(--pixel); }
+.panneaux__nav a:hover { color: var(--ink); background: var(--surface); }
+.panneaux__nav a[aria-current] { color: var(--ink); background: var(--surface); box-shadow: inset 4px 0 0 var(--accent); }
+.panneaux__nb { min-width: 2.25em; padding: 0 6px; background: var(--bg); font: 700 .8rem/1.8 var(--font-display); text-align: center; clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px)); }
+.panneaux__nb[data-urgent] { background: var(--accent); color: var(--accent-ink); }
+.admin .panneaux__corps > section > h2:first-child { margin-top: 0; }
+@media (max-width: 48rem) {
+  .panneaux { grid-template-columns: 1fr; gap: 24px; }
+  .panneaux__nav { position: static; display: flex; overflow-x: auto; padding-bottom: 8px; border-bottom: 1px solid var(--line); }
+  .panneaux__nav a { flex: none; }
+  .panneaux__nav a[aria-current] { box-shadow: inset 0 -4px 0 var(--accent); }
+}
+
+.tdb__tete { display: grid; gap: 12px; }
+.invite { margin: 0; font: .95rem var(--font-display); color: var(--muted); overflow-wrap: anywhere; }
+.invite > span:first-child { color: var(--accent); }
+.invite__curseur { display: inline-block; width: .6em; height: 1.1em; margin-left: 4px; vertical-align: -.2em; background: var(--ink); }
+.indicateurs { list-style: none; margin: 2rem 0 0; padding: 0; display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 130px), 1fr)); gap: 12px; }
+.indicateurs a { display: grid; align-content: space-between; gap: 12px; height: 100%; min-height: 8.5rem; padding: clamp(16px, 2vw, 24px); text-decoration: none; color: var(--muted); clip-path: var(--pixel);
+  background: radial-gradient(circle, rgb(255 255 255 / .07) 1px, transparent 1.5px) 0 0 / 10px 10px, var(--surface); }
+.indicateurs a:hover { color: var(--ink); }
+.indicateurs strong { color: var(--ink); font: 700 clamp(2.5rem, 5vw, 3.75rem)/1 var(--font-display); letter-spacing: -.06em; }
+.indicateurs [data-urgent] a { background: radial-gradient(circle, rgb(24 25 27 / .18) 1px, transparent 1.5px) 0 0 / 10px 10px, var(--accent); color: var(--accent-ink); }
+.indicateurs [data-urgent] strong { color: var(--accent-ink); }
+
+.tdb__grille { display: grid; grid-template-columns: minmax(0, 2fr) minmax(0, 1fr); gap: 24px 40px; }
+@media (max-width: 56rem) { .tdb__grille { grid-template-columns: 1fr; } }
+.taches { list-style: none; padding: 0; display: grid; gap: 6px; }
+.taches a { position: relative; display: grid; grid-template-columns: 1.5rem 1fr auto; align-items: center; gap: 12px; min-height: 52px; padding: 10px 16px; background: var(--surface); text-decoration: none; clip-path: var(--pixel); }
+.taches__signe { font: 700 1.1rem var(--font-display); color: var(--muted); text-align: center; }
+.taches [data-urgent] .taches__signe { color: var(--accent); }
+.taches [data-urgent] a { box-shadow: inset 4px 0 0 var(--accent); }
+.taches__fleche { font-family: var(--font-display); color: var(--muted); }
+.taches a:hover .taches__fleche { color: var(--accent); }
+.taches__vide { margin: 0; padding: 16px; background: var(--surface); font-family: var(--font-display); color: var(--muted); clip-path: var(--pixel); }
+.plateau-mini { list-style: none; display: flex; align-items: end; gap: 4px; margin: 0; padding: 20px 16px 0; background: linear-gradient(transparent calc(100% - 10px), #4a2617 0) , var(--surface); clip-path: var(--pixel); }
+.plateau-mini li { flex: 1; display: grid; justify-items: center; padding-bottom: 10px; }
+.plateau-mini .mascotte { width: 100%; max-width: 56px; height: auto; }
+.tdb__jury .note-claire { margin-top: 12px; }
+
+.admin .cartes { gap: 16px; }
+.admin .carte { position: relative; display: grid; gap: 14px; align-content: start; clip-path: var(--pixel); }
+.admin .carte h3 { margin: 0; }
+.admin .carte h3 a { text-decoration: none; }
+.admin .carte h3 a::after { content: ''; position: absolute; inset: 0; }
+.admin .carte:hover h3 a { text-decoration: underline; text-decoration-color: var(--accent); }
+.admin .carte p { margin: 0; }
+.frise { display: grid; gap: 8px; }
+.frise ol { list-style: none; display: grid; grid-template-columns: repeat(7, 1fr); gap: 3px; margin: 0; padding: 0; max-width: 18rem; }
+.frise li { height: 10px; background: var(--line); }
+.frise li[data-etat="fait"] { background: var(--muted); }
+.frise li[data-etat="courant"] { background: var(--accent); }
+.frise p { margin: 0; font: 700 .85rem var(--font-display); color: var(--accent); }
+.jauges { display: grid; gap: 12px; margin: 0; }
+.jauges div { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
+.jauges dt { color: var(--muted); font-size: .9rem; }
+.jauges dd { margin: 0; font: 700 .9rem var(--font-display); }
+.jauge { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(20, 1fr); gap: 2px; }
+.jauge i { height: 8px; background: var(--line); }
+.jauge i[data-plein] { background: var(--accent); }
+
+@media (prefers-reduced-motion: no-preference) {
+  .invite__curseur { animation: clignote 1.1s steps(1) 5; }
+  .indicateurs a, .admin .carte, .taches a { transition: transform .2s ease; }
+  .indicateurs a:hover, .admin .carte:hover { transform: translateY(-2px); }
+  .taches__fleche { transition: transform .2s ease, color .2s ease; }
+  .taches a:hover .taches__fleche { transform: translateX(4px); }
+  .admin .btn { transition: transform .12s ease, border-color .15s ease, background-color .15s ease; }
+  .admin .btn:active:not(:disabled) { transform: scale(.97); }
+  .panneaux__nav a { transition: background-color .15s ease, color .15s ease; }
+  .jauge i[data-plein] { animation: remplit .5s steps(1) both; }
+  .jauge i:nth-child(n+6) { animation-delay: .05s; } .jauge i:nth-child(n+11) { animation-delay: .1s; } .jauge i:nth-child(n+16) { animation-delay: .15s; }
+}
+@keyframes clignote { 50% { opacity: 0; } }
+@keyframes remplit { from { background: var(--line); } }
+.admin h1 + .frise { margin-top: 1rem; }
+@media (max-width: 48rem) {
+  .console__bar { padding-top: 12px; gap: 4px; }
+  .console__onglets { flex-wrap: nowrap; width: 100%; overflow-x: auto; scrollbar-width: none; margin-inline: -12px; }
+  .console__onglets a { flex: none; }
+}
