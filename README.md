@@ -114,7 +114,7 @@ confidentialité n'est tenue que pour les adresses qui reviennent.
 
 ## Conservation (tâches planifiées)
 
-`GET /api/cron/conservation`, appelée une fois par jour par le planificateur de Vercel (`vercel.json`, entrée `crons` seule :
+`GET /api/cron/conservation`, appelée une fois par jour par le planificateur de Vercel (`vercel.json`, entrée `crons` :
 03:17 UTC). Elle exige `Authorization: Bearer <CRON_SECRET>` ; sans le bon secret, ou si `CRON_SECRET` manque ou fait moins de
 32 caractères : **404**. Le secret est lu dans `process.env.CRON_SECRET` (le nom que Vercel envoie, sans préfixe `NUXT_`) et
 comparé en temps constant. La route utilise la clé de service. Chaque tâche est idempotente, bornée (constantes `DELAIS` et
@@ -240,6 +240,10 @@ Avec Colima, exporter `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` ava
 
 Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Ils ne contiennent que le texte publiable : la source complète, avec notes de rédaction, reste hors de ce dépôt. Les polices sont auto-hébergées
 (Space Mono et Plus Jakarta Sans, licence OFL) : le site n'appelle aucun service tiers.
+
+## Déploiement
+
+Vercel ne construit que `preprod` (préprod, `preprod.code-tank.ybdn.io`) et `prod` (`code-tank.ybdn.io`) ; `develop` se lance en local (`git.deploymentEnabled` dans `vercel.json`).
 
 ## Licence
 
