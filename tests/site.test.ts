@@ -19,7 +19,7 @@ const fichiers = (dir: string): string[] =>
 
 describe('pages publiques', () => {
   it.each([
-    ['/', 'Concours de code jugé par ybdn et ses agents'],
+    ['/', 'Ton code face au jury'],
     ['/charte', 'Charte'],
     ['/confidentialite', 'confidentialité'],
     ['/mentions-legales', 'Mentions légales'],

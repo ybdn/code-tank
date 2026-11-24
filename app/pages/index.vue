@@ -35,7 +35,7 @@ const rebours = (iso: string) => {
           <InvitePrompt :commande="`$ code-tank ${ouverte ? `--campagne ${ouverte.slug}` : '--prochaine'}`">
             {{ ouverte ? `${ouverte.titre}\u00a0: dépôt ouvert jusqu'au ${formaterDate(ouverte.cloture_depot)}` : 'la prochaine campagne arrive' }}
           </InvitePrompt>
-          <h1 id="hero-h">Concours de code jugé par ybdn et ses agents</h1>
+          <h1 id="hero-h">Ton code face au jury</h1>
           <p class="lead">
             Un thème imposé, le même pour tous. Tu déposes ton projet, cinq jurés le notent, et chaque note cite le
             fichier et la ligne qui la justifient.

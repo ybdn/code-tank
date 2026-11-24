@@ -57,7 +57,7 @@ main:focus { outline: none; }
 .btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
 
 .nav { border-bottom: 1px solid var(--line); }
-.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 68px; }
+.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 76px; }
 .logo { display: inline-flex; align-items: center; gap: 12px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.25rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
 /* 48 px = 2 px par case (pixels entiers). Calage optique : les pieds sur la ligne de base de « Code Tank ». */
 .logo .mascotte { width: 48px; height: 48px; flex: none; translate: 0 -2px; }
@@ -96,7 +96,7 @@ main:focus { outline: none; }
 .rows__val { grid-column: 2; grid-row: 1; color: var(--clair-muted); font-size: .9rem; text-align: right; }
 .note { color: var(--clair-muted); font-size: .9rem; }
 
-/* Le plateau : lattes orangées, traverse, lampes bleues, fauteuils blancs vides, parquet. */
+/* Le plateau : lattes orangées, traverse, lampes bleues, fauteuils graphite en pixels, parquet. */
 .plateau { position: relative; display: flex; align-items: flex-end; justify-content: space-around; gap: 8px; min-height: 400px; padding: 0 16px 56px; overflow: hidden; border-radius: 12px;
   background:
     linear-gradient(#8a3d17 0 0) 0 40% / 100% 12px no-repeat,
@@ -105,10 +105,13 @@ main:focus { outline: none; }
 .plateau::after { content: ''; position: absolute; inset: auto 0 0; height: 48px; background: #4a2617; border-top: 6px solid #d98a3a; }
 .lampes { position: absolute; inset: 0 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; justify-items: center; padding: 0 16px; }
 .lampes i { width: 32px; height: 8px; background: #3d7fe0; box-shadow: 0 10px 36px 10px rgb(61 127 224 / .35); }
-.siege { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 8px; }
-.siege__dos { width: min(118px, 100%); aspect-ratio: 1 / 1; display: grid; align-items: end; justify-items: center; padding-bottom: 5px; background: #f1ece4; border-radius: 18px 18px 6px 6px; }
-.siege__dos .mascotte { width: 92%; max-width: 108px; height: auto; }
-.siege__table { width: min(80px, 90%); height: 12px; border-radius: 50%; background: #e9dcc6; }
+.siege { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; }
+/* Dossier plus haut que large : la place de la couronne du Boss au-dessus de la capuche. */
+.siege__dos { width: min(112px, 100%); aspect-ratio: 5 / 6; display: grid; align-items: end; justify-items: center; background: #1b1d21; clip-path: var(--pixel); box-shadow: inset 0 6px 0 #2e3138; }
+.siege__dos .mascotte { width: 86%; max-width: 96px; height: auto; }
+/* Assise collée au dossier, pied jusqu'au parquet. */
+.siege__table { width: min(124px, 108%); height: 10px; background: #2e3138; clip-path: var(--pixel); --case: 3px; }
+.siege::after { content: ''; width: 10px; height: 8px; background: #141518; }
 
 /* Les mascottes respirent d'un pixel de leur grille (1/24 de la hauteur), en deux images. */
 @keyframes respire { to { transform: translateY(-4.1667%); } }
