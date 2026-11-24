@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
-  CRITERES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, prochaineEcheance, tachesAdmin, validerCampagne, validerReglages, versChampLocal,
+  CRITERES_PAR_DEFAUT, MODELES_PAR_DEFAUT, cheminAdmin, contradictionsIa, libelleElement, depuisChampLocal, etapeSuivante, prochaineEcheance, tachesAdmin, validerCampagne, validerReglages, versChampLocal,
   type CampagneTableau, type TableauDeBord,
 } from '../../shared/utils/admin'
 
@@ -42,6 +42,13 @@ describe('validerCampagne', () => {
     expect(campagne.criteres.find((c) => c.cle === 'outillage')?.calcule).toBe(true)
     expect(campagne.criteres.reduce((s, c) => s + c.poids, 0)).toBe(100)
   })
+  it('les modèles sont facultatifs et gardés tels quels : un par juré', () => {
+    expect(validerCampagne(valide()).campagne).not.toHaveProperty('modeles')
+    const modeles = { sudo: 'claude-opus-5-5', refacto: 'claude-sonnet-5-5', lint: 'claude-haiku-5-5', pitch: 'claude-sonnet-5-5' }
+    const r = validerCampagne({ ...valide(), modeles })
+    expect(r.erreurs).toEqual({})
+    expect(r.campagne.modeles).toEqual(modeles)
+  })
   it('ne contrôle pas le total des poids : la base le fait à l\'ouverture', () => {
     const c = valide()
     c.criteres[0]!.poids = 5
@@ -64,6 +71,10 @@ describe('validerCampagne', () => {
     ['juré inconnu', { criteres: [{ cle: 'a', libelle: 'A', poids: 100, jure: 'boss' }] }, 'criteres'],
     ['clé en double', { criteres: [{ cle: 'a', libelle: 'A', poids: 50, jure: 'sudo' }, { cle: 'a', libelle: 'B', poids: 50, jure: 'lint' }] }, 'criteres'],
     ['libellé vide', { criteres: [{ cle: 'a', libelle: ' ', poids: 100, jure: 'sudo' }] }, 'criteres'],
+    ['modèle inconnu', { modeles: { ...MODELES_PAR_DEFAUT, sudo: 'claude-opus-4-8' } }, 'modeles'],
+    ['juré manquant', { modeles: { sudo: 'claude-opus-5-5', refacto: 'claude-opus-5-5', lint: 'claude-opus-5-5' } }, 'modeles'],
+    ['clé de juré en trop', { modeles: { ...MODELES_PAR_DEFAUT, boss: 'claude-opus-5-5' } }, 'modeles'],
+    ['modèles en texte', { modeles: 'claude-opus-5-5' }, 'modeles'],
   ])('refuse : %s', (_nom, surcharge, champ) => {
     expect(validerCampagne({ ...valide(), ...surcharge }).erreurs).toHaveProperty(champ)
   })

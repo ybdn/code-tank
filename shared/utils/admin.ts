@@ -5,6 +5,19 @@ import type { Critere } from './campagne'
 export const JURES = ['sudo', 'refacto', 'lint', 'pitch'] as const
 export const NOM_JURE: Record<string, string> = { sudo: 'Sudo', refacto: 'Refacto', lint: 'Lint', pitch: 'Pitch' }
 
+// Modèles Claude proposés pour les jurés (la base n'admet que ceux-ci). Coûts relatifs d'après les tarifs d'entrée / sortie
+// par million de tokens : Opus 4 $ / 20 $, Sonnet 2 $ / 10 $, Haiku 0,10 $ / 0,50 $ (jusqu'à 100 000 tokens de prompt).
+export const MODELES = ['claude-opus-5-5', 'claude-sonnet-5-5', 'claude-haiku-5-5'] as const
+export type ModeleJure = (typeof MODELES)[number]
+export const MODELE_PAR_DEFAUT: ModeleJure = 'claude-sonnet-5-5'
+export const LIBELLE_MODELE: Record<ModeleJure, string> = {
+  'claude-opus-5-5': 'Opus : le plus cher',
+  'claude-sonnet-5-5': 'Sonnet : coût moyen, par défaut',
+  'claude-haiku-5-5': 'Haiku : le moins cher, analyse plus légère',
+}
+export type ModelesJures = Record<(typeof JURES)[number], ModeleJure>
+export const MODELES_PAR_DEFAUT: ModelesJures = { sudo: MODELE_PAR_DEFAUT, refacto: MODELE_PAR_DEFAUT, lint: MODELE_PAR_DEFAUT, pitch: MODELE_PAR_DEFAUT }
+
 export type CritereAdmin = Critere & { calcule?: true }
 
 // Critères par défaut du § 5 : total 100, dont 10 calculés par script (la note vient du scan de faits, pas de Claude).
@@ -75,11 +88,13 @@ export function depuisChampLocal(local: string): string {
 
 // --- Campagne -----------------------------------------------------------------------------
 
-export type ChampCampagne = 'slug' | 'titre' | 'theme' | 'brief' | 'criteres' | 'ouverture_inscriptions' | 'cloture_depot' | 'date_resultats' | 'max_participants'
+export type ChampCampagne = 'slug' | 'titre' | 'theme' | 'brief' | 'criteres' | 'ouverture_inscriptions' | 'cloture_depot' | 'date_resultats' | 'max_participants' | 'modeles'
 export type ErreursCampagne = Partial<Record<ChampCampagne, string>>
 export type CorpsCampagne = {
   slug: string; titre: string; theme: string; brief: string; criteres: CritereAdmin[]
   ouverture_inscriptions: string; cloture_depot: string; date_resultats: string; max_participants: number
+  // Absent du corps : la base garde le défaut à la création et la valeur actuelle à la modification.
+  modeles?: ModelesJures
 }
 
 const texte = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
@@ -127,11 +142,19 @@ export function validerCampagne(corps: Record<string, unknown>): { campagne: Cor
   const max = corps.max_participants
   if (typeof max !== 'number' || !Number.isInteger(max) || max < 1 || max > MAX_PARTICIPANTS) e.max_participants = `Le nombre de participants est un entier de 1 à ${MAX_PARTICIPANTS}.`
 
+  let modeles: ModelesJures | undefined
+  if (corps.modeles !== undefined) {
+    const m = (corps.modeles && typeof corps.modeles === 'object' ? corps.modeles : {}) as Record<string, unknown>
+    if (JURES.every((j) => (MODELES as readonly unknown[]).includes(m[j])) && Object.keys(m).length === JURES.length) modeles = m as ModelesJures
+    else e.modeles = 'Choisis Opus, Sonnet ou Haiku pour chacun des quatre jurés.'
+  }
+
   const iso = (t: number | null) => (t === null ? '' : new Date(t).toISOString())
   return {
     campagne: {
       slug, titre, theme, brief, criteres,
       ouverture_inscriptions: iso(o), cloture_depot: iso(c), date_resultats: iso(r), max_participants: typeof max === 'number' ? max : 0,
+      ...(modeles ? { modeles } : {}),
     },
     erreurs: e,
   }
@@ -221,6 +244,7 @@ export type ParticipationAdmin = {
 export type CampagneAdmin = {
   id: string; slug: string; titre: string; theme: string; brief: string; criteres: CritereAdmin[]; statut: string
   ouverture_inscriptions: string; cloture_depot: string; date_resultats: string; max_participants: number; regles_figees_le: string | null
+  modeles: ModelesJures
 }
 
 export type DetailCampagne = {

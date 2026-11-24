@@ -6,6 +6,8 @@ const props = defineProps<{
   figees?: boolean
   // Le slug est l'adresse publique : il ne change plus une fois la campagne visible.
   slugFige?: boolean
+  // Modèles des jurés : modifiables jusqu'à la délibération.
+  modelesFiges?: boolean
   erreurs: Record<string, string>
   occupe: boolean
 }>()
@@ -22,6 +24,7 @@ const f = reactive({
   cloture_depot: i ? versChampLocal(i.cloture_depot) : '',
   date_resultats: i ? versChampLocal(i.date_resultats) : '',
   max_participants: (i?.max_participants ?? '') as number | '',
+  modeles: { ...(i?.modeles ?? MODELES_PAR_DEFAUT) },
 })
 const locales = ref<ErreursCampagne>({})
 const toutes = computed<Record<string, string | undefined>>(() => ({ ...props.erreurs, ...locales.value }))
@@ -150,6 +153,21 @@ const retirer = (cle: string) => (f.criteres = f.criteres.filter((c) => c.cle !=
       <input id="max_participants" v-model.number="f.max_participants" type="number" min="1" max="1000" step="1" required v-bind="champ('max_participants', 'aide-max')">
       <p v-if="toutes.max_participants" id="err-max_participants" class="champ__erreur">{{ toutes.max_participants }}</p>
     </div>
+
+    <fieldset class="groupe">
+      <legend>Modèle de chaque juré</legend>
+      <p id="aide-modeles" class="champ__aide">
+        Le modèle Claude utilisé par les audits de ce juré : il décide du coût de la délibération.
+        <template v-if="modelesFiges">Figé depuis le passage en délibération.</template>
+      </p>
+      <div v-for="j in JURES" :key="j" class="champ">
+        <label :for="`modele-${j}`">{{ NOM_JURE[j] }}</label>
+        <select :id="`modele-${j}`" v-model="f.modeles[j]" :disabled="modelesFiges" aria-describedby="aide-modeles">
+          <option v-for="m in MODELES" :key="m" :value="m">{{ LIBELLE_MODELE[m] }}</option>
+        </select>
+      </div>
+      <p v-if="toutes.modeles" id="err-modeles" class="champ__erreur">{{ toutes.modeles }}</p>
+    </fieldset>
 
     <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ initial ? 'Enregistrer la campagne' : 'Créer le brouillon' }}</button></p>
   </form>
