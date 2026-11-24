@@ -252,3 +252,58 @@ export type DetailCampagne = {
   participations: ParticipationAdmin[]
   candidats: { id: string; pseudo: string; vrai_nom: string }[]
 }
+
+// --- Tableau de bord ------------------------------------------------------------------------
+
+export type CampagneTableau = {
+  id: string; slug: string; titre: string; statut: string; ouverture_inscriptions: string; cloture_depot: string; date_resultats: string
+  max_participants: number; inscrits: number; receptions_en_attente: number; receptions_refusees: number; depots: number; votes_verrouilles: number
+}
+export type TableauDeBord = {
+  comptes: Record<string, number>; plafond_comptes: number | null; plafond_depense_usd: number; campagnes: CampagneTableau[]
+}
+export type Tache = { urgent: boolean; texte: string; lien: string }
+
+const pluriel = (n: number, un: string, plusieurs: string) => `${n} ${n > 1 ? plusieurs : un}`
+
+// Ce qui attend l'organisateur, déduit des chiffres et des dates ; les urgences d'abord. Rien n'est fait à sa place.
+export function tachesAdmin(t: TableauDeBord, maintenant = Date.now()): Tache[] {
+  const taches: Tache[] = []
+  const verifies = t.comptes.verifie ?? 0
+  if (verifies) taches.push({ urgent: true, texte: `${pluriel(verifies, 'compte vérifié attend', 'comptes vérifiés attendent')} ta décision.`, lien: '/admin/comptes?panneau=verifie' })
+  const attente = t.comptes.liste_attente ?? 0
+  if (attente) taches.push({ urgent: false, texte: `${pluriel(attente, 'compte est', 'comptes sont')} en liste d'attente.`, lien: '/admin/comptes?panneau=liste_attente' })
+
+  for (const c of t.campagnes) {
+    const page = `/admin/campagnes/${c.slug}`
+    const passee = (iso: string) => Date.parse(iso) <= maintenant
+    if (c.statut === 'brouillon' && passee(c.ouverture_inscriptions)) {
+      taches.push({ urgent: true, texte: `${c.titre} : la date d'ouverture est passée, la campagne est encore en brouillon.`, lien: `${page}?panneau=etape` })
+    }
+    if ((c.statut === 'inscriptions' || c.statut === 'depot') && passee(c.cloture_depot)) {
+      taches.push({ urgent: true, texte: `${c.titre} : le dépôt est clos, passe en délibération.`, lien: `${page}?panneau=etape` })
+    }
+    if (c.receptions_en_attente) {
+      taches.push({ urgent: false, texte: `${c.titre} : ${pluriel(c.receptions_en_attente, 'envoi attend', 'envois attendent')} le contrôle du dépôt.`, lien: `${page}?panneau=depots` })
+    }
+    const aVoter = c.depots - c.votes_verrouilles
+    if ((c.statut === 'deliberation' || c.statut === 'prete') && aVoter > 0) {
+      taches.push({ urgent: true, texte: `${c.titre} : ${pluriel(aVoter, 'vote du Boss reste', 'votes du Boss restent')} à verrouiller.`, lien: `${page}?panneau=depots` })
+    }
+    if (c.statut === 'deliberation' && c.depots > 0 && aVoter === 0) {
+      taches.push({ urgent: false, texte: `${c.titre} : tous les votes sont verrouillés, tu peux passer à la relecture.`, lien: `${page}?panneau=etape` })
+    }
+    if (c.statut === 'prete' && passee(c.date_resultats)) {
+      taches.push({ urgent: true, texte: `${c.titre} : la date des résultats est passée, publie-les.`, lien: `${page}?panneau=etape` })
+    }
+  }
+  return taches.sort((a, b) => Number(b.urgent) - Number(a.urgent))
+}
+
+// La prochaine date qui compte pour une campagne, selon son étape.
+export function prochaineEcheance(c: CampagneTableau): { libelle: string; date: string } | null {
+  if (c.statut === 'brouillon') return { libelle: 'Ouverture des inscriptions', date: c.ouverture_inscriptions }
+  if (c.statut === 'inscriptions' || c.statut === 'depot') return { libelle: 'Clôture du dépôt', date: c.cloture_depot }
+  if (c.statut === 'deliberation' || c.statut === 'prete') return { libelle: 'Résultats', date: c.date_resultats }
+  return null
+}

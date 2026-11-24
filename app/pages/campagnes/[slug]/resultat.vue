@@ -22,7 +22,7 @@ const mascotte = (jure: string) => jure as Jure
 <template>
   <section class="section" aria-labelledby="resultat-h">
     <div class="wrap texte resultats">
-      <p class="etat">{{ campagne.titre }}</p>
+      <p><NuxtLink class="retour" :to="`/campagnes/${slug}`">← {{ campagne.titre }}</NuxtLink></p>
       <h1 id="resultat-h">Ton entretien avec le jury</h1>
 
       <p v-if="!publie">Les résultats de cette campagne ne sont pas encore publiés. <NuxtLink :to="`/campagnes/${slug}`">Retour à la campagne</NuxtLink></p>
@@ -37,18 +37,24 @@ const mascotte = (jure: string) => jure as Jure
       <p v-else-if="error || !data" role="alert" class="avis avis--erreur">Ton entretien ne peut pas être lu pour le moment. Réessaie dans un instant.</p>
 
       <template v-else>
-        <p v-if="data.ligne" class="lead">
-          <template v-if="data.ligne.disqualifie">Ton dépôt a été disqualifié.</template>
-          <template v-else-if="data.ligne.rang !== null">Tu termines {{ ordinal(data.ligne.rang) }}.</template>
-          <template v-else>Ton dépôt n'est pas classé.</template>
-        </p>
+        <div v-if="data.ligne" class="verdict-final" :data-rang="data.ligne.rang ?? undefined">
+          <p class="verdict-final__rang">
+            <template v-if="data.ligne.disqualifie">Ton dépôt a été disqualifié.</template>
+            <template v-else-if="data.ligne.rang !== null">Tu termines <strong>{{ ordinal(data.ligne.rang) }}</strong></template>
+            <template v-else>Ton dépôt n'est pas classé.</template>
+          </p>
+          <template v-if="data.ligne.score_final !== null">
+            <p class="verdict-final__score"><strong>{{ formaterNombre(data.ligne.score_final) }}</strong> sur 100</p>
+            <JaugePixel :valeur="data.ligne.score_final" :max="100" />
+          </template>
+        </div>
         <p v-if="data.ligne?.disqualifie" class="avis">Justification de l'organisateur, publique : {{ data.ligne.justification }}</p>
         <p v-if="data.ligne?.justification_departage" class="avis">À égalité de score, l'organisateur t'a départagé. Justification publique : {{ data.ligne.justification_departage }}</p>
 
         <template v-if="data.demande">
           <h2>Ta demande</h2>
           <!-- Texte du candidat : rendu comme du texte, jamais comme du HTML. -->
-          <p class="brief">{{ data.demande }}</p>
+          <blockquote class="replique"><p>{{ data.demande }}</p></blockquote>
         </template>
 
         <h2>L'entretien</h2>
@@ -61,8 +67,11 @@ const mascotte = (jure: string) => jure as Jure
               <blockquote v-if="sortie(j.jure)!.replique" class="replique"><p>{{ sortie(j.jure)!.replique }}</p></blockquote>
             </template>
             <p v-else class="note-claire">Ce juré n'a pas rendu d'audit pour ton dépôt.</p>
-            <ul class="criteres">
-              <li v-for="c in critereDe(j.jure)" :key="c.cle"><span>{{ c.libelle }}</span><span>{{ noteDe(c) ?? '—' }} sur 10</span></li>
+            <ul class="criteres criteres--notes">
+              <li v-for="c in critereDe(j.jure)" :key="c.cle">
+                <span>{{ c.libelle }}</span><span>{{ noteDe(c) ?? '—' }} sur 10</span>
+                <JaugePixel v-if="noteDe(c) !== null" :valeur="Number(noteDe(c))" :max="10" :cases="10" />
+              </li>
             </ul>
           </div>
         </article>

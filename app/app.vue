@@ -1,5 +1,6 @@
 <script setup lang="ts">
 const organisateur = useOrganisateur()
+const user = useSupabaseUser()
 </script>
 
 <template>
@@ -14,7 +15,7 @@ const organisateur = useOrganisateur()
           <NuxtLink to="/charte">Charte</NuxtLink>
           <NuxtLink v-if="organisateur" to="/admin">Administration</NuxtLink>
         </nav>
-        <NuxtLink class="btn btn--primary" to="/compte">Créer mon compte</NuxtLink>
+        <NuxtLink class="btn btn--primary" to="/compte">{{ user ? 'Mon compte' : 'Créer mon compte' }}</NuxtLink>
       </div>
     </header>
     <main id="contenu" tabindex="-1"><NuxtLayout><NuxtPage /></NuxtLayout></main>

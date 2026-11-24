@@ -116,8 +116,9 @@ async function retirer() {
 <template>
   <section class="section">
     <div class="wrap texte">
-      <p><NuxtLink :to="`/campagnes/${slug}`">← {{ campagne.titre }}</NuxtLink></p>
+      <p><NuxtLink class="retour" :to="`/campagnes/${slug}`">← {{ campagne.titre }}</NuxtLink></p>
       <h1>Mon dépôt</h1>
+      <InvitePrompt v-if="depotOuvert(campagne)" commande="$ code-tank deposer">dépôt ouvert jusqu'au {{ formaterDate(campagne.cloture_depot) }}</InvitePrompt>
 
       <div role="status" aria-live="polite"><p v-if="message" class="avis">{{ message }}</p></div>
       <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
@@ -136,27 +137,35 @@ async function retirer() {
       <template v-else>
         <template v-if="reception">
           <h2>État de ta réception</h2>
-          <p v-if="reception.etat === 'en_attente'" class="etat" data-etat="en_attente">
-            Reçu, en cours de contrôle (envoyé le {{ formaterDate(reception.recue_le) }}).
-          </p>
-          <template v-else-if="reception.etat === 'refusee'">
-            <p class="etat" data-etat="refusee">Ton archive a été refusée. Corrige ce qui suit, puis redépose.</p>
-            <ul>
-              <li v-for="(m, i) in reception.motifs_refus" :key="i">{{ m.message }}</li>
-            </ul>
-          </template>
-          <p v-else class="etat" data-etat="acceptee">Ton archive est acceptée. Voici ton reçu.</p>
+          <div class="terminal" :data-etat="reception.etat">
+            <p class="terminal__barre" aria-hidden="true"><i /><i /><i /><span>reception.log</span></p>
+            <div class="terminal__corps">
+              <p v-if="reception.etat === 'en_attente'" class="etat" data-etat="en_attente">
+                Reçu, en cours de contrôle (envoyé le {{ formaterDate(reception.recue_le) }}).
+              </p>
+              <template v-else-if="reception.etat === 'refusee'">
+                <p class="etat" data-etat="refusee">Ton archive a été refusée. Corrige ce qui suit, puis redépose.</p>
+                <ul>
+                  <li v-for="(m, i) in reception.motifs_refus" :key="i">{{ m.message }}</li>
+                </ul>
+              </template>
+              <p v-else class="etat" data-etat="acceptee">Ton archive est acceptée. Voici ton reçu.</p>
+            </div>
+          </div>
         </template>
 
         <template v-if="recu">
           <h2>Reçu de ton dépôt accepté</h2>
-          <dl class="dates">
-            <div><dt>Fichiers retenus</dt><dd>{{ recu.nb_fichiers }}</dd></div>
-            <div><dt>Fichiers exclus</dt><dd>{{ recu.fichiers_exclus.length }}</dd></div>
-            <div><dt>Taille</dt><dd>{{ recu.nb_tokens.toLocaleString('fr-FR') }} tokens</dd></div>
-            <div><dt>Empreinte SHA-256</dt><dd class="empreinte">{{ recu.sha256 }}</dd></div>
-            <div><dt>Déposé le</dt><dd>{{ formaterDate(recu.depose_le) }}</dd></div>
-          </dl>
+          <div class="terminal">
+            <p class="terminal__barre" aria-hidden="true"><i /><i /><i /><span>recu.txt</span></p>
+            <dl class="dates terminal__corps">
+              <div><dt>Fichiers retenus</dt><dd>{{ recu.nb_fichiers }}</dd></div>
+              <div><dt>Fichiers exclus</dt><dd>{{ recu.fichiers_exclus.length }}</dd></div>
+              <div><dt>Taille</dt><dd>{{ recu.nb_tokens.toLocaleString('fr-FR') }} tokens</dd></div>
+              <div><dt>Empreinte SHA-256</dt><dd class="empreinte">{{ recu.sha256 }}</dd></div>
+              <div><dt>Déposé le</dt><dd>{{ formaterDate(recu.depose_le) }}</dd></div>
+            </dl>
+          </div>
           <p v-if="reception && reception.etat !== 'acceptee'" class="note-claire">Ce reçu reste valable tant que ton nouvel envoi n'est pas accepté.</p>
         </template>
 
@@ -173,11 +182,20 @@ async function retirer() {
         </template>
 
         <template v-if="depotOuvert(campagne)">
-          <h2>{{ reception || recu ? 'Redéposer' : 'Déposer ton code' }}</h2>
-          <p v-if="reception || recu">Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>
-          <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="Boolean(reception || recu)" :reutilisation="accord" @envoyer="deposer" />
+          <details v-if="reception || recu" class="bloc redepot" :open="etape > 0 || Boolean(alerte) || Object.keys(erreurs).length > 0">
+            <summary>Redéposer une nouvelle version</summary>
+            <div class="bloc__corps">
+              <p>Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>
+              <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" redepot :reutilisation="accord" @envoyer="deposer" />
+            </div>
+          </details>
+          <template v-else>
+            <h2>Déposer ton code</h2>
+            <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="false" :reutilisation="accord" @envoyer="deposer" />
+          </template>
         </template>
-        <p v-else>Le dépôt n'est pas ouvert pour cette campagne.</p>
+        <p v-else-if="STATUTS_RESULTATS.includes(campagne.statut)" class="btns"><NuxtLink class="btn btn--primary" :to="`/campagnes/${slug}/resultat`">Voir mon entretien et mon rapport</NuxtLink></p>
+        <p v-else>Le dépôt est clos pour cette campagne.</p>
 
         <template v-if="peutRetirer">
           <h2>Retirer mon dépôt</h2>

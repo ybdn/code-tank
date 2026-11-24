@@ -19,22 +19,33 @@ const jures: { nom: string; jure: Jure; role: string; points: string }[] = [
 // Lue par le serveur (les brouillons sont cachés par la RLS) ; en cas d'erreur, `campagnes` reste vide.
 const compteSupprime = useRoute().query.compte === 'supprime'
 const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'campagnes' })
+const ouverte = computed(() => campagnes.value?.find((c) => depotOuvert(c)))
+const rebours = (iso: string) => {
+  const j = joursAvant(iso)
+  return j > 1 ? `J-${j}` : j === 1 ? 'Demain' : 'Aujourd\'hui'
+}
 </script>
 
 <template>
   <div>
     <section class="section hero" aria-labelledby="hero-h">
-      <div class="wrap hero__in">
-        <p v-if="compteSupprime" role="status" class="avis">Ton compte est supprimé. Tes données personnelles sont effacées ; seule reste, s'il y en a une, ta ligne anonyme d'un classement publié.</p>
-        <h1 id="hero-h">Concours de code jugé par Claude</h1>
-        <p class="lead">
-          Un thème imposé, le même pour tous. Tu déposes ton projet, cinq jurés le notent, et chaque note cite le
-          fichier et la ligne qui la justifient.
-        </p>
-        <p class="btns">
-          <NuxtLink class="btn btn--primary" to="/compte">Créer mon compte</NuxtLink>
-          <NuxtLink class="btn" to="/charte">Lire la charte</NuxtLink>
-        </p>
+      <div class="wrap hero__grille">
+        <div class="hero__in">
+          <p v-if="compteSupprime" role="status" class="avis">Ton compte est supprimé. Tes données personnelles sont effacées ; seule reste, s'il y en a une, ta ligne anonyme d'un classement publié.</p>
+          <InvitePrompt :commande="`$ code-tank ${ouverte ? `--campagne ${ouverte.slug}` : '--prochaine'}`">
+            {{ ouverte ? `${ouverte.titre} : dépôt ouvert jusqu'au ${formaterDate(ouverte.cloture_depot)}` : 'la prochaine campagne arrive' }}
+          </InvitePrompt>
+          <h1 id="hero-h">Concours de code jugé par Claude</h1>
+          <p class="lead">
+            Un thème imposé, le même pour tous. Tu déposes ton projet, cinq jurés le notent, et chaque note cite le
+            fichier et la ligne qui la justifient.
+          </p>
+          <p class="btns">
+            <NuxtLink class="btn btn--primary" :to="ouverte ? `/campagnes/${ouverte.slug}` : '/compte'">{{ ouverte ? 'Voir la campagne ouverte' : 'Créer mon compte' }}</NuxtLink>
+            <NuxtLink class="btn" to="/charte">Lire la charte</NuxtLink>
+          </p>
+        </div>
+        <PlateauJury />
       </div>
     </section>
 
@@ -45,10 +56,11 @@ const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'c
         <p v-else-if="!campagnes.length" class="vide">Aucune campagne ouverte pour l'instant.</p>
         <ul v-else class="cartes">
           <li v-for="c in campagnes" :key="c.slug" class="carte">
-            <p class="carte__statut">{{ LIBELLE_STATUT[c.statut] }}</p>
+            <p v-if="depotOuvert(c)" class="carte__rebours">{{ rebours(c.cloture_depot) }}</p>
             <h3><NuxtLink :to="`/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></h3>
             <p>Thème : {{ c.theme }}</p>
-            <p class="carte__dates">Dépôt jusqu'au {{ formaterDate(c.cloture_depot) }}</p>
+            <FriseEtapes :statut="c.statut" publique compacte />
+            <p v-if="depotOuvert(c)" class="carte__dates">Dépôt jusqu'au {{ formaterDate(c.cloture_depot) }}</p>
           </li>
         </ul>
       </div>
@@ -60,14 +72,17 @@ const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'c
         <ol class="etapes">
           <li>
             <h3>Crée ton compte</h3>
+            <code class="etapes__cmd" aria-hidden="true">$ code-tank login --github</code>
             <p>Connecte-toi avec GitHub et vérifie ton e-mail. L'organisateur autorise chaque compte à la main.</p>
           </li>
           <li>
             <h3>Dépose ton code</h3>
+            <code class="etapes__cmd" aria-hidden="true">$ code-tank deposer projet.zip</code>
             <p>Une archive zip et une courte présentation. Le dépôt est contrôlé avant d'être lu, et jamais exécuté.</p>
           </li>
           <li>
             <h3>Reçois le verdict</h3>
+            <code class="etapes__cmd" aria-hidden="true">$ code-tank verdict</code>
             <p>Un entretien avec le jury, tes notes par critère avec leurs preuves, et le classement final public.</p>
           </li>
         </ol>
@@ -75,19 +90,17 @@ const { data: campagnes } = await useFetch('/api/campagnes', { retry: 0, key: 'c
     </section>
 
     <section id="jury" class="section section--clair" aria-labelledby="jury-h">
-      <div class="wrap jury">
-        <div>
-          <h2 id="jury-h">Cinq jurés</h2>
-          <ul class="rows">
-            <li v-for="j in jures" :key="j.nom">
-              <span class="rows__nom">{{ j.nom }}</span>
-              <p>{{ j.role }}</p>
-              <span class="rows__val">{{ j.points }}</span>
-            </li>
-          </ul>
-          <p class="note">Critères et poids par défaut ; ils sont publiés à l'ouverture de chaque campagne.</p>
-        </div>
-        <PlateauJury />
+      <div class="wrap">
+        <h2 id="jury-h">Cinq jurés</h2>
+        <ul class="jures">
+          <li v-for="j in jures" :key="j.nom" :data-jure="j.jure">
+            <div class="jures__tete"><MascottePixel :jure="j.jure" /></div>
+            <span class="jures__nom">{{ j.nom }}</span>
+            <span class="jures__val">{{ j.points }}</span>
+            <p>{{ j.role }}</p>
+          </li>
+        </ul>
+        <p class="note">Critères et poids par défaut ; ils sont publiés à l'ouverture de chaque campagne.</p>
       </div>
     </section>
   </div>
