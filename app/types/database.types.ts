@@ -27,14 +27,14 @@ isOneToOne: false
                   ]
                 },"campagne": {
                   Row: {
-                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id": string,"max_participants": number,"ouverture_inscriptions": string,"publiee_le": string | null,"regles_figees_le": string | null,"slug": string,"statut": Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
+                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id": string,"max_participants": number,"modeles": NonNullable<Json>,"ouverture_inscriptions": string,"publiee_le": string | null,"regles_figees_le": string | null,"slug": string,"statut": Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id"?: string,"max_participants": number,"ouverture_inscriptions": string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug": string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
+                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id"?: string,"max_participants": number,"modeles"?: NonNullable<Json>,"ouverture_inscriptions": string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug": string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
                   }
                   Update: {
-                    "brief"?: string,"cloture_depot"?: string,"criteres"?: NonNullable<Json>,"date_resultats"?: string,"id"?: string,"max_participants"?: number,"ouverture_inscriptions"?: string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug"?: string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme"?: string,"titre"?: string
+                    "brief"?: string,"cloture_depot"?: string,"criteres"?: NonNullable<Json>,"date_resultats"?: string,"id"?: string,"max_participants"?: number,"modeles"?: NonNullable<Json>,"ouverture_inscriptions"?: string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug"?: string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme"?: string,"titre"?: string
                   }
                   Relationships: [
                     
