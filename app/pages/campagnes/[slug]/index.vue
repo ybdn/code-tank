@@ -83,7 +83,7 @@ async function sedesinscrire() {
       <header class="campagne__tete">
         <FriseEtapes :statut="campagne.statut" publique />
         <h1>{{ campagne.titre }}</h1>
-        <p class="lead">Thème imposé : {{ campagne.theme }}</p>
+        <p class="lead">Thème imposé&nbsp;: {{ campagne.theme }}</p>
       </header>
 
       <div class="campagne__grille">

@@ -260,7 +260,7 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
   it('refuse un statut hors ordre et des poids qui ne font pas 100, puis ouvre les inscriptions', async () => {
     const hors = await statut('depot')
     expect(hors.statut).toBe(409)
-    expect(hors.json.statusMessage).toContain('Transition de statut interdite')
+    expect(hors.json.statusMessage).toBe('Transition de statut interdite : de « Brouillon » à « Dépôt ouvert ».')
     expect((await statut('nimporte')).statut).toBe(422)
 
     const lourd = corps(slug)
@@ -312,9 +312,9 @@ describe('campagnes, dépôts, vote du Boss et publication', () => {
 
     const html = (await page(`/admin/campagnes/${slug}`, orga)).texte
     expect(html).toContain('Contradiction avec la déclaration')
-    expect(html).toContain('Trace non couverte par la déclaration : cursor · dossier : .cursor/rules:4, 1 occurrence.')
-    expect(html).not.toContain('Trace non couverte par la déclaration : claude')
-    expect(html).toContain('postinstall : package.json:12')
+    expect(html).toContain('Trace non couverte par la déclaration : cursor · dossier\u00a0: .cursor/rules:4, 1 occurrence.')
+    expect(html).not.toContain('Trace non couverte par la déclaration : claude')
+    expect(html).toContain('postinstall\u00a0: package.json:12')
     expect(html).not.toContain('[object Object]')
     expect(html).toContain('Aucun dépôt n&#39;est exécuté, par personne')
     expect(html).toContain('Mon &lt;b&gt;minuteur&lt;/b&gt;')

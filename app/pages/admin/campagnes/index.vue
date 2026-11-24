@@ -20,18 +20,19 @@ async function creer(corps: CorpsCampagne) {
         <template #liste>
           <h2>Toutes les campagnes</h2>
           <p v-if="!campagnes.length" class="vide">Aucune campagne pour l'instant.</p>
-          <div v-else class="tableau" role="region" aria-label="Campagnes" tabindex="0">
-            <table>
-              <thead>
-                <tr><th scope="col">Campagne</th><th scope="col">Statut</th><th scope="col">Inscriptions dès le</th><th scope="col">Clôture du dépôt</th><th scope="col">Participants</th></tr>
+          <div v-else class="tableau tableau--liste" role="region" aria-label="Campagnes" tabindex="0">
+            <!-- Rôles explicites : au téléphone, le tableau passe en fiches (display: block), qui sans eux perdraient la sémantique de tableau. -->
+            <table role="table">
+              <thead role="rowgroup">
+                <tr role="row"><th scope="col" role="columnheader">Campagne</th><th scope="col" role="columnheader">Statut</th><th scope="col" role="columnheader">Inscriptions dès le</th><th scope="col" role="columnheader">Clôture du dépôt</th><th scope="col" role="columnheader">Participants</th></tr>
               </thead>
-              <tbody>
-                <tr v-for="c in campagnes" :key="c.id">
-                  <th scope="row"><NuxtLink :to="`/admin/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></th>
-                  <td>{{ STATUT_ADMIN[c.statut] }}</td>
-                  <td>{{ formaterDate(c.ouverture_inscriptions) }}</td>
-                  <td>{{ formaterDate(c.cloture_depot) }}</td>
-                  <td>{{ c.max_participants }}</td>
+              <tbody role="rowgroup">
+                <tr v-for="c in campagnes" :key="c.id" role="row">
+                  <th scope="row" role="rowheader"><NuxtLink :to="`/admin/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></th>
+                  <td role="cell">{{ STATUT_ADMIN[c.statut] }}</td>
+                  <td role="cell" data-label="Inscriptions dès le">{{ formaterDateCourte(c.ouverture_inscriptions) }}</td>
+                  <td role="cell" data-label="Clôture du dépôt">{{ formaterDateCourte(c.cloture_depot) }}</td>
+                  <td role="cell" data-label="Participants">{{ c.max_participants }}</td>
                 </tr>
               </tbody>
             </table>

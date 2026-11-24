@@ -7,7 +7,7 @@ onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
 </script>
 
 <template>
-  <div>
+  <div class="site">
     <a class="skip" href="#contenu">Aller au contenu</a>
     <header class="nav">
       <div class="wrap nav__bar">

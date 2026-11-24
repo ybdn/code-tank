@@ -8,10 +8,10 @@ type Etat = 'email_a_verifier' | 'verifie' | 'liste_attente' | 'autorise' | 'ref
 type Compte = Profil & { email_verifie_le: string | null; etat: Etat }
 
 const ETATS: Record<Etat, string> = {
-  email_a_verifier: 'Vérifie ton e-mail : ton compte attend le clic sur le lien que nous t\'avons envoyé.',
-  verifie: 'En attente d\'autorisation : ton e-mail est vérifié, l\'organisateur autorise chaque compte à la main.',
-  liste_attente: 'Liste d\'attente : le nombre de comptes est atteint. L\'organisateur choisit qui monte, ce n\'est pas l\'ordre d\'arrivée.',
-  autorise: 'Compte autorisé : tu peux t\'inscrire à une campagne dès qu\'elle est ouverte.',
+  email_a_verifier: 'Vérifie ton e-mail\u00a0: ton compte attend le clic sur le lien que nous t\'avons envoyé.',
+  verifie: 'En attente d\'autorisation\u00a0: ton e-mail est vérifié, l\'organisateur autorise chaque compte à la main.',
+  liste_attente: 'Liste d\'attente\u00a0: le nombre de comptes est atteint. L\'organisateur choisit qui monte, ce n\'est pas l\'ordre d\'arrivée.',
+  autorise: 'Compte autorisé\u00a0: tu peux t\'inscrire à une campagne dès qu\'elle est ouverte.',
   refuse: 'Ta candidature n\'a pas été retenue.',
   ferme: 'Ton compte est fermé.',
 }
@@ -31,6 +31,13 @@ const occupe = ref(false)
 const erreurs = ref<ErreursProfil>({})
 const message = ref('')
 const alerte = ref('')
+// Le message s'affiche en haut de page, loin du bouton cliqué (souvent en bas du formulaire) : on l'amène à l'écran.
+const statut = useTemplateRef<HTMLElement>('statut')
+const erreurGlobale = useTemplateRef<HTMLElement>('erreurGlobale')
+watch([message, alerte], async () => {
+  await nextTick()
+  ;(alerte.value ? erreurGlobale.value : message.value ? statut.value : null)?.scrollIntoView({ block: 'nearest' })
+})
 
 async function charger() {
   const { data, error } = await supabase
@@ -93,7 +100,7 @@ async function creer(corps: Record<string, unknown>) {
   await charger()
   message.value = r.courrielEnvoye
     ? 'Compte créé. Nous venons de t\'envoyer un lien de vérification.'
-    : 'Compte créé, mais l\'e-mail n\'a pas pu partir : utilise « Renvoyer le lien ».'
+    : 'Compte créé, mais l\'e-mail n\'a pas pu partir\u00a0: utilise «\u00a0Renvoyer le lien\u00a0».'
 }
 
 async function modifier(corps: Record<string, unknown>) {
@@ -103,8 +110,8 @@ async function modifier(corps: Record<string, unknown>) {
   message.value = r.courrielEnvoye === null
     ? 'Profil enregistré.'
     : r.courrielEnvoye
-      ? 'Profil enregistré. Ton adresse a changé : un nouveau lien de vérification est parti.'
-      : 'Profil enregistré, mais l\'e-mail n\'a pas pu partir : utilise « Renvoyer le lien ».'
+      ? 'Profil enregistré. Ton adresse a changé\u00a0: un nouveau lien de vérification est parti.'
+      : 'Profil enregistré, mais l\'e-mail n\'a pas pu partir\u00a0: utilise «\u00a0Renvoyer le lien\u00a0».'
 }
 
 async function confirmerAttente() {
@@ -113,7 +120,7 @@ async function confirmerAttente() {
   const { error } = await supabase.rpc('confirmer_attente')
   occupe.value = false
   if (error) alerte.value = error.code === 'P0001' ? error.message : 'La confirmation a échoué. Réessaie dans un instant.'
-  else message.value = 'Merci, c\'est noté : ta candidature reste sur la liste d\'attente.'
+  else message.value = 'Merci, c\'est noté\u00a0: ta candidature reste sur la liste d\'attente.'
 }
 
 async function renvoyer() {
@@ -123,19 +130,19 @@ async function renvoyer() {
 
 <template>
   <section class="section">
-    <div class="wrap texte">
+    <div class="wrap texte texte--etroit">
       <h1>Mon compte</h1>
       <ol v-if="pret && !bloque" class="parcours" aria-label="Ton parcours">
         <li v-for="(e, i) in parcours" :key="e.libelle" :data-etat="e.etat" :aria-current="e.etat === 'courant' ? 'step' : undefined">
           <span class="parcours__num" aria-hidden="true">{{ e.etat === 'fait' ? '✓' : String(i + 1).padStart(2, '0') }}</span>
-          <span>{{ e.libelle }}<span v-if="e.etat === 'fait'" class="sr-only"> : fait</span></span>
+          <span>{{ e.libelle }}<span v-if="e.etat === 'fait'" class="sr-only">&nbsp;: fait</span></span>
         </li>
       </ol>
 
-      <div role="status" aria-live="polite">
+      <div ref="statut" role="status" aria-live="polite">
         <p v-if="message" class="avis">{{ message }}</p>
       </div>
-      <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
+      <p v-if="alerte" ref="erreurGlobale" role="alert" class="avis avis--erreur">{{ alerte }}</p>
 
       <template v-if="!user">
         <p class="lead">
@@ -149,7 +156,7 @@ async function renvoyer() {
       <p v-else-if="!pret">Chargement de ton compte…</p>
 
       <template v-else-if="!compte">
-        <p class="lead">Tu es connecté avec GitHub. Crée ton compte : le profil, la charte et ta majorité.</p>
+        <p class="lead">Tu es connecté avec GitHub. Crée ton compte&nbsp;: le profil, la charte et ta majorité.</p>
         <FormulaireProfil creation :erreurs="erreurs" :occupe="occupe" @envoyer="creer" />
         <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
       </template>
@@ -158,7 +165,7 @@ async function renvoyer() {
         <h2>État</h2>
         <p class="etat etat--console" :data-etat="compte.etat">{{ ETATS[compte.etat] }}</p>
         <p>
-          Pour exercer tes droits sur tes données :
+          Pour exercer tes droits sur tes données&nbsp;:
           <a href="mailto:support@ybdn.io?subject=Code%20Tank%20%E2%80%94%20Mes%20donn%C3%A9es">support@ybdn.io</a>.
         </p>
         <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
@@ -174,7 +181,7 @@ async function renvoyer() {
           <p class="btns"><button class="btn btn--primary" type="button" :disabled="occupe" @click="confirmerAttente">Je suis toujours en attente</button></p>
         </template>
         <p>
-          E-mail de contact : <strong>{{ compte.email_contact }}</strong>
+          E-mail de contact&nbsp;: <strong>{{ compte.email_contact }}</strong>
           ({{ compte.email_verifie_le ? 'vérifié' : 'pas encore vérifié' }}).
         </p>
         <p v-if="!compte.email_verifie_le" class="btns">

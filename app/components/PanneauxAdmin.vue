@@ -7,11 +7,20 @@ const actif = computed(() => {
   const q = route.query.panneau
   return props.panneaux.find((p) => p.id === q)?.id ?? props.panneaux[0]?.id
 })
+// En onglets défilants (écran étroit), l'onglet ouvert peut être hors de vue : on le centre.
+const nav = useTemplateRef<HTMLElement>('nav')
+function montrerActif() {
+  const n = nav.value
+  const a = n?.querySelector<HTMLElement>('[aria-current]')
+  if (n && a && n.scrollWidth > n.clientWidth) n.scrollLeft += a.getBoundingClientRect().left - n.getBoundingClientRect().left - (n.clientWidth - a.offsetWidth) / 2
+}
+onMounted(montrerActif)
+watch(actif, () => nextTick(montrerActif))
 </script>
 
 <template>
   <div class="panneaux">
-    <nav class="panneaux__nav" :aria-label="libelle">
+    <nav ref="nav" class="panneaux__nav" :aria-label="libelle">
       <NuxtLink
         v-for="p in panneaux"
         :key="p.id"
