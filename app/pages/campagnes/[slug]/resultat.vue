@@ -9,7 +9,7 @@ useHead({ title: `Mon entretien · ${campagne.value.titre}`, meta: [{ name: 'rob
 const publie = STATUTS_RESULTATS.includes(campagne.value.statut)
 const { data, error } = await useFetch<ResultatCandidat>(`/api/campagnes/${slug}/resultat`, { retry: 0, key: `resultat-${slug}`, immediate: publie })
 
-const nom = (jure: string) => JURES_CLAUDE.find((j) => j.jure === jure)?.nom ?? jure
+const nom = (jure: string) => JURES_AGENTS.find((j) => j.jure === jure)?.nom ?? jure
 const sortie = (jure: string) => data.value?.jures.find((j) => j.jure === jure)?.sortie
 const critereDe = (jure: string) => (data.value?.criteres ?? []).filter((c) => c.jure === jure)
 const noteDe = (c: Critere) => (c.calcule ? data.value?.ligne?.notes?.[c.cle] : sortie(c.jure)?.criteres.find((x) => x.cle === c.cle)?.note) ?? null
@@ -58,7 +58,7 @@ const mascotte = (jure: string) => jure as Jure
         </template>
 
         <h2>L'entretien</h2>
-        <article v-for="j in JURES_CLAUDE" :key="j.jure" class="jure" :aria-labelledby="`jure-${j.jure}`">
+        <article v-for="j in JURES_AGENTS" :key="j.jure" class="jure" :aria-labelledby="`jure-${j.jure}`">
           <div class="jure__tete"><MascottePixel :jure="mascotte(j.jure)" /></div>
           <div class="jure__corps">
             <h3 :id="`jure-${j.jure}`">{{ j.nom }}</h3>
@@ -83,12 +83,12 @@ const mascotte = (jure: string) => jure as Jure
             <p class="note-claire">Il a noté ton projet sans voir les notes des quatre autres jurés.</p>
             <ul v-if="data.ligne" class="criteres">
               <li><span>Note du Boss</span><span>{{ formaterNombre(data.ligne.note_boss) }} sur 10</span></li>
-              <li><span>Score Claude</span><span>{{ formaterNombre(data.ligne.score_claude) }} sur 100</span></li>
+              <li><span>Score des agents</span><span>{{ formaterNombre(data.ligne.score_claude) }} sur 100</span></li>
               <li><span>Score final</span><strong>{{ formaterNombre(data.ligne.score_final) }} sur 100</strong></li>
             </ul>
             <!-- Commentaire du Boss sur le candidat : texte libre, rendu comme du texte, jamais comme du HTML. -->
             <blockquote v-if="data.commentaire_boss" class="replique"><p>{{ data.commentaire_boss }}</p></blockquote>
-            <p class="note-claire">Score final = deux tiers du score Claude + un tiers de la note du Boss ramenée sur 100.</p>
+            <p class="note-claire">Score final = deux tiers du score des agents + un tiers de la note du Boss ramenée sur 100.</p>
           </div>
         </article>
 

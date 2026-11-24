@@ -31,6 +31,6 @@ export default defineEventHandler(async (event): Promise<ResultatCandidat> => {
     demande: depot.data?.demande?.trim() || null,
     commentaire_boss: vote.data?.commentaire?.trim() || null,
     // Ordre de l'entretien, pas celui de la base.
-    jures: JURES_CLAUDE.flatMap(({ jure }) => rapport.data.filter((a) => a.jure === jure).map((a) => ({ jure, sortie: lireSortie(a.resultat) }))),
+    jures: JURES_AGENTS.flatMap(({ jure }) => rapport.data.filter((a) => a.jure === jure).map((a) => ({ jure, sortie: lireSortie(a.resultat) }))),
   }
 })

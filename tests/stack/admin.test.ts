@@ -173,7 +173,7 @@ describe('réglages et plafond de comptes', () => {
   })
 })
 
-// Archive et audits simulés : le contrôle du zip et les audits Claude vivent hors de ce dépôt.
+// Archive et audits simulés : le contrôle du zip et les audits des agents vivent hors de ce dépôt.
 async function deposerSimule(campagneId: string, pid: string, options: { audit?: boolean } = {}) {
   const chemin = `${campagneId}/${pid}/${crypto.randomUUID()}.zip`
   expect((await admin.storage.from('depots').upload(chemin, zip(40))).error).toBeNull()

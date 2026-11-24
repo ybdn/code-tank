@@ -130,7 +130,7 @@ describe('après publication', () => {
     expect(texte).toContain('Dites-moi si mon découpage tient.')
     expect(texte).toContain('Le Boss')
     expect(texte).toContain('src/minuteur.ts:12')
-    // Texte de Claude : échappé.
+    // Texte des agents : échappé.
     expect(texte).toContain('&lt;img src=x onerror=alert(1)&gt;')
     expect(texte).not.toContain('<img src=x')
     // Commentaire du Boss : celui de A seulement, échappé.

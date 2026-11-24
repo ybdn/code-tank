@@ -1,6 +1,6 @@
 <script setup lang="ts">
 // Une participation vue par l'organisateur : réception, dépôt accepté, alertes, vote du Boss à l'aveugle, puis, le vote
-// verrouillé, audits, réplique, case de réutilisation et décisions. Tout texte venu d'un candidat ou de Claude est interpolé
+// verrouillé, audits, réplique, case de réutilisation et décisions. Tout texte venu d'un candidat ou des agents est interpolé
 // comme du texte, jamais comme du HTML.
 const props = defineProps<{ participation: ParticipationAdmin; campagne: CampagneAdmin }>()
 const emit = defineEmits<{ change: [] }>()
@@ -143,7 +143,7 @@ const champ = (n: string, aide?: string) => ({
       <template v-if="p.depot">
         <h3>Vote du Boss</h3>
         <p v-if="!p.vote?.verrouille_le" class="note-claire">
-          Vote à l'aveugle&nbsp;: tant qu'il n'est pas verrouillé, la note de Claude, le rapport et la case de réutilisation sont absents, car la base les refuse à ta session.
+          Vote à l'aveugle&nbsp;: tant qu'il n'est pas verrouillé, la note des agents, le rapport et la case de réutilisation sont absents, car la base les refuse à ta session.
         </p>
 
         <template v-if="p.vote?.verrouille_le">
@@ -169,7 +169,7 @@ const champ = (n: string, aide?: string) => ({
             </p>
           </form>
           <div v-if="confirmation === 'verrou'" class="avis" role="group" :aria-labelledby="`verrou-${p.id}`">
-            <p :id="`verrou-${p.id}`">Un vote verrouillé ne se modifie plus. Le vote enregistré ({{ p.vote?.note }}/10) sera définitif, et les notes de Claude, les rapports et la case de réutilisation deviendront lisibles.</p>
+            <p :id="`verrou-${p.id}`">Un vote verrouillé ne se modifie plus. Le vote enregistré ({{ p.vote?.note }}/10) sera définitif, et les notes des agents, les rapports et la case de réutilisation deviendront lisibles.</p>
             <p class="btns">
               <button class="btn btn--primary" type="button" :disabled="occupe" @click="verrouiller">{{ occupe ? 'Verrouillage…' : 'Verrouiller définitivement' }}</button>
               <button :id="`annuler-verrou-${p.id}`" class="btn" type="button" :disabled="occupe" @click="annuler">Annuler</button>

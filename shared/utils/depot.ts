@@ -17,7 +17,7 @@ const MAX_NOM_OUTIL = 50
 
 const texte = (v: unknown) => (typeof v === 'string' ? v.trim() : '')
 
-// « Claude Code, Copilot » ou un nom par ligne.
+// « Copilot, Cursor » ou un nom par ligne.
 export const listerOutils = (saisie: string) => saisie.split(/[,\n]/).map((o) => o.trim()).filter(Boolean)
 
 // Contrôle indicatif côté navigateur : la limite du bucket fait foi.

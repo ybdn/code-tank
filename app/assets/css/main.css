@@ -21,7 +21,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+/* La barre de navigation reste en haut : les ancres s'arrêtent sous elle. */
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 16px); }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1rem/1.6 var(--font-text); letter-spacing: .01em; }
 h1, h2, h3, .logo { font-family: var(--font-display); font-weight: 400; letter-spacing: -.05em; word-spacing: -.3em; line-height: 1.1; margin: 0; }
 h1 { font-size: clamp(2.25rem, 6vw, 4.25rem); }
@@ -56,16 +57,18 @@ main:focus { outline: none; }
 }
 .btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
 
-.nav { border-bottom: 1px solid var(--line); }
-.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 68px; }
+:root { --nav-h: 77px; }
+.nav { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 76px; }
 .logo { display: inline-flex; align-items: center; gap: 12px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.25rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
-/* 42 px = 3 px par case. Calage optique mesuré : le chapeau au haut de « ybdn.io », les pieds sur la ligne de base de « Code Tank ». */
-.logo .mascotte { width: 42px; height: 42px; flex: none; translate: 0 -3.5px; }
+/* 48 px = 2 px par case (pixels entiers), centrée dans la barre ; la couronne du Boss déborde au-dessus. */
+.logo .mascotte { width: 48px; height: 48px; flex: none; }
 /* Au survol, la mascotte saute d'une case, comme sur le plateau. */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) { .logo:hover .mascotte { animation: saut .4s steps(1); } }
-@keyframes saut { 0%, 75% { transform: translateY(-3px); } }
-.logo__nom { display: grid; justify-items: start; line-height: 1; }
-.logo__par { margin-bottom: .67em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
+@keyframes saut { 0%, 75% { transform: translateY(-2px); } }
+/* « Code Tank » seul compte dans la hauteur, centré sur l'axe des liens ; « ybdn.io » se pose au-dessus. */
+.logo__nom { position: relative; display: block; line-height: 1; }
+.logo__par { position: absolute; left: 0; bottom: 100%; margin-bottom: .5em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
 .nav__links { display: flex; gap: 0 24px; margin-right: auto; }
 .nav__links a, .legal-links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
 @media (hover: hover) { .legal-links a:hover { text-decoration: underline; } .nav__links a:hover { color: var(--ink); } }
@@ -75,6 +78,7 @@ main:focus { outline: none; }
 .nav__links a.router-link-exact-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 3px; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px); }
 .nav .btn { flex: none; padding: 0 18px; font-size: .92rem; }
 @media (max-width: 52rem) {
+  :root { --nav-h: 100px; }
   .nav__bar { flex-wrap: wrap; gap: 0 16px; padding-top: 10px; }
   .nav .btn { margin-left: auto; }
   .nav__links { order: 3; width: 100%; margin-right: 0; overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--line); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); padding-right: 24px; }
@@ -96,7 +100,7 @@ main:focus { outline: none; }
 .rows__val { grid-column: 2; grid-row: 1; color: var(--clair-muted); font-size: .9rem; text-align: right; }
 .note { color: var(--clair-muted); font-size: .9rem; }
 
-/* Le plateau : lattes orangées, traverse, lampes bleues, fauteuils blancs vides, parquet. */
+/* Le plateau : lattes orangées, traverse, lampes bleues, fauteuils graphite en pixels, parquet. */
 .plateau { position: relative; display: flex; align-items: flex-end; justify-content: space-around; gap: 8px; min-height: 400px; padding: 0 16px 56px; overflow: hidden; border-radius: 12px;
   background:
     linear-gradient(#8a3d17 0 0) 0 40% / 100% 12px no-repeat,
@@ -105,13 +109,16 @@ main:focus { outline: none; }
 .plateau::after { content: ''; position: absolute; inset: auto 0 0; height: 48px; background: #4a2617; border-top: 6px solid #d98a3a; }
 .lampes { position: absolute; inset: 0 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; justify-items: center; padding: 0 16px; }
 .lampes i { width: 32px; height: 8px; background: #3d7fe0; box-shadow: 0 10px 36px 10px rgb(61 127 224 / .35); }
-.siege { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 8px; }
-.siege__dos { width: min(118px, 100%); aspect-ratio: 1 / 1; display: grid; align-items: end; justify-items: center; padding-bottom: 5px; background: #f1ece4; border-radius: 18px 18px 6px 6px; }
-.siege__dos .mascotte { width: 92%; max-width: 108px; height: auto; }
-.siege__table { width: min(80px, 90%); height: 12px; border-radius: 50%; background: #e9dcc6; }
+.siege { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; }
+/* Dossier plus haut que large : la place de la couronne du Boss au-dessus de la capuche. */
+.siege__dos { width: min(112px, 100%); aspect-ratio: 5 / 6; display: grid; align-items: end; justify-items: center; background: #1b1d21; clip-path: var(--pixel); box-shadow: inset 0 6px 0 #2e3138; }
+.siege__dos .mascotte { width: 86%; max-width: 96px; height: auto; }
+/* Assise collée au dossier, pied jusqu'au parquet. */
+.siege__table { width: min(124px, 108%); height: 10px; background: #2e3138; clip-path: var(--pixel); --case: 3px; }
+.siege::after { content: ''; width: 10px; height: 8px; background: #141518; }
 
-/* Les mascottes respirent d'un pixel de leur grille (1/14 de la hauteur), en deux images. */
-@keyframes respire { to { transform: translateY(-7.1429%); } }
+/* Les mascottes respirent d'un pixel de leur grille (1/24 de la hauteur), en deux images. */
+@keyframes respire { to { transform: translateY(-4.1667%); } }
 @keyframes fondu { from { opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) {
   .siege .mascotte { overflow: visible; animation: respire 1.6s steps(2, jump-none) infinite; }
@@ -142,6 +149,15 @@ main:focus { outline: none; }
 /* Sommaire : des cibles de 44 px, sans espace entre elles. */
 .legal .toc li + li { margin-top: 0; }
 .legal .toc a { display: inline-flex; align-items: center; min-height: 44px; }
+/* Grand écran : titre sur toute la largeur, sommaire collant à gauche, texte à droite. */
+@media (min-width: 64rem) {
+  .legal { max-width: 68rem; display: grid; grid-template-columns: 15rem minmax(0, 44rem); column-gap: 64px; align-items: start; }
+  .legal > :first-child { grid-column: 1 / -1; }
+  .legal .toc { position: sticky; top: calc(var(--nav-h) + 24px); font-size: .92rem; }
+  .legal .toc a { color: var(--muted); text-decoration: none; }
+  .legal .toc a:hover { color: var(--ink); text-decoration: underline; }
+  .legal > :last-child { grid-column: 2; }
+}
 .legal .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 .legal table { width: 100%; border-collapse: collapse; text-align: left; min-width: 34rem; }
 .legal :is(th, td) { padding: 12px 16px; vertical-align: top; border-bottom: 1px solid var(--line); }
@@ -149,9 +165,10 @@ main:focus { outline: none; }
 
 .footer { border-top: 1px solid var(--line); padding-block: 32px; color: var(--muted); }
 .footer__bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px 32px; }
-.footer__marque { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+/* Marque en colonne (logo, puis la phrase), liens à droite ; tout passe en colonne quand la place manque. */
+.footer__marque { display: grid; justify-items: start; gap: 16px; }
 .footer .logo { color: var(--ink); }
-.footer p { margin: 0; align-self: center; }
+.footer p { margin: 0; font-size: .92rem; }
 .legal-links { display: flex; flex-wrap: wrap; gap: 4px 20px; }
 
 /* Formulaires et état du compte. */
@@ -234,7 +251,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .champ input.court { max-width: 8rem; }
 .empreinte { overflow-wrap: anywhere; }
 
-/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par Claude sont du texte. */
+/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par les agents sont du texte. */
 .resultats :is(p, li, th, td, blockquote) { overflow-wrap: anywhere; }
 .resultats h2 { margin-top: 2.5rem; font-size: clamp(1.5rem, 3vw, 2.25rem); }
 .resultats .btns { margin-top: 1.5rem; }
@@ -298,7 +315,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .console__num { font: 700 .75rem var(--font-display); color: var(--accent); }
 
 .panneaux { display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); gap: 40px; align-items: start; margin-top: 2rem; }
-.panneaux__nav { position: sticky; top: 16px; display: grid; gap: 4px; }
+.panneaux__nav { position: sticky; top: calc(var(--nav-h) + 16px); display: grid; gap: 4px; }
 .panneaux__nav a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 12px 8px 16px; text-decoration: none; color: var(--muted); clip-path: var(--pixel); }
 @media (hover: hover) { .panneaux__nav a:hover { color: var(--ink); background: var(--surface); } }
 .panneaux__nav a[aria-current] { color: var(--ink); background: var(--surface); box-shadow: inset 4px 0 0 var(--accent); }
@@ -474,7 +491,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .criteres-jauges { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .criteres-jauges li { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; }
 .criteres-jauges strong { font-family: var(--font-display); }
-.place { position: sticky; top: 24px; display: grid; gap: 16px; padding: 24px; background: var(--trame), var(--surface); }
+.place { position: sticky; top: calc(var(--nav-h) + 24px); display: grid; gap: 16px; padding: 24px; background: var(--trame), var(--surface); }
 .place h2 { font-size: 1.5rem; margin: 0; }
 .place p { margin: 0; }
 .place__rebours { color: var(--muted); }
@@ -545,7 +562,7 @@ h1 + .parcours { margin-top: 2rem; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
 @media (max-width: 24rem) {
   .logo { gap: 8px; font-size: 1rem; }
-  .logo .mascotte { width: 28px; height: 28px; translate: 0 -2px; }
+  .logo .mascotte { width: 24px; height: 24px; }
   .logo__par { margin-bottom: .3em; }
   .nav .btn { padding: 0 14px; }
 }

@@ -1,6 +1,6 @@
 # Code Tank, le site
 
-Site public du concours de code Code Tank, jugé par Claude. Nuxt 4, TypeScript, rendu côté serveur, pnpm.
+Site public du concours de code Code Tank, jugé par ybdn et ses agents. Nuxt 4, TypeScript, rendu côté serveur, pnpm.
 
 Ce lot contient le socle (accueil, charte, politique de confidentialité, mentions légales, en-têtes de sécurité),
 le schéma de la base (`supabase/`, voir plus bas) et les comptes : connexion GitHub par Supabase Auth, création du

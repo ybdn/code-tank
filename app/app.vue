@@ -11,7 +11,7 @@ onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
     <a class="skip" href="#contenu">Aller au contenu</a>
     <header class="nav">
       <div class="wrap nav__bar">
-        <NuxtLink class="logo" to="/" aria-label="Code Tank by ybdn.io, accueil"><MascottePixel jure="sudo" /><span class="logo__nom" aria-hidden="true"><span class="logo__par">ybdn.io</span>Code Tank</span></NuxtLink>
+        <NuxtLink class="logo" to="/" aria-label="Code Tank by ybdn.io, accueil"><MascottePixel jure="boss" /><span class="logo__nom" aria-hidden="true"><span class="logo__par">ybdn.io</span>Code Tank</span></NuxtLink>
         <nav aria-label="Principal" class="nav__links">
           <a href="/#campagnes">Campagnes</a>
           <a href="/#jury">Jury</a>
@@ -25,8 +25,8 @@ onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
     <footer class="footer">
       <div class="wrap footer__bar">
         <div class="footer__marque">
-          <NuxtLink class="logo" to="/" aria-label="Code Tank by ybdn.io, accueil"><MascottePixel jure="sudo" /><span class="logo__nom" aria-hidden="true"><span class="logo__par">ybdn.io</span>Code Tank</span></NuxtLink>
-          <p>Le concours de code jugé par Claude. Code source sous licence AGPL-3.0.</p>
+          <NuxtLink class="logo" to="/" aria-label="Code Tank by ybdn.io, accueil"><MascottePixel jure="boss" /><span class="logo__nom" aria-hidden="true"><span class="logo__par">ybdn.io</span>Code Tank</span></NuxtLink>
+          <p>Le concours de code jugé par ybdn et ses agents. Code source sous licence AGPL-3.0.</p>
         </div>
         <nav aria-label="Informations légales" class="legal-links">
           <NuxtLink to="/charte">Charte</NuxtLink>
