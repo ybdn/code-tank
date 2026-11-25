@@ -113,13 +113,31 @@ describe('campagne du Boss', () => {
     await creer(autre)
   })
 
+  it('deux créations simultanées du même compte : une seule passe (index unique partiel)', async () => {
+    const s = await inscrit()
+    const r = await Promise.all([envoyer('POST', '/api/boss', s.cookie, reglages('Un')), envoyer('POST', '/api/boss', s.cookie, reglages('Deux'))])
+    expect(r.map((x) => x.statut).sort()).toEqual([200, 409])
+    expect(r.find((x) => x.statut === 409)!.json.message).toBe('Tu as déjà une campagne en cours : une seule à la fois.')
+    expect((await lire('/api/boss', s.cookie)).json.campagnes).toHaveLength(1)
+  })
+
+  it('valeurs hors bornes de type : 409 avec le message de la base, jamais 500', async () => {
+    const s = await inscrit()
+    expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), max_participants: 3_000_000_000 }))
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Le nombre de places va de 1 à 10.' }) })
+    expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), date_resultats: '+275760-09-13T00:00:00.000Z' }))
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Les trois dates sont obligatoires.' }) })
+    expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), ouverture_inscriptions: '1900-01-01T00:00:00.000Z' }))
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Les trois dates sont obligatoires.' }) })
+  })
+
   it('un compte en attente ne crée pas de campagne', async () => {
     sql('update public.reglage set mode_acces = \'liste_attente\'')
     try {
       const attente = await inscrit()
       expect(await envoyer('POST', '/api/boss', attente.cookie, reglages()))
         .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Seul un compte actif crée une campagne.' }) })
-      expect((await lire('/api/boss', attente.cookie)).json).toEqual({ campagnes: [] })
+      expect((await lire('/api/boss', attente.cookie)).json).toEqual({ etat: 'en_attente', campagnes: [] })
     } finally {
       sql('update public.reglage set mode_acces = \'ouvert\'')
     }

@@ -200,7 +200,8 @@ create trigger campagne_transition before insert or update of statut on public.c
   for each row execute function public.garder_transition();
 
 -- Contrôle des réglages, commun à creer_campagne et modifier_campagne : messages clairs avant les contraintes de la table,
--- qui restent le dernier mot. Les textes sont contrôlés une fois débarrassés des espaces de bord, comme ils sont enregistrés.
+-- qui restent le dernier mot. Bornes de 30 et 15 jours comptées à l'heure de Paris, comme les contraintes. Les textes
+-- sont contrôlés une fois débarrassés des espaces de bord, comme ils sont enregistrés.
 create function public.verifier_reglages(p_titre text, p_theme text, p_brief text, p_langages text[], p_visibilite text,
   p_role_boss text, p_max_participants integer, p_ouverture timestamptz, p_cloture timestamptz, p_resultats timestamptz)
 returns void
@@ -235,10 +236,10 @@ begin
   if not (p_ouverture < p_cloture and p_cloture < p_resultats) then
     raise exception 'Les dates se suivent : ouverture des inscriptions, clôture du dépôt, puis résultats.';
   end if;
-  if p_cloture > p_ouverture + interval '30 days' then
+  if p_cloture at time zone 'Europe/Paris' > (p_ouverture at time zone 'Europe/Paris') + interval '30 days' then
     raise exception 'La clôture du dépôt tombe au plus 30 jours après l''ouverture des inscriptions.';
   end if;
-  if p_resultats > p_cloture + interval '15 days' then
+  if p_resultats at time zone 'Europe/Paris' > (p_cloture at time zone 'Europe/Paris') + interval '15 days' then
     raise exception 'Les résultats tombent au plus 15 jours après la clôture du dépôt.';
   end if;
   if p_resultats <= now() then

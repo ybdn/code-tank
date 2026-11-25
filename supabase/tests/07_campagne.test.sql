@@ -3,7 +3,7 @@
 -- attente (C), compte suspendu (S), rôle de service. Identité simulée par le rôle et request.jwt.claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(79);
+select plan(92);
 
 insert into auth.users (id, email) values
   ('70000000-0000-4000-8000-00000000000b', 'b@example.org'),
@@ -22,6 +22,10 @@ select is_empty($$
   select r from unnest(array['anon', 'service_role']) r
   where has_table_privilege(r, 'public.campagne', 'select,insert,update,delete,truncate,references,trigger')
 $$, 'aucun droit sur campagne pour anon ni pour le rôle de service');
+select is_empty($$
+  select d from unnest(array['insert', 'update', 'delete', 'truncate', 'references', 'trigger']) d
+  where has_table_privilege('authenticated', 'public.campagne', d)
+$$, 'authenticated : aucune écriture sur campagne');
 select policies_are('public', 'campagne', array['campagne_lecture_boss'], 'campagne : une seule politique, lecture par le Boss');
 select is_empty($$
   select r, f from unnest(array['authenticated']) r, unnest(array[
@@ -114,6 +118,39 @@ select matches(public.creer_campagne('!!!', 'T', 'B', array['Go'], 'invitation',
   '^[0-9a-f]{6}$', 'un titre sans lettre latine ni chiffre donne un slug fait du seul suffixe');
 reset role;
 delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
+
+-- Bornes comptées à l'heure de Paris, session en UTC comme sous PostgREST (changements d'heure de 2027) --------------
+set local timezone = 'UTC';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000e","role":"authenticated"}';
+select lives_ok($$select public.creer_campagne('Hiver', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-10-10 09:00 Europe/Paris', '2027-11-09 09:00 Europe/Paris', '2027-11-20 09:00 Europe/Paris')$$,
+  '30 jours à l''heure de Paris, à travers le passage à l''heure d''hiver (30 j et 1 h en UTC) : accepté');
+reset role;
+delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
+set local role authenticated;
+select lives_ok($$select public.creer_campagne('Hiver', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-10-20 09:00 Europe/Paris', '2027-10-25 09:00 Europe/Paris', '2027-11-09 09:00 Europe/Paris')$$,
+  '15 jours à l''heure de Paris, à travers le passage à l''heure d''hiver : accepté');
+reset role;
+delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
+set local role authenticated;
+select throws_ok($$select public.creer_campagne('Été', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-10 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris', '2027-04-10 09:00 Europe/Paris')$$,
+  'P0001', 'La clôture du dépôt tombe au plus 30 jours après l''ouverture des inscriptions.',
+  '30 jours et 30 min à l''heure de Paris, à travers le passage à l''heure d''été (moins de 30 j en UTC) : refusé');
+select throws_ok($$select public.creer_campagne('Été', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-20 09:00 Europe/Paris', '2027-03-25 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris')$$,
+  'P0001', 'Les résultats tombent au plus 15 jours après la clôture du dépôt.',
+  '15 jours et 30 min à l''heure de Paris, à travers le passage à l''heure d''été : refusé');
+reset role;
+select lives_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('heure-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-10-10 09:00 Europe/Paris', '2027-11-09 09:00 Europe/Paris', '2027-11-24 09:00 Europe/Paris')$$,
+  'contraintes : 30 j puis 15 j à l''heure de Paris à travers l''heure d''hiver, acceptés en session UTC');
+select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('heure-2', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-10 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris', '2027-04-10 09:00 Europe/Paris')$$,
+  '23514', 'new row for relation "campagne" violates check constraint "campagne_duree_depot"', 'contrainte : 30 j et 30 min à l''heure de Paris refusés en session UTC');
+select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('heure-3', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-20 09:00 Europe/Paris', '2027-03-25 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris')$$,
+  '23514', 'new row for relation "campagne" violates check constraint "campagne_duree_resultats"', 'contrainte : 15 j et 30 min à l''heure de Paris refusés en session UTC');
+delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
+reset timezone;
 
 -- Contraintes SQL (écriture directe par postgres) ---------------------------------------------------
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
@@ -209,6 +246,23 @@ insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visib
 select throws_ok($$update public.campagne set statut = 'publiee' where slug = 'expire-1'$$, 'P0001', 'Transition de statut interdite.',
   'brouillon → publiee refusée');
 select lives_ok($$update public.campagne set statut = 'expiree' where slug = 'expire-1'$$, 'brouillon → expiree');
+select lives_ok($$update public.campagne set statut = statut, titre = 'Autre' where slug = 'expire-1'$$, 'sans changement de statut : la mise à jour passe');
+-- expiree depuis ouverte, deliberation et prete.
+insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('expire-2', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() + interval '1 day', now() + interval '2 days');
+update public.campagne set statut = 'ouverte' where slug = 'expire-2';
+select lives_ok($$update public.campagne set statut = 'expiree' where slug = 'expire-2'$$, 'ouverte → expiree');
+insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('expire-3', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() + interval '1 day', now() + interval '2 days');
+update public.campagne set statut = 'ouverte' where slug = 'expire-3';
+update public.campagne set statut = 'deliberation' where slug = 'expire-3';
+select lives_ok($$update public.campagne set statut = 'expiree' where slug = 'expire-3'$$, 'deliberation → expiree');
+insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('expire-4', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() + interval '1 day', now() + interval '2 days');
+update public.campagne set statut = 'ouverte' where slug = 'expire-4';
+update public.campagne set statut = 'deliberation' where slug = 'expire-4';
+update public.campagne set statut = 'prete' where slug = 'expire-4';
+select lives_ok($$update public.campagne set statut = 'expiree' where slug = 'expire-4'$$, 'prete → expiree');
 select throws_ok($$update public.campagne set statut = 'ouverte' where slug = 'expire-1'$$, 'P0001', 'Transition de statut interdite.',
   'expiree est finale');
 
@@ -255,6 +309,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000b","role":"authenticated"}';
 select throws_ok($$select public.supprimer_brouillon(current_setting('t.b2')::uuid)$$, 'P0001', 'Ton compte n''est pas actif.',
   'Boss suspendu : suppression refusée');
+select throws_ok($$select public.modifier_campagne(current_setting('t.b2')::uuid, 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
+  'P0001', 'Ton compte n''est pas actif.', 'Boss suspendu : modification refusée');
 reset role;
 update public.compte set etat = 'actif' where id = '70000000-0000-4000-8000-00000000000b';
 set local role authenticated;

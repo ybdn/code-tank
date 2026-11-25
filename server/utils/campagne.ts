@@ -32,7 +32,13 @@ export async function reglagesDuCorps(event: H3Event) {
   exigerJson(event)
   const c = await readBody(event).catch(() => null) ?? {}
   const texte = (v: unknown) => (typeof v === 'string' ? v : '')
-  const date = (v: unknown) => (typeof v === 'string' && !Number.isNaN(Date.parse(v)) ? new Date(v).toISOString() : null)
+  // Hors bornes raisonnables, la base lèverait une erreur de type (22003, 22007), donc un 500 : la valeur devient vide et la
+  // fonction répond 409 avec son message.
+  const date = (v: unknown) => {
+    const t = typeof v === 'string' ? Date.parse(v) : NaN
+    const annee = new Date(t).getUTCFullYear()
+    return annee >= 2000 && annee <= 2100 ? new Date(t).toISOString() : null
+  }
   return {
     p_titre: texte(c.titre),
     p_theme: texte(c.theme),
@@ -40,7 +46,7 @@ export async function reglagesDuCorps(event: H3Event) {
     p_langages: Array.isArray(c.langages) ? c.langages.map(texte) : [],
     p_visibilite: texte(c.visibilite),
     p_role_boss: texte(c.role_boss),
-    p_max_participants: Number.isInteger(c.max_participants) ? c.max_participants as number : 0,
+    p_max_participants: Number.isSafeInteger(c.max_participants) && c.max_participants >= 0 && c.max_participants <= 1000 ? c.max_participants as number : 0,
     p_ouverture_inscriptions: date(c.ouverture_inscriptions)!,
     p_cloture_depot: date(c.cloture_depot)!,
     p_date_resultats: date(c.date_resultats)!,

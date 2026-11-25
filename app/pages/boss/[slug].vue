@@ -1,19 +1,27 @@
 <script setup lang="ts">
 const route = useRoute()
+const router = useRouter()
 const slug = route.params.slug as string
 // L'API répond 404 à tout autre compte que le Boss, visiteur compris : la page aussi.
 const { data, error, refresh } = await useFetch<CampagneBoss>(`/api/boss/${encodeURIComponent(slug)}`)
 if (error.value?.statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Page introuvable', fatal: true })
 useHead({ title: () => data.value?.titre ?? 'Ma campagne' })
 
-// Réglable en brouillon ou ouverte, tant que les règles ne sont pas figées et la campagne non bloquée.
-const reglable = computed(() => !!data.value && ['brouillon', 'ouverte'].includes(data.value.statut) && !data.value.regles_figees_le && !data.value.bloquee_le)
+// Échue : date des résultats passée ; la base refuse alors toute action du Boss (campagne_vivante).
+const echue = computed(() => !!data.value && Date.parse(data.value.date_resultats) < Date.now())
+// Réglable en brouillon ou ouverte, tant que les règles ne sont pas figées et la campagne ni bloquée ni échue.
+const reglable = computed(() => !!data.value && ['brouillon', 'ouverte'].includes(data.value.statut) && !data.value.regles_figees_le && !data.value.bloquee_le && !echue.value)
 const occupe = ref(false)
 const annonce = ref(route.query.cree ? 'Brouillon créé.' : '')
 const alerte = ref('')
 const titre = useTemplateRef<HTMLElement>('titre')
 const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')
-onMounted(() => { if (route.query.cree) titre.value?.focus() })
+// Le paramètre est retiré après l'annonce : un rechargement ne la répète pas.
+onMounted(() => {
+  if (!route.query.cree) return
+  titre.value?.focus()
+  router.replace({ query: {} })
+})
 
 async function echec(e: unknown) {
   const err = e as { statusCode?: number; data?: { message?: string } }
@@ -68,8 +76,8 @@ async function supprimer() {
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
         <FormulaireCampagne v-if="reglable" :initial="data" :occupe="occupe" @envoyer="enregistrer" />
-        <p v-else>Les réglages ne se modifient plus&nbsp;: {{ data.bloquee_le ? 'la campagne est bloquée.' : 'les règles sont figées à cette étape.' }}</p>
-        <template v-if="data.statut === 'brouillon'">
+        <p v-else>Les réglages ne se modifient plus&nbsp;: {{ data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>
+        <template v-if="data.statut === 'brouillon' && !data.bloquee_le && !echue">
           <h2>Supprimer le brouillon</h2>
           <p>Tu changes d'avis&nbsp;? Le brouillon disparaît pour de bon.</p>
           <p class="btns"><button class="btn btn--danger" type="button" :aria-disabled="occupe" @click="supprimer">Supprimer le brouillon</button></p>
