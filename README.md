@@ -35,7 +35,7 @@ pnpm build
 - `GET /api/boss` : état du compte connecté (`etat`) et ses campagnes, lus sous son JWT (RLS). `POST /api/boss` : crée une campagne en
   brouillon par la RPC `creer_campagne` (compte actif, une seule campagne active ; un brouillon échu passe d'abord en
   `expiree`), renvoie `{ slug }`.
-  `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne (avec `compte_actif`, qui dit à la page si elle propose les actions), son réglage (`modifier_campagne`, brouillon ou ouverte, règles
+  `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne (avec `compte_actif`, qui dit à la page si elle propose les actions, et `inscrits`, lu dans `campagne_phase`), son réglage (`modifier_campagne`, brouillon ou ouverte, règles
   non figées) et la suppression du brouillon (`supprimer_brouillon`), toutes avec le JWT de l'appelant. Tout autre compte
   que le Boss, visiteur compris : **404** ; corps non JSON (`POST`, `PATCH`, `DELETE`) : **415** ; règle métier : **409**.
   `POST /api/boss/[slug]/ouverture` : ouvre le brouillon par `ouvrir_campagne` (mêmes **404**, **415** et **409**).
@@ -129,7 +129,8 @@ Trois migrations datées du même jour (AD-13) :
   bloquée, et publique ou dont l'appelant est le Boss, avec `places_restantes` calculées ; `sinscrire` (campagne publique
   en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
   `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`) ;
-  `modifier_campagne` refuse moins de places que d'inscrits et un Boss inscrit qui deviendrait juge.
+  `modifier_campagne` refuse moins de places que d'inscrits, un Boss inscrit qui deviendrait juge et tout changement de
+  visibilité dès le premier inscrit.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
