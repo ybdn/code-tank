@@ -3,7 +3,7 @@
 -- attente (C), compte suspendu (S), rôle de service. Identité simulée par le rôle et request.jwt.claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(97);
+select plan(104);
 
 insert into auth.users (id, email) values
   ('70000000-0000-4000-8000-00000000000b', 'b@example.org'),
@@ -71,12 +71,12 @@ select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'pub
   'P0001', 'Seul un compte actif crée une campagne.', 'le compte suspendu non plus');
 
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000b","role":"authenticated"}';
-select matches(public.creer_campagne(' Ma campagne d''été ! ', ' Minuteur ', 'Un minuteur de pause.', array[' TypeScript ', 'Go'], 'publique', 'juge', 5,
-  now() + interval '1 day', now() + interval '31 days', now() + interval '46 days'), '^ma-campagne-d-ete-[0-9a-f]{6}$',
+select matches(public.creer_campagne(E'\t Ma campagne d''été !\u00a0\n', ' Minuteur ', 'Un minuteur de pause.', array[' TypeScript ', 'Go'], 'publique', 'juge', 5,
+  ((now() at time zone 'Europe/Paris') + interval '1 day') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '31 days') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '46 days') at time zone 'Europe/Paris'), '^ma-campagne-d-ete-[0-9a-f]{6}$',
   'B crée sa campagne aux bornes (30 j puis 15 j) : slug tiré du titre, suivi de 6 caractères hexadécimaux');
 select results_eq($$select statut, titre, theme, langages, boss_id::text from public.campagne$$,
   $$values ('brouillon', 'Ma campagne d''été !', 'Minuteur', array['TypeScript', 'Go'], '70000000-0000-4000-8000-00000000000b')$$,
-  'en brouillon, textes sans espaces de bord, B en est le Boss');
+  'en brouillon, textes sans blancs de bord (tabulation, espace insécable, retour), B en est le Boss');
 select throws_ok($$select public.creer_campagne('Deux', 'T', 'B', array['Go'], 'invitation', 'joueur', 1, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
   'P0001', 'Tu as déjà une campagne en cours : une seule à la fois.', 'une seconde campagne active est refusée');
 reset role;
@@ -90,6 +90,12 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000e","role":"authenticated"}';
 select throws_ok($$select public.creer_campagne('  ', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
   'P0001', 'Le titre fait 1 à 120 caractères.', 'titre vide refusé');
+select throws_ok($$select public.creer_campagne(E'\t', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
+  'P0001', 'Le titre fait 1 à 120 caractères.', 'titre fait d''une tabulation refusé');
+select throws_ok($$select public.creer_campagne('T', 'T', E'\n\n', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
+  'P0001', 'Le brief fait 1 à 2 000 caractères.', 'brief fait de retours à la ligne refusé');
+select throws_ok($$select public.creer_campagne('T', E'\u00a0', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
+  'P0001', 'Le thème fait 1 à 200 caractères.', 'thème fait d''une espace insécable refusé');
 select throws_ok($$select public.creer_campagne('T', 'T', repeat('x', 2001), array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
   'P0001', 'Le brief fait 1 à 2 000 caractères.', 'brief de plus de 2 000 caractères refusé');
 select throws_ok($$select public.creer_campagne('T', 'T', 'B', array[]::text[], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
@@ -105,12 +111,12 @@ select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'pub
 select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 0, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
   'P0001', 'Le nombre de places va de 1 à 10.', '0 place refusée');
 select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, null, now() + interval '2 days', now() + interval '3 days')$$,
-  'P0001', 'Les trois dates sont obligatoires.', 'date manquante refusée');
+  'P0001', 'Les trois dates sont obligatoires, entre 2000 et 2100.', 'date manquante refusée');
 select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '2 days', now() + interval '1 day', now() + interval '3 days')$$,
   'P0001', 'Les dates se suivent : ouverture des inscriptions, clôture du dépôt, puis résultats.', 'dates dans le désordre refusées');
-select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '31 days 1 second', now() + interval '32 days')$$,
+select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, ((now() at time zone 'Europe/Paris') + interval '1 day') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '31 days 1 second') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '32 days') at time zone 'Europe/Paris')$$,
   'P0001', 'La clôture du dépôt tombe au plus 30 jours après l''ouverture des inscriptions.', 'dépôt de plus de 30 jours refusé');
-select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '17 days 1 second')$$,
+select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, ((now() at time zone 'Europe/Paris') + interval '1 day') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '2 days') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '17 days 1 second') at time zone 'Europe/Paris')$$,
   'P0001', 'Les résultats tombent au plus 15 jours après la clôture du dépôt.', 'résultats plus de 15 jours après la clôture refusés');
 select throws_ok($$select public.creer_campagne('T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() - interval '3 days', now() - interval '2 days', now() - interval '1 day')$$,
   'P0001', 'La date des résultats est déjà passée.', 'campagne déjà échue refusée');
@@ -119,35 +125,36 @@ select matches(public.creer_campagne('!!!', 'T', 'B', array['Go'], 'invitation',
 reset role;
 delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
 
--- Bornes comptées à l'heure de Paris, session en UTC comme sous PostgREST (changements d'heure de 2027) --------------
+-- Bornes comptées à l'heure de Paris (celles des autres tests aussi : aucun test ne dépend du jour d'exécution), session
+-- en UTC comme sous PostgREST ; changements d'heure de 2031, dates lointaines qui restent futures ---------------------
 set local timezone = 'UTC';
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000e","role":"authenticated"}';
-select lives_ok($$select public.creer_campagne('Hiver', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-10-10 09:00 Europe/Paris', '2027-11-09 09:00 Europe/Paris', '2027-11-20 09:00 Europe/Paris')$$,
+select lives_ok($$select public.creer_campagne('Hiver', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-10-05 09:00 Europe/Paris', '2031-11-04 09:00 Europe/Paris', '2031-11-15 09:00 Europe/Paris')$$,
   '30 jours à l''heure de Paris, à travers le passage à l''heure d''hiver (30 j et 1 h en UTC) : accepté');
 reset role;
 delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
 set local role authenticated;
-select lives_ok($$select public.creer_campagne('Hiver', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-10-20 09:00 Europe/Paris', '2027-10-25 09:00 Europe/Paris', '2027-11-09 09:00 Europe/Paris')$$,
+select lives_ok($$select public.creer_campagne('Hiver', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-10-15 09:00 Europe/Paris', '2031-10-20 09:00 Europe/Paris', '2031-11-04 09:00 Europe/Paris')$$,
   '15 jours à l''heure de Paris, à travers le passage à l''heure d''hiver : accepté');
 reset role;
 delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
 set local role authenticated;
-select throws_ok($$select public.creer_campagne('Été', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-10 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris', '2027-04-10 09:00 Europe/Paris')$$,
+select throws_ok($$select public.creer_campagne('Été', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-03-12 09:00 Europe/Paris', '2031-04-11 09:30 Europe/Paris', '2031-04-12 09:00 Europe/Paris')$$,
   'P0001', 'La clôture du dépôt tombe au plus 30 jours après l''ouverture des inscriptions.',
   '30 jours et 30 min à l''heure de Paris, à travers le passage à l''heure d''été (moins de 30 j en UTC) : refusé');
-select throws_ok($$select public.creer_campagne('Été', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-20 09:00 Europe/Paris', '2027-03-25 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris')$$,
+select throws_ok($$select public.creer_campagne('Été', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-03-22 09:00 Europe/Paris', '2031-03-27 09:00 Europe/Paris', '2031-04-11 09:30 Europe/Paris')$$,
   'P0001', 'Les résultats tombent au plus 15 jours après la clôture du dépôt.',
   '15 jours et 30 min à l''heure de Paris, à travers le passage à l''heure d''été : refusé');
 reset role;
 select lives_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
-  values ('heure-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-10-10 09:00 Europe/Paris', '2027-11-09 09:00 Europe/Paris', '2027-11-24 09:00 Europe/Paris')$$,
+  values ('heure-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-10-05 09:00 Europe/Paris', '2031-11-04 09:00 Europe/Paris', '2031-11-19 09:00 Europe/Paris')$$,
   'contraintes : 30 j puis 15 j à l''heure de Paris à travers l''heure d''hiver, acceptés en session UTC');
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
-  values ('heure-2', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-10 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris', '2027-04-10 09:00 Europe/Paris')$$,
+  values ('heure-2', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-03-12 09:00 Europe/Paris', '2031-04-11 09:30 Europe/Paris', '2031-04-12 09:00 Europe/Paris')$$,
   '23514', 'new row for relation "campagne" violates check constraint "campagne_duree_depot"', 'contrainte : 30 j et 30 min à l''heure de Paris refusés en session UTC');
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
-  values ('heure-3', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2027-03-20 09:00 Europe/Paris', '2027-03-25 09:00 Europe/Paris', '2027-04-09 09:30 Europe/Paris')$$,
+  values ('heure-3', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, '2031-03-22 09:00 Europe/Paris', '2031-03-27 09:00 Europe/Paris', '2031-04-11 09:30 Europe/Paris')$$,
   '23514', 'new row for relation "campagne" violates check constraint "campagne_duree_resultats"', 'contrainte : 15 j et 30 min à l''heure de Paris refusés en session UTC');
 delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e';
 reset timezone;
@@ -157,10 +164,10 @@ select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, bri
   values ('x-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 11, now(), now() + interval '1 day', now() + interval '2 days')$$,
   '23514', null, 'contrainte : 10 places au plus');
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
-  values ('x-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() + interval '30 days 1 second', now() + interval '31 days')$$,
+  values ('x-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), ((now() at time zone 'Europe/Paris') + interval '30 days 1 second') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '31 days') at time zone 'Europe/Paris')$$,
   '23514', 'new row for relation "campagne" violates check constraint "campagne_duree_depot"', 'contrainte : clôture ≤ ouverture + 30 j');
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
-  values ('x-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() + interval '1 day', now() + interval '16 days 1 second')$$,
+  values ('x-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), ((now() at time zone 'Europe/Paris') + interval '1 day') at time zone 'Europe/Paris', ((now() at time zone 'Europe/Paris') + interval '16 days 1 second') at time zone 'Europe/Paris')$$,
   '23514', 'new row for relation "campagne" violates check constraint "campagne_duree_resultats"', 'contrainte : résultats ≤ clôture + 15 j');
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
   values ('x-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() - interval '1 day', now() + interval '2 days')$$,
@@ -179,6 +186,11 @@ reset role;
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000b","role":"authenticated"}';
 select results_eq('select id::text from public.campagne', $$values (current_setting('t.b'))$$, 'B lit sa campagne');
+select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('direct', '70000000-0000-4000-8000-00000000000b', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now(), now() + interval '1 day', now() + interval '2 days')$$,
+  '42501', null, 'le Boss n''insère pas directement');
+select throws_ok($$update public.campagne set titre = 'Direct'$$, '42501', null, 'le Boss ne modifie pas directement');
+select throws_ok($$delete from public.campagne$$, '42501', null, 'le Boss ne supprime pas directement');
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000e","role":"authenticated"}';
 select is_empty('select 1 from public.campagne', 'un autre compte actif ne lit pas la campagne de B');
 set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000c","role":"authenticated"}';
@@ -281,6 +293,9 @@ select throws_ok($$select public.supprimer_brouillon(current_setting('t.b2')::uu
 reset role;
 set local role service_role;
 select throws_ok($$select public.supprimer_brouillon(current_setting('t.b2')::uuid)$$, '42501', null, 'le rôle de service ne supprime rien');
+reset role;
+set local role anon;
+select throws_ok($$select public.supprimer_brouillon(current_setting('t.b2')::uuid)$$, '42501', null, 'le visiteur ne supprime rien');
 reset role;
 -- Bloquée : toute RPC du Boss refuse.
 update public.campagne set bloquee_le = now(), motif_blocage = 'Essai' where id = current_setting('t.b2')::uuid;

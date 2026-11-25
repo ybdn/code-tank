@@ -78,7 +78,8 @@ async function supprimer() {
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
         <FormulaireCampagne v-if="reglable" :initial="data" :occupe="occupe" @envoyer="enregistrer" />
-        <p v-else>Les réglages ne se modifient plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>
+        <p v-else-if="!data.compte_actif">Ton compte n'est pas actif.</p>
+        <p v-else>Les réglages ne se modifient plus&nbsp;: {{ data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>
         <template v-if="data.statut === 'brouillon' && actif">
           <h2>Supprimer le brouillon</h2>
           <p>Tu changes d'avis&nbsp;? Le brouillon disparaît pour de bon.</p>

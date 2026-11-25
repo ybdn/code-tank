@@ -31,9 +31,11 @@ export async function campagneDuBoss(event: H3Event) {
 export async function reglagesDuCorps(event: H3Event) {
   exigerJson(event)
   const c = await readBody(event).catch(() => null) ?? {}
-  const texte = (v: unknown) => (typeof v === 'string' ? v : '')
+  // Postgres refuse le caractère nul et une demi-paire UTF-16 (22P05, 22P02 : un 500) : retirés ou remplacés ici.
+  const texte = (v: unknown) => (typeof v === 'string' ? v.replaceAll('\u0000', '').toWellFormed() : '')
   // Hors bornes raisonnables, la base lèverait une erreur de type (22003, 22007), donc un 500 : la valeur devient vide et la
   // fonction répond 409 avec son message.
+  // shortcut: années bornées à 2000-2100 ici seulement (la base ne les contrôle pas), à élargir avant 2100.
   const date = (v: unknown) => {
     const t = typeof v === 'string' ? Date.parse(v) : NaN
     const annee = new Date(t).getUTCFullYear()
@@ -46,6 +48,7 @@ export async function reglagesDuCorps(event: H3Event) {
     p_langages: Array.isArray(c.langages) ? c.langages.map(texte) : [],
     p_visibilite: texte(c.visibilite),
     p_role_boss: texte(c.role_boss),
+    // shortcut: borne 0-1000 contre le dépassement d'integer, bien au-delà du plafond de 10 places tenu par la base.
     p_max_participants: Number.isSafeInteger(c.max_participants) && c.max_participants >= 0 && c.max_participants <= 1000 ? c.max_participants as number : 0,
     p_ouverture_inscriptions: date(c.ouverture_inscriptions)!,
     p_cloture_depot: date(c.cloture_depot)!,

@@ -32,7 +32,7 @@ pnpm build
 - `GET /api/admin/reglage` : mode d'accès courant (`{ mode }`). `POST /api/admin/reglage` : le règle par la RPC
   `regler_mode_acces`, avec le JWT de l'admin. Corps non JSON : **415** ; mode inconnu : **409**. Page : `/admin`
   (« Mode d'accès »), sans lien dans l'en-tête. Le rôle `admin` se pose à la main en SQL (voir `A-FAIRE.md`).
-- `GET /api/boss` : état du compte connecté et ses campagnes, lus sous son JWT (RLS). `POST /api/boss` : crée une campagne en
+- `GET /api/boss` : état du compte connecté (`etat`) et ses campagnes, lus sous son JWT (RLS). `POST /api/boss` : crée une campagne en
   brouillon par la RPC `creer_campagne` (compte actif, une seule campagne active ; un brouillon échu passe d'abord en
   `expiree`), renvoie `{ slug }`.
   `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne (avec `compte_actif`, qui dit à la page si elle propose les actions), son réglage (`modifier_campagne`, brouillon ou ouverte, règles

@@ -5,7 +5,7 @@ const route = useRoute()
 const router = useRouter()
 // Sans session : 401, la page renvoie vers /compte. Compte actif sans campagne active : le formulaire de création.
 type Ligne = { slug: string; titre: string; statut: string; date_resultats: string; bloquee_le: string | null }
-const { data, error, status } = await useFetch<{ etat: string | null; campagnes: Ligne[] }>('/api/boss')
+const { data, error, status, refresh } = await useFetch<{ etat: string | null; campagnes: Ligne[] }>('/api/boss')
 // Un brouillon échu et non bloqué ne compte pas : creer_campagne le fait passer en expiree.
 const echu = (c: Ligne) => c.statut === 'brouillon' && !c.bloquee_le && Date.parse(c.date_resultats) < Date.now()
 const active = computed(() => data.value?.campagnes.find((c) => STATUTS_ACTIFS.includes(c.statut) && !echu(c)))
@@ -29,7 +29,10 @@ async function creer(corps: Record<string, unknown>) {
     const { slug } = await $fetch<{ slug: string }>('/api/boss', { method: 'POST', body: corps })
     await navigateTo(`/boss/${slug}?cree=1`)
   } catch (e) {
-    alerte.value = (e as { data?: { message?: string } }).data?.message ?? 'Une erreur est survenue.'
+    const err = e as { statusCode?: number; data?: { message?: string } }
+    alerte.value = err.data?.message ?? 'Une erreur est survenue.'
+    // Une campagne a pu être créée entre-temps (autre onglet) : la page affiche alors son lien.
+    if (err.statusCode === 409) await refresh()
     // Le refus s'affiche au-dessus du formulaire : le focus y va, le message est lu.
     await nextTick()
     zoneAlerte.value?.focus()

@@ -201,24 +201,25 @@ create trigger campagne_transition before insert or update of statut on public.c
 
 -- Contrôle des réglages, commun à creer_campagne et modifier_campagne : messages clairs avant les contraintes de la table,
 -- qui restent le dernier mot. Bornes de 30 et 15 jours comptées à l'heure de Paris, comme les contraintes. Les textes
--- sont contrôlés une fois débarrassés des espaces de bord, comme ils sont enregistrés.
+-- sont contrôlés une fois débarrassés des blancs de bord (espace, tabulation, retours, espace insécable), comme ils sont
+-- enregistrés.
 create function public.verifier_reglages(p_titre text, p_theme text, p_brief text, p_langages text[], p_visibilite text,
   p_role_boss text, p_max_participants integer, p_ouverture timestamptz, p_cloture timestamptz, p_resultats timestamptz)
 returns void
 language plpgsql set search_path = ''
 as $$
 begin
-  if char_length(btrim(p_titre)) not between 1 and 120 or p_titre is null then
+  if char_length(btrim(p_titre, E' \t\r\n\u00a0')) not between 1 and 120 or p_titre is null then
     raise exception 'Le titre fait 1 à 120 caractères.';
   end if;
-  if char_length(btrim(p_theme)) not between 1 and 200 or p_theme is null then
+  if char_length(btrim(p_theme, E' \t\r\n\u00a0')) not between 1 and 200 or p_theme is null then
     raise exception 'Le thème fait 1 à 200 caractères.';
   end if;
-  if char_length(btrim(p_brief)) not between 1 and 2000 or p_brief is null then
+  if char_length(btrim(p_brief, E' \t\r\n\u00a0')) not between 1 and 2000 or p_brief is null then
     raise exception 'Le brief fait 1 à 2 000 caractères.';
   end if;
   if coalesce(cardinality(p_langages), 0) not between 1 and 20
-    or exists (select 1 from unnest(p_langages) l where l is null or char_length(btrim(l)) not between 1 and 40) then
+    or exists (select 1 from unnest(p_langages) l where l is null or char_length(btrim(l, E' \t\r\n\u00a0')) not between 1 and 40) then
     raise exception 'Indique de 1 à 20 langages, de 40 caractères au plus chacun.';
   end if;
   if p_visibilite is null or p_visibilite not in ('publique', 'invitation') then
@@ -231,7 +232,7 @@ begin
     raise exception 'Le nombre de places va de 1 à 10.';
   end if;
   if p_ouverture is null or p_cloture is null or p_resultats is null then
-    raise exception 'Les trois dates sont obligatoires.';
+    raise exception 'Les trois dates sont obligatoires, entre 2000 et 2100.';
   end if;
   if not (p_ouverture < p_cloture and p_cloture < p_resultats) then
     raise exception 'Les dates se suivent : ouverture des inscriptions, clôture du dépôt, puis résultats.';
@@ -272,14 +273,15 @@ begin
     p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
   update public.campagne set statut = 'expiree'
   where boss_id = auth.uid() and statut = 'brouillon' and bloquee_le is null and now() > date_resultats;
+  -- shortcut: translittération latin-1 seulement (œ, æ, ß, ł, š… deviennent un tiret), passer à unaccent si les titres l'exigent.
   v_base := trim(both '-' from left(trim(both '-' from regexp_replace(
     translate(lower(p_titre), 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy'), '[^a-z0-9]+', '-', 'g')), 50));
   -- Un titre sans lettre latine ni chiffre donne un slug fait du seul suffixe.
   v_slug := concat_ws('-', nullif(v_base, ''), left(replace(gen_random_uuid()::text, '-', ''), 6));
   insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
     ouverture_inscriptions, cloture_depot, date_resultats)
-  values (v_slug, auth.uid(), btrim(p_titre), btrim(p_theme), btrim(p_brief),
-    array(select btrim(l) from unnest(p_langages) l), p_visibilite, p_role_boss, p_max_participants,
+  values (v_slug, auth.uid(), btrim(p_titre, E' \t\r\n\u00a0'), btrim(p_theme, E' \t\r\n\u00a0'), btrim(p_brief, E' \t\r\n\u00a0'),
+    array(select btrim(l, E' \t\r\n\u00a0') from unnest(p_langages) l), p_visibilite, p_role_boss, p_max_participants,
     p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
   return v_slug;
 exception
@@ -319,8 +321,8 @@ begin
   end if;
   perform public.verifier_reglages(p_titre, p_theme, p_brief, p_langages, p_visibilite, p_role_boss, p_max_participants,
     p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
-  update public.campagne set titre = btrim(p_titre), theme = btrim(p_theme), brief = btrim(p_brief),
-    langages = array(select btrim(l) from unnest(p_langages) l), visibilite = p_visibilite, role_boss = p_role_boss,
+  update public.campagne set titre = btrim(p_titre, E' \t\r\n\u00a0'), theme = btrim(p_theme, E' \t\r\n\u00a0'), brief = btrim(p_brief, E' \t\r\n\u00a0'),
+    langages = array(select btrim(l, E' \t\r\n\u00a0') from unnest(p_langages) l), visibilite = p_visibilite, role_boss = p_role_boss,
     max_participants = p_max_participants, ouverture_inscriptions = p_ouverture_inscriptions,
     cloture_depot = p_cloture_depot, date_resultats = p_date_resultats
   where id = p_campagne;

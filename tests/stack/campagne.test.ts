@@ -65,6 +65,7 @@ describe('campagne du Boss', () => {
   it('création, 409 pour une seconde, 404 pour tout autre compte, réglage, règles figées, suppression refusée hors brouillon', async () => {
     expect((await envoyer('POST', '/api/boss', boss.cookie, reglages(), 'text/plain')).statut).toBe(415)
     expect((await envoyer('POST', '/api/boss', undefined, reglages())).statut).toBe(401)
+    expect((await lire('/api/boss')).statut).toBe(401)
     const slug = await creer(boss)
     expect(slug).toMatch(/^minuteur-de-pause-[0-9a-f]{6}$/)
     expect(await lire(`/api/boss/${slug}`, boss.cookie)).toMatchObject({ statut: 200, json: { slug, statut: 'brouillon', max_participants: 5, compte_actif: true } })
@@ -125,10 +126,14 @@ describe('campagne du Boss', () => {
     const s = await inscrit()
     expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), max_participants: 3_000_000_000 }))
       .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Le nombre de places va de 1 à 10.' }) })
+    // Caractère nul et demi-paire UTF-16 : retirés ou remplacés par la route, jamais un 500.
+    expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), titre: '\u0000' }))
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Le titre fait 1 à 120 caractères.' }) })
+    expect((await envoyer('POST', '/api/boss', s.cookie, { ...reglages('Nul\u0000 et \ud83d') })).statut).toBe(200)
     expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), date_resultats: '+275760-09-13T00:00:00.000Z' }))
-      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Les trois dates sont obligatoires.' }) })
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Les trois dates sont obligatoires, entre 2000 et 2100.' }) })
     expect(await envoyer('POST', '/api/boss', s.cookie, { ...reglages(), ouverture_inscriptions: '1900-01-01T00:00:00.000Z' }))
-      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Les trois dates sont obligatoires.' }) })
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Les trois dates sont obligatoires, entre 2000 et 2100.' }) })
   })
 
   it('un compte en attente ne crée pas de campagne', async () => {
