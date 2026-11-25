@@ -39,7 +39,7 @@ jobs:
       - run: pnpm db:reset
       - run: pnpm db:test
 
-  # Comptes et dépôt : pile Supabase locale réduite, stockage compris (Docker des runners GitHub), SMTP de la boîte mail locale (54425), GitHub simulé, aucun secret.
+  # Site construit contre la pile Supabase locale réduite (Docker des runners GitHub), aucun secret.
   pile:
     runs-on: ubuntu-latest
     steps:

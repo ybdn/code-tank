@@ -186,9 +186,6 @@ importers:
       '@nuxtjs/supabase':
         specifier: ^2.1.0
         version: 2.1.0
-      disposable-email-domains-js:
-        specifier: ^2.3.0
-        version: 2.3.0
       marked:
         specifier: ^18.2.1
         version: 18.2.1
@@ -214,9 +211,6 @@ importers:
       '@nuxt/test-utils':
         specifier: ^4.4.0
         version: 4.4.0(cf4b1e8c8b453cdf51685919401cda2e)
-      '@supabase/supabase-js':
-        specifier: ^2.119.2
-        version: 2.119.2
       '@types/nodemailer':
         specifier: ^8.0.2
         version: 8.0.2
@@ -2287,9 +2281,6 @@ packages:
   diff@9.0.0:
     resolution: {integrity: sha512-svtcdpS8CgJyqAjEQIXdb3OjhFVVYjzGAPO8WGCmRbrml64SPw/jJD4GoE98aR7r25A0XcgrK3F02yw9R/vhQw==}
     engines: {node: '>=0.3.1'}
-
-  disposable-email-domains-js@2.3.0:
-    resolution: {integrity: sha512-7/4mk+SmSiKou8vQmagIpIxdiQxrsmaS4HYCH1LcWY02x//6tz4R0CpoNcH2rZ58bccF4hA/PD6gcXhg1YWinw==}
 
   dot-prop@10.2.0:
     resolution: {integrity: sha512-BTJ9aZYL3vCfZlZOBLy9v8TUqWGQ0pzFnygKwFZt5udj6viBoFIBviKPUoZLDCPn1FoXffv6McQFDenrm5Krfw==}
@@ -6689,8 +6680,6 @@ snapshots:
       - srvx
 
   diff@9.0.0: {}
-
-  disposable-email-domains-js@2.3.0: {}
 
   dot-prop@10.2.0:
     dependencies:

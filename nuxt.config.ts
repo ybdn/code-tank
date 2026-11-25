@@ -6,18 +6,15 @@ export default defineNuxtConfig({
   compatibilityDate: '2026-11-22',
   modules: ['@nuxt/eslint', 'nuxt-security', '@nuxtjs/supabase'],
   supabase: {
-    // Seule /compte demande une session, et elle gère elle-même l'état déconnecté : aucune redirection globale.
+    // Aucune redirection globale : chaque page gère elle-même l'état déconnecté.
     redirect: false,
     // Nom stable du cookie de session, indépendant de l'URL de Supabase.
     cookiePrefix: 'sb-code-tank',
   },
   runtimeConfig: {
     // Valeurs fournies par l'environnement (NUXT_*) ; voir le README.
-    secretVerification: '',
     secretDebit: '',
-    versionCharte: '',
     siteUrl: '',
-    githubApi: 'https://api.github.com',
     // Jury (dépôt privé) : URL complète de POST /api/jury et secret partagé ; sans eux, le site n'appelle rien.
     juryUrl: '',
     jurySecret: '',
@@ -37,8 +34,6 @@ export default defineNuxtConfig({
       link: [{ rel: 'icon', href: '/favicon.svg', type: 'image/svg+xml' }],
     },
   },
-  // Entretien et rapport d'un candidat : jamais mis en cache, ni par le navigateur ni par un relais.
-  routeRules: { '/campagnes/*/resultat': { headers: { 'cache-control': 'private, no-store' } } },
   // Les polices restent des fichiers : un data: URI serait refusé par font-src 'self'.
   vite: { build: { assetsInlineLimit: 0 } },
   security: {

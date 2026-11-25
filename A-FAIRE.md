@@ -10,7 +10,6 @@ Ce qui est déjà rédigé dans le dépôt :
 
 ## 1. Décisions à prendre (avant la republication)
 
-- [ ] **Clause de réutilisation (§ 5 de la charte).** La garder telle quelle (une simple possibilité, avec accord écrit séparé à chaque fois), l'alléger, ou la retirer. Si elle est retirée, il faut aussi retirer la case « d'accord pour être contacté » du dépôt, la fiche 3 du registre et les lignes correspondantes de la politique de confidentialité. Demande-le à Claude, c'est du code et du texte.
 - [ ] **Relecture par un avocat : oui ou non.** Pour un projet perso, gratuit et entre proches, elle n'est pas indispensable. Si tu y renonces, demande à Claude de retirer les bandeaux « PROJET, à faire relire par un avocat » des trois textes. Ne les laisse pas indéfiniment.
 - [ ] **Conservation des demandes d'exercice des droits.** Le registre (fiche 5) propose de garder une demande et sa réponse jusqu'à la fin de l'année suivante. Valide ou change cette durée.
 
@@ -76,7 +75,6 @@ git push origin propre:preprod propre:prod
 
 ## 5. Avant d'ouvrir les comptes
 
-- [ ] Fixer `NUXT_VERSION_CHARTE` dans Vercel à la date de la version définitive de la charte (`AAAA-MM-JJ`).
 - [ ] Vérifier que `CRON_SECRET` est défini dans Vercel et que la tâche `/api/cron/conservation` tourne (journal des crons de Vercel) : c'est elle qui applique les durées de conservation promises.
 
 ## 6. En continu

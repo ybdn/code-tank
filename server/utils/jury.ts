@@ -1,5 +1,5 @@
 import type { H3Event } from 'h3'
-import { SECRET_MIN } from './jeton'
+import { SECRET_MIN } from './secret'
 
 // Appel du jury (dépôt privé, fonction POST /api/jury). Jamais bloquant : un échec est journalisé (code seulement) et
 // l'action de l'utilisateur réussit quand même. Le jury fait ce qu'il a à faire (réceptions, délibération) et répond tout de
