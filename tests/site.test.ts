@@ -19,36 +19,25 @@ const fichiers = (dir: string): string[] =>
 
 describe('pages publiques', () => {
   it.each([
-    ['/', 'Ton code face au jury'],
+    ['/', 'Affronte notre jury.'],
     ['/charte', 'Charte'],
     ['/confidentialite', 'confidentialité'],
     ['/mentions-legales', 'Mentions légales'],
-    ['/compte', 'Se connecter avec GitHub'],
   ])('%s répond avec son contenu rendu côté serveur', async (chemin, texte) => {
     expect(await $fetch<string>(chemin)).toContain(texte)
   })
 })
 
-describe('Supabase injoignable', () => {
-  it('l\'accueil reste rendu, vite, avec un message de repli', async () => {
-    const debut = Date.now()
+describe('code du concours supprimé', () => {
+  it('l\'accueil n\'a plus ni ancienne accroche ni liste de campagnes', async () => {
     const html = await $fetch<string>('/')
-    expect(Date.now() - debut).toBeLessThan(5000)
-    expect(html).toContain('Les campagnes ne peuvent pas être lues pour le moment.')
+    expect(html).not.toContain('Ton code face au jury')
+    expect(html).not.toContain('Le concours de code jugé par ybdn')
+    expect(html).not.toContain('id="campagnes"')
   })
 
-  it('une page de campagne répond 503 sans attendre', async () => {
-    const debut = Date.now()
-    expect((await fetch('/campagnes/une-campagne')).status).toBe(503)
-    expect(Date.now() - debut).toBeLessThan(5000)
-  })
-})
-
-describe('administration sans session (Supabase injoignable)', () => {
-  it.each(['/admin', '/admin/comptes', '/Admin', '/api/admin/comptes'])('%s répond 404, sans redirection', async (chemin) => {
-    const res = await fetch(chemin, { redirect: 'manual' })
-    expect(res.status).toBe(404)
-    expect(res.headers.get('location')).toBeNull()
+  it.each(['/compte', '/admin', '/campagnes/une-campagne', '/api/campagnes', '/api/compte', '/api/admin/comptes'])('%s répond 404', async (chemin) => {
+    expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
   })
 })
 

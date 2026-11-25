@@ -5,50 +5,16 @@ export type Database = {
   
   "public": {
           Tables: {
-            "audit": {
+            "critere": {
                   Row: {
-                    "batch_id": string | null,"cout_usd": number | null,"depot_id": string,"id": string,"jure": string,"modele": string,"replique_masquee": boolean,"resultat": Json | null,"statut": Database["public"]['Enums']["audit_statut"],"tentatives": number,"usage": Json | null,"version_consignes": string
+                    "calcule": boolean,"cle": string,"jure": string,"libelle": string,"poids": number
                   }
                   ComputedFields: never
                   Insert: {
-                    "batch_id"?: string | null,"cout_usd"?: number | null,"depot_id": string,"id"?: string,"jure": string,"modele": string,"replique_masquee"?: boolean,"resultat"?: Json | null,"statut"?: Database["public"]['Enums']["audit_statut"],"tentatives"?: number,"usage"?: Json | null,"version_consignes": string
+                    "calcule"?: boolean,"cle": string,"jure": string,"libelle": string,"poids": number
                   }
                   Update: {
-                    "batch_id"?: string | null,"cout_usd"?: number | null,"depot_id"?: string,"id"?: string,"jure"?: string,"modele"?: string,"replique_masquee"?: boolean,"resultat"?: Json | null,"statut"?: Database["public"]['Enums']["audit_statut"],"tentatives"?: number,"usage"?: Json | null,"version_consignes"?: string
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "audit_depot_id_fkey"
-      columns: ["depot_id"]
-isOneToOne: false
-      referencedRelation: "depot"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"campagne": {
-                  Row: {
-                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id": string,"max_participants": number,"modeles": NonNullable<Json>,"ouverture_inscriptions": string,"publiee_le": string | null,"regles_figees_le": string | null,"slug": string,"statut": Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "brief": string,"cloture_depot": string,"criteres": NonNullable<Json>,"date_resultats": string,"id"?: string,"max_participants": number,"modeles"?: NonNullable<Json>,"ouverture_inscriptions": string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug": string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme": string,"titre": string
-                  }
-                  Update: {
-                    "brief"?: string,"cloture_depot"?: string,"criteres"?: NonNullable<Json>,"date_resultats"?: string,"id"?: string,"max_participants"?: number,"modeles"?: NonNullable<Json>,"ouverture_inscriptions"?: string,"publiee_le"?: string | null,"regles_figees_le"?: string | null,"slug"?: string,"statut"?: Database["public"]['Enums']["campagne_statut"],"theme"?: string,"titre"?: string
-                  }
-                  Relationships: [
-                    
-                  ]
-                },"compte": {
-                  Row: {
-                    "attente_demandee_le": string | null,"charte_acceptee_le": string,"confirme_attente_le": string | null,"cree_le": string,"depot_cite_url": string,"derniere_connexion_le": string,"email_contact": string,"email_verifie_le": string | null,"etat": Database["public"]['Enums']["compte_etat"],"etat_le": string,"github_donnees": Json | null,"github_id": string,"id": string,"majeur_declare_le": string,"motivation": string,"prevenu_inactivite_le": string | null,"pseudo": string,"role": Database["public"]['Enums']["compte_role"],"version_charte": string,"vrai_nom": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "attente_demandee_le"?: string | null,"charte_acceptee_le": string,"confirme_attente_le"?: string | null,"cree_le"?: string,"depot_cite_url": string,"derniere_connexion_le"?: string,"email_contact": string,"email_verifie_le"?: string | null,"etat"?: Database["public"]['Enums']["compte_etat"],"etat_le"?: string,"github_donnees"?: Json | null,"github_id": string,"id": string,"majeur_declare_le": string,"motivation": string,"prevenu_inactivite_le"?: string | null,"pseudo": string,"role"?: Database["public"]['Enums']["compte_role"],"version_charte": string,"vrai_nom": string
-                  }
-                  Update: {
-                    "attente_demandee_le"?: string | null,"charte_acceptee_le"?: string,"confirme_attente_le"?: string | null,"cree_le"?: string,"depot_cite_url"?: string,"derniere_connexion_le"?: string,"email_contact"?: string,"email_verifie_le"?: string | null,"etat"?: Database["public"]['Enums']["compte_etat"],"etat_le"?: string,"github_donnees"?: Json | null,"github_id"?: string,"id"?: string,"majeur_declare_le"?: string,"motivation"?: string,"prevenu_inactivite_le"?: string | null,"pseudo"?: string,"role"?: Database["public"]['Enums']["compte_role"],"version_charte"?: string,"vrai_nom"?: string
+                    "calcule"?: boolean,"cle"?: string,"jure"?: string,"libelle"?: string,"poids"?: number
                   }
                   Relationships: [
                     
@@ -67,136 +33,6 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
-                },"decision": {
-                  Row: {
-                    "campagne_id": string,"id": string,"justification": string,"participation_id": string,"prise_le": string,"type": Database["public"]['Enums']["decision_type"]
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "campagne_id": string,"id"?: string,"justification": string,"participation_id": string,"prise_le"?: string,"type": Database["public"]['Enums']["decision_type"]
-                  }
-                  Update: {
-                    "campagne_id"?: string,"id"?: string,"justification"?: string,"participation_id"?: string,"prise_le"?: string,"type"?: Database["public"]['Enums']["decision_type"]
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "decision_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "campagne"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "decision_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "classement"
-      referencedColumns: ["campagne_id"]
-    },{
-      foreignKeyName: "decision_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "places_campagne"
-      referencedColumns: ["campagne_id"]
-    },{
-      foreignKeyName: "decision_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: false
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"depot": {
-                  Row: {
-                    "alerte_manipulation": boolean,"alertes_integrite": NonNullable<Json>,"chemin_stockage": string | null,"contact_reutilisation": boolean,"declaration_code_le": string,"demande": string | null,"depose_le": string,"faits": Json | null,"fichiers_exclus": NonNullable<Json>,"id": string,"licence_presente": boolean,"nb_fichiers": number,"nb_tokens": number,"note_outillage": number | null,"outils_ia": NonNullable<Json>,"participation_id": string,"presentation": string,"sha256": string,"taille_octets": number,"traces_ia": NonNullable<Json>,"type_code": Database["public"]['Enums']["type_code"]
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "alerte_manipulation"?: boolean,"alertes_integrite"?: NonNullable<Json>,"chemin_stockage"?: string | null,"contact_reutilisation"?: boolean,"declaration_code_le": string,"demande"?: string | null,"depose_le"?: string,"faits"?: Json | null,"fichiers_exclus"?: NonNullable<Json>,"id"?: string,"licence_presente": boolean,"nb_fichiers": number,"nb_tokens": number,"note_outillage"?: number | null,"outils_ia"?: NonNullable<Json>,"participation_id": string,"presentation": string,"sha256": string,"taille_octets": number,"traces_ia"?: NonNullable<Json>,"type_code": Database["public"]['Enums']["type_code"]
-                  }
-                  Update: {
-                    "alerte_manipulation"?: boolean,"alertes_integrite"?: NonNullable<Json>,"chemin_stockage"?: string | null,"contact_reutilisation"?: boolean,"declaration_code_le"?: string,"demande"?: string | null,"depose_le"?: string,"faits"?: Json | null,"fichiers_exclus"?: NonNullable<Json>,"id"?: string,"licence_presente"?: boolean,"nb_fichiers"?: number,"nb_tokens"?: number,"note_outillage"?: number | null,"outils_ia"?: NonNullable<Json>,"participation_id"?: string,"presentation"?: string,"sha256"?: string,"taille_octets"?: number,"traces_ia"?: NonNullable<Json>,"type_code"?: Database["public"]['Enums']["type_code"]
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "depot_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: true
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"participation": {
-                  Row: {
-                    "campagne_id": string,"compte_id": string | null,"etat": Database["public"]['Enums']["participation_etat"],"id": string,"inscrit_le": string,"retire_le": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "campagne_id": string,"compte_id"?: string | null,"etat"?: Database["public"]['Enums']["participation_etat"],"id"?: string,"inscrit_le"?: string,"retire_le"?: string | null
-                  }
-                  Update: {
-                    "campagne_id"?: string,"compte_id"?: string | null,"etat"?: Database["public"]['Enums']["participation_etat"],"id"?: string,"inscrit_le"?: string,"retire_le"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "campagne"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "classement"
-      referencedColumns: ["campagne_id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "places_campagne"
-      referencedColumns: ["campagne_id"]
-    },{
-      foreignKeyName: "participation_compte_id_fkey"
-      columns: ["compte_id"]
-isOneToOne: false
-      referencedRelation: "compte"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"reception": {
-                  Row: {
-                    "chemin_stockage": string,"contact_reutilisation": boolean,"declaration_code_le": string,"demande": string | null,"etat": Database["public"]['Enums']["reception_etat"],"id": string,"motifs_refus": NonNullable<Json>,"outils_ia": NonNullable<Json>,"participation_id": string,"presentation": string,"recue_le": string,"traitee_le": string | null,"type_code": Database["public"]['Enums']["type_code"]
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "chemin_stockage": string,"contact_reutilisation"?: boolean,"declaration_code_le": string,"demande"?: string | null,"etat"?: Database["public"]['Enums']["reception_etat"],"id"?: string,"motifs_refus"?: NonNullable<Json>,"outils_ia"?: NonNullable<Json>,"participation_id": string,"presentation": string,"recue_le"?: string,"traitee_le"?: string | null,"type_code": Database["public"]['Enums']["type_code"]
-                  }
-                  Update: {
-                    "chemin_stockage"?: string,"contact_reutilisation"?: boolean,"declaration_code_le"?: string,"demande"?: string | null,"etat"?: Database["public"]['Enums']["reception_etat"],"id"?: string,"motifs_refus"?: NonNullable<Json>,"outils_ia"?: NonNullable<Json>,"participation_id"?: string,"presentation"?: string,"recue_le"?: string,"traitee_le"?: string | null,"type_code"?: Database["public"]['Enums']["type_code"]
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "reception_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: true
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"reglage": {
-                  Row: {
-                    "plafond_comptes": number | null,"plafond_depense_usd": number
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "plafond_comptes"?: number | null,"plafond_depense_usd"?: number
-                  }
-                  Update: {
-                    "plafond_comptes"?: number | null,"plafond_depense_usd"?: number
-                  }
-                  Relationships: [
-                    
-                  ]
                 },"verrou": {
                   Row: {
                     "detenteur": string,"expire_le": string,"nom": string
@@ -211,217 +47,24 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
-                },"vote_boss": {
-                  Row: {
-                    "commentaire": string | null,"note": number,"participation_id": string,"verrouille_le": string | null
-                  }
-                  ComputedFields: never
-                  Insert: {
-                    "commentaire"?: string | null,"note": number,"participation_id": string,"verrouille_le"?: string | null
-                  }
-                  Update: {
-                    "commentaire"?: string | null,"note"?: number,"participation_id"?: string,"verrouille_le"?: string | null
-                  }
-                  Relationships: [
-                    {
-      foreignKeyName: "vote_boss_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: true
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
                 }
           }
           Views: {
-            "classement": {
-                  Row: {
-                    "campagne_id": string,"disqualifie": boolean | null,"justification": string | null,"justification_departage": string | null,"note_boss": number | null,"notes": Json | null,"pseudo": string | null,"rang": number | null,"score_claude": number | null,"score_final": number | null
-                  }
-                  ComputedFields: never
-                  Relationships: [
-                    
-                  ]
-                },"contact_reutilisation_lisible": {
-                  Row: {
-                    "contact_reutilisation": boolean,"participation_id": string
-                  }
-                  ComputedFields: never
-                  Insert: {
-                           "contact_reutilisation"?: boolean | null,"participation_id"?: string | null
-                         }
-                        Update: {
-                           "contact_reutilisation"?: boolean | null,"participation_id"?: string | null
-                         }
-                        Relationships: [
-                    {
-      foreignKeyName: "depot_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: true
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"ma_reception": {
-                  Row: {
-                    "contact_reutilisation": boolean,"declaration_code_le": string,"demande": string | null,"etat": Database["public"]['Enums']["reception_etat"],"motifs_refus": NonNullable<Json>,"outils_ia": NonNullable<Json>,"participation_id": string,"presentation": string,"recue_le": string,"traitee_le": string | null,"type_code": Database["public"]['Enums']["type_code"]
-                  }
-                  ComputedFields: never
-                  Relationships: [
-                    {
-      foreignKeyName: "reception_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: true
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"mon_depot": {
-                  Row: {
-                    "contact_reutilisation": boolean,"demande": string | null,"depose_le": string,"fichiers_exclus": NonNullable<Json>,"licence_presente": boolean,"nb_fichiers": number,"nb_tokens": number,"outils_ia": NonNullable<Json>,"participation_id": string,"presentation": string,"sha256": string,"taille_octets": number,"type_code": Database["public"]['Enums']["type_code"]
-                  }
-                  ComputedFields: never
-                  Relationships: [
-                    {
-      foreignKeyName: "depot_participation_id_fkey"
-      columns: ["participation_id"]
-isOneToOne: true
-      referencedRelation: "participation"
-      referencedColumns: ["id"]
-    }
-                  ]
-                },"mon_vote_boss": {
-                  Row: {
-                    "campagne_id": string,"commentaire": string | null,"note": number
-                  }
-                  ComputedFields: never
-                  Relationships: [
-                    {
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "campagne"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "classement"
-      referencedColumns: ["campagne_id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "places_campagne"
-      referencedColumns: ["campagne_id"]
-    }
-                  ]
-                },"places_campagne": {
-                  Row: {
-                    "campagne_id": string,"places_restantes": number | null
-                  }
-                  ComputedFields: never
-                  Relationships: [
-                    
-                  ]
-                },"rapport": {
-                  Row: {
-                    "campagne_id": string,"depot_id": string,"id": string,"jure": string,"resultat": Json | null
-                  }
-                  ComputedFields: never
-                  Relationships: [
-                    {
-      foreignKeyName: "audit_depot_id_fkey"
-      columns: ["depot_id"]
-isOneToOne: false
-      referencedRelation: "depot"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "campagne"
-      referencedColumns: ["id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "classement"
-      referencedColumns: ["campagne_id"]
-    },{
-      foreignKeyName: "participation_campagne_id_fkey"
-      columns: ["campagne_id"]
-isOneToOne: false
-      referencedRelation: "places_campagne"
-      referencedColumns: ["campagne_id"]
-    }
-                  ]
-                }
+            [_ in never]: never
           }
           Functions: {
-            "_inscrire":
-{ Args: { "p_campagne_id": string,"p_compte_id": string,"p_hors_quota": boolean }; Returns: undefined
-                           },
-"ajouter_participant":
-{ Args: { "p_campagne_id": string,"p_compte_id": string }; Returns: undefined
-                           },
-"changer_statut_campagne":
-{ Args: { "p_campagne_id": string,"p_statut": Database["public"]['Enums']["campagne_statut"] }; Returns: undefined
-                           },
-"confirmer_attente":
-{ Args: Record<PropertyKey, never>; Returns: undefined
-                           },
-"consommer_debit":
+            "consommer_debit":
 { Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
-                           },
-"decider_compte":
-{ Args: { "p_compte_id": string,"p_etat": Database["public"]['Enums']["compte_etat"] }; Returns: undefined
-                           },
-"demasquer_replique":
-{ Args: { "p_audit_id": string }; Returns: undefined
-                           },
-"enregistrer_decision":
-{ Args: { "p_justification": string,"p_participation_id": string,"p_type": Database["public"]['Enums']["decision_type"] }; Returns: undefined
-                           },
-"est_organisateur":
-{ Args: Record<PropertyKey, never>; Returns: boolean
-                           },
-"masquer_replique":
-{ Args: { "p_audit_id": string }; Returns: undefined
-                           },
-"noter_connexion":
-{ Args: Record<PropertyKey, never>; Returns: undefined
-                           },
-"objets_abandonnes":
-{ Args: { "p_age_h": number,"p_limite": number }; Returns: string[]
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
                            },
-"purger_debit":
-{ Args: { "p_age_h": number,"p_limite": number }; Returns: number
-                           },
-"regler_contact_reutilisation":
-{ Args: { "p_accord": boolean,"p_campagne_id": string }; Returns: undefined
-                           },
 "rendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean
-                           },
-"retirer_depot":
-{ Args: { "p_campagne_id": string }; Returns: undefined
-                           },
-"se_desinscrire":
-{ Args: { "p_campagne_id": string }; Returns: undefined
-                           },
-"sinscrire":
-{ Args: { "p_campagne_id": string }; Returns: undefined
-                           },
-"verrouiller_vote":
-{ Args: { "p_participation_id": string }; Returns: undefined
                            }
           }
           Enums: {
-            "audit_statut": "en_cours"|"termine"|"echec","campagne_statut": "brouillon"|"inscriptions"|"depot"|"deliberation"|"prete"|"publiee"|"archivee","compte_etat": "email_a_verifier"|"verifie"|"autorise"|"liste_attente"|"refuse"|"ferme","compte_role": "candidat"|"organisateur","decision_type": "departage"|"disqualification"|"fermeture_compte","participation_etat": "inscrit"|"retire","reception_etat": "en_attente"|"acceptee"|"refusee","type_code": "open_source"|"proprietaire"
+            [_ in never]: never
           }
           CompositeTypes: {
             [_ in never]: never
@@ -537,7 +180,7 @@ export type CompositeTypes<
 export const Constants = {
   "public": {
           Enums: {
-            "audit_statut": ["en_cours", "termine", "echec"],"campagne_statut": ["brouillon", "inscriptions", "depot", "deliberation", "prete", "publiee", "archivee"],"compte_etat": ["email_a_verifier", "verifie", "autorise", "liste_attente", "refuse", "ferme"],"compte_role": ["candidat", "organisateur"],"decision_type": ["departage", "disqualification", "fermeture_compte"],"participation_etat": ["inscrit", "retire"],"reception_etat": ["en_attente", "acceptee", "refusee"],"type_code": ["open_source", "proprietaire"]
+            
           }
         }
 } as const
