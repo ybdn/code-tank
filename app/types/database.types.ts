@@ -67,6 +67,38 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"participation": {
+                  Row: {
+                    "campagne_id": string,"compte_id": string | null,"connaissance_envoi_le": string,"etat": string,"id": string,"inscrit_le": string,"retire_le": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "campagne_id": string,"compte_id"?: string | null,"connaissance_envoi_le": string,"etat"?: string,"id"?: string,"inscrit_le"?: string,"retire_le"?: string | null
+                  }
+                  Update: {
+                    "campagne_id"?: string,"compte_id"?: string | null,"connaissance_envoi_le"?: string,"etat"?: string,"id"?: string,"inscrit_le"?: string,"retire_le"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "participation_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "participation_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne_phase"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "participation_compte_id_fkey"
+      columns: ["compte_id"]
+isOneToOne: false
+      referencedRelation: "compte"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"reglage": {
                   Row: {
                     "id": boolean,"mode_acces": string
@@ -100,7 +132,7 @@ isOneToOne: false
           Views: {
             "campagne_phase": {
                   Row: {
-                    "boss_pseudo": string,"brief": string,"cloture_depot": string,"date_resultats": string,"id": string,"langages": (string)[],"max_participants": number,"ouverture_inscriptions": string,"phase": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                    "boss_pseudo": string,"brief": string,"cloture_depot": string,"date_resultats": string,"id": string,"langages": (string)[],"max_participants": number,"ouverture_inscriptions": string,"phase": string | null,"places_restantes": number | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
                   }
                   ComputedFields: never
                   Relationships: [
@@ -147,6 +179,12 @@ isOneToOne: false
                            },
 "rendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean
+                           },
+"se_desinscrire":
+{ Args: { "p_campagne": string }; Returns: undefined
+                           },
+"sinscrire":
+{ Args: { "p_campagne": string,"p_connaissance": boolean }; Returns: undefined
                            },
 "supprimer_brouillon":
 { Args: { "p_campagne": string }; Returns: undefined

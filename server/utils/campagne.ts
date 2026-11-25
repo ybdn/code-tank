@@ -4,10 +4,12 @@ import { serverSupabaseClient } from '#supabase/server'
 // Routes du Boss (story 2.1) : lecture sous le JWT (RLS : le Boss ne lit que ses campagnes), écriture par les RPC qui
 // revérifient tout (AD-1).
 
-// Erreur d'une RPC de campagne vers HTTP : CT404 (campagne absente ou appelant qui n'en est pas le Boss) en 404, P0001
-// (règle métier, message fixe écrit par la fonction, jamais une valeur reçue) en 409, le reste en 500 sans détail.
+// Erreur d'une RPC de campagne vers HTTP : CT404 (campagne absente ou appelant qui n'en est pas le Boss) en 404, CT429
+// (limite de débit par compte de sinscrire) en 429, P0001 (règle métier) en 409 ; ces messages sont fixes, écrits par la
+// fonction, jamais une valeur reçue. Le reste en 500 sans détail.
 export function erreurCampagne(error: { code: string; message: string }, contexte: string, message: string): never {
   if (error.code === 'CT404') throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
+  if (error.code === 'CT429') throw createError({ statusCode: 429, message: error.message })
   if (error.code === 'P0001') throw createError({ statusCode: 409, message: error.message })
   console.error(contexte, error.code)
   throw createError({ statusCode: 500, message })
@@ -63,4 +65,16 @@ export async function reglagesDuCorps(event: H3Event) {
     p_cloture_depot: date(c.cloture_depot)!,
     p_date_resultats: date(c.date_resultats)!,
   }
+}
+
+// Inscription et désinscription (story 2.3) : JSON exigé (415), session exigée (401), slug dans la forme de la table et
+// campagne visible de l'appelant dans campagne_phase (404 sinon). La RPC revérifie tout.
+export async function campagneDeLInscrit(event: H3Event) {
+  exigerJson(event)
+  const slug = slugDeLaRoute(event)
+  const { client } = await utilisateurVerifie(event)
+  const { data, error } = await client.from('campagne_phase').select('id').eq('slug', slug).maybeSingle()
+  if (error) erreurCampagne(error, 'Lecture d\'une campagne publique :', 'La campagne ne peut pas être lue pour le moment.')
+  if (!data?.id) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
+  return { client, id: data.id }
 }

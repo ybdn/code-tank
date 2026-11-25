@@ -46,7 +46,7 @@ const { data: campagnes, error } = await useFetch('/api/campagnes')
           <li v-for="c in campagnes" :key="c.slug" class="carte">
             <h3><NuxtLink :to="`/campagnes/${c.slug}`">{{ c.titre }}</NuxtLink></h3>
             <p>{{ c.theme }}</p>
-            <p>{{ LIBELLE_PHASE[c.phase] }} · {{ c.max_participants }} {{ c.max_participants > 1 ? 'places' : 'place' }}</p>
+            <p>{{ LIBELLE_PHASE[c.phase] }} · {{ c.places_restantes }} {{ c.places_restantes > 1 ? 'places restantes' : 'place restante' }} sur {{ c.max_participants }}</p>
           </li>
         </ul>
         <p v-else>Aucune campagne ouverte pour le moment.</p>

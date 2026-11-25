@@ -54,13 +54,14 @@ function soumettre() {
 
     <fieldset class="groupe">
       <legend>Visibilité</legend>
+      <p v-if="props.initial?.inscrits" class="champ__aide">La visibilité ne change plus une fois qu'il y a des inscrits.</p>
       <div class="champ champ--case">
-        <input id="visibilite-publique" v-model="f.visibilite" type="radio" name="visibilite" value="publique" aria-describedby="aide-publique">
+        <input id="visibilite-publique" v-model="f.visibilite" type="radio" name="visibilite" value="publique" :disabled="!!props.initial?.inscrits" aria-describedby="aide-publique">
         <label for="visibilite-publique">Publique</label>
         <p id="aide-publique" class="champ__aide">Listée sur l'accueil&nbsp;; tout compte actif s'inscrit.</p>
       </div>
       <div class="champ champ--case">
-        <input id="visibilite-invitation" v-model="f.visibilite" type="radio" name="visibilite" value="invitation" aria-describedby="aide-invitation">
+        <input id="visibilite-invitation" v-model="f.visibilite" type="radio" name="visibilite" value="invitation" :disabled="!!props.initial?.inscrits" aria-describedby="aide-invitation">
         <label for="visibilite-invitation">Sur invitation</label>
         <p id="aide-invitation" class="champ__aide">Non listée&nbsp;; on entre par un lien secret.</p>
       </div>
