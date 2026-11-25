@@ -15,7 +15,7 @@ export function erreurCampagne(error: { code: string; message: string }, context
   throw createError({ statusCode: 500, message })
 }
 
-export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le'
+export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le, jeton_invitation'
 
 // Un slug hors de la forme imposée par la table (caractère nul, UTF-8 invalide…) ne peut désigner aucune campagne : 404
 // tout de suite, plutôt qu'une erreur de la base en 500.
@@ -23,6 +23,13 @@ export function slugDeLaRoute(event: H3Event) {
   const slug = getRouterParam(event, 'slug', { decode: true }) ?? ''
   if (slug.length > 60 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
   return slug
+}
+
+// Jeton d'invitation (story 2.4) : hors de la forme posée par la base (64 caractères hexadécimaux en minuscules), il ne peut
+// ouvrir aucune campagne : 404 tout de suite, sans appel à la base. Le jeton ne figure dans aucun message ni journal.
+export function jetonValide(jeton: unknown) {
+  if (typeof jeton !== 'string' || !/^[0-9a-f]{64}$/.test(jeton)) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
+  return jeton
 }
 
 // La campagne de l'adresse, si l'appelant en est le Boss. Sans session, ou pour tout autre compte : 404 (ressource hors droits).
@@ -68,13 +75,45 @@ export async function reglagesDuCorps(event: H3Event) {
 }
 
 // Inscription et désinscription (story 2.3) : JSON exigé (415), session exigée (401), slug dans la forme de la table et
-// campagne visible de l'appelant dans campagne_phase (404 sinon). La RPC revérifie tout.
-export async function campagneDeLInscrit(event: H3Event) {
+// campagne visible de l'appelant dans campagne_phase (404 sinon). Avec un jeton d'invitation (story 2.4), la campagne est
+// celle du lien (lire_invitation), qui doit porter ce slug. La RPC revérifie tout.
+export async function campagneDeLInscrit(event: H3Event, jeton?: string) {
   exigerJson(event)
   const slug = slugDeLaRoute(event)
   const { client } = await utilisateurVerifie(event)
-  const { data, error } = await client.from('campagne_phase').select('id').eq('slug', slug).maybeSingle()
+  const { data, error } = jeton
+    ? await client.rpc('lire_invitation', { p_jeton: jeton }).maybeSingle()
+    : await client.from('campagne_phase').select('id, slug').eq('slug', slug).maybeSingle()
   if (error) erreurCampagne(error, 'Lecture d\'une campagne publique :', 'La campagne ne peut pas être lue pour le moment.')
-  if (!data?.id) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
+  if (!data?.id || data.slug !== slug) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
   return { client, id: data.id }
+}
+
+// Page d'une campagne (stories 2.2 à 2.4), pour /api/campagnes/[slug] et /api/invitation/[jeton] : la ligne de campagne_phase
+// lue par la route (aucune ligne : 404, comme toute campagne hors droits), sans son id ; les critères et poids, de critere,
+// seule source (AD-8). Avec une session, ce qu'il faut à la page pour ne proposer que l'action que la base acceptera
+// (story 2.3) : compte actif, Boss de la campagne (pseudo unique sans tenir compte de la casse), inscrit ; lus sous RLS
+// (chacun ne lit que son compte et ses participations).
+export async function pageCampagne(event: H3Event, client: Awaited<ReturnType<typeof utilisateurVerifie>>['client'], userId: string | undefined, lecture: PromiseLike<(CampagnePublique & { id: string }) | null>) {
+  const [campagne, criteres] = await Promise.all([
+    lecture,
+    lirePublic<Critere[]>(event, 'critere?select=cle,libelle,jure,poids,calcule&order=jure.asc,poids.desc'),
+  ])
+  if (!campagne) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
+  const { id, ...publique } = campagne
+  let moi = { connecte: false, compte_actif: false, est_boss: false, inscrit: false }
+  if (userId) {
+    const [compte, participation] = await Promise.all([
+      client.from('compte').select('pseudo, etat').eq('id', userId).maybeSingle(),
+      client.from('participation').select('id').eq('campagne_id', id).eq('etat', 'inscrit').maybeSingle(),
+    ])
+    if (compte.error || participation.error) erreurCampagne((compte.error ?? participation.error)!, 'Lecture de l\'inscription :', 'La campagne ne peut pas être lue pour le moment.')
+    moi = {
+      connecte: true,
+      compte_actif: compte.data?.etat === 'actif',
+      est_boss: compte.data?.pseudo.toLowerCase() === publique.boss_pseudo.toLowerCase(),
+      inscrit: !!participation.data,
+    }
+  }
+  return { ...publique, criteres, ...moi }
 }

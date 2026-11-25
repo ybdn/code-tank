@@ -7,14 +7,14 @@ export type Database = {
           Tables: {
             "campagne": {
                   Row: {
-                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"jeton_invitation": string | null,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"id"?: string,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
+                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"id"?: string,"jeton_invitation"?: string | null,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
                   }
                   Update: {
-                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"id"?: string,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
+                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"id"?: string,"jeton_invitation"?: string | null,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
                   }
                   Relationships: [
                     {
@@ -89,6 +89,12 @@ isOneToOne: false
       foreignKeyName: "participation_campagne_id_fkey"
       columns: ["campagne_id"]
 isOneToOne: false
+      referencedRelation: "campagne_calculee"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "participation_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
       referencedRelation: "campagne_phase"
       referencedColumns: ["id"]
     },{
@@ -130,7 +136,21 @@ isOneToOne: false
                 }
           }
           Views: {
-            "campagne_phase": {
+            "campagne_calculee": {
+                  Row: {
+                    "boss_id": string,"boss_pseudo": string,"brief": string,"cloture_depot": string,"date_resultats": string,"id": string,"jeton_invitation": string | null,"langages": (string)[],"max_participants": number,"ouverture_inscriptions": string,"phase": string | null,"places_restantes": number | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    {
+      foreignKeyName: "campagne_boss_id_fkey"
+      columns: ["boss_id"]
+isOneToOne: false
+      referencedRelation: "compte"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"campagne_phase": {
                   Row: {
                     "boss_pseudo": string,"brief": string,"cloture_depot": string,"date_resultats": string,"id": string,"langages": (string)[],"max_participants": number,"ouverture_inscriptions": string,"phase": string | null,"places_restantes": number | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
                   }
@@ -165,6 +185,31 @@ isOneToOne: false
 "est_boss":
 { Args: { "p_campagne": string }; Returns: boolean
                            },
+"lire_invitation":
+{ Args: { "p_jeton": string }; Returns: {
+              "boss_pseudo": string,
+"brief": string,
+"cloture_depot": string,
+"date_resultats": string,
+"id": string,
+"langages": (string)[],
+"max_participants": number,
+"ouverture_inscriptions": string,
+"phase": string | null,
+"places_restantes": number | null,
+"role_boss": string,
+"slug": string,
+"statut": string,
+"theme": string,
+"titre": string,
+"visibilite": string
+            }[]
+                          SetofOptions: {
+        from: "*"
+        to: "campagne_phase"
+        isOneToOne: false
+        isSetofReturn: true
+      } },
 "modifier_campagne":
 { Args: { "p_brief": string,"p_campagne": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined
                            },
@@ -173,6 +218,9 @@ isOneToOne: false
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
+                           },
+"regenerer_invitation":
+{ Args: { "p_campagne": string }; Returns: string
                            },
 "regler_mode_acces":
 { Args: { "p_mode": string }; Returns: undefined
@@ -184,7 +232,7 @@ isOneToOne: false
 { Args: { "p_campagne": string }; Returns: undefined
                            },
 "sinscrire":
-{ Args: { "p_campagne": string,"p_connaissance": boolean }; Returns: undefined
+{ Args: { "p_campagne": string,"p_connaissance": boolean,"p_jeton"?: string }; Returns: undefined
                            },
 "supprimer_brouillon":
 { Args: { "p_campagne": string }; Returns: undefined

@@ -256,6 +256,7 @@ $$;
 -- appels simultanés. Pas de ligne à verrouiller ni de campagne_vivante ici : la campagne n'existe pas encore. Un brouillon
 -- échu de l'appelant, que la garde campagne_vivante empêche de supprimer, passe d'abord en expiree (arête d'AD-2) pour ne
 -- pas garder la place active ; bloqué, il reste tel quel (AD-10). Les autres étapes échues relèvent de la tâche quotidienne.
+-- Une campagne sur invitation reçoit son lien secret (story 2.4) : 256 bits de pgcrypto en hexadécimal.
 -- Exécutable par authenticated (PostgREST l'expose) : toutes les règles vivent ici.
 create function public.creer_campagne(p_titre text, p_theme text, p_brief text, p_langages text[], p_visibilite text,
   p_role_boss text, p_max_participants integer, p_ouverture_inscriptions timestamptz, p_cloture_depot timestamptz,
@@ -281,10 +282,11 @@ begin
   -- Un titre sans lettre latine ni chiffre donne un slug fait du seul suffixe.
   v_slug := concat_ws('-', nullif(v_base, ''), left(replace(gen_random_uuid()::text, '-', ''), 6));
   insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
-    ouverture_inscriptions, cloture_depot, date_resultats)
+    ouverture_inscriptions, cloture_depot, date_resultats, jeton_invitation)
   values (v_slug, auth.uid(), btrim(p_titre, E' \t\r\n\u00a0'), btrim(p_theme, E' \t\r\n\u00a0'), btrim(p_brief, E' \t\r\n\u00a0'),
     array(select btrim(l, E' \t\r\n\u00a0') from unnest(p_langages) l), p_visibilite, p_role_boss, p_max_participants,
-    p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
+    p_ouverture_inscriptions, p_cloture_depot, p_date_resultats,
+    case when p_visibilite = 'invitation' then encode(extensions.gen_random_bytes(32), 'hex') end);
   return v_slug;
 exception
   when unique_violation then
@@ -298,6 +300,7 @@ $$;
 
 -- Modifie les réglages d'une campagne en brouillon ou ouverte tant que les règles ne sont pas figées (premier dépôt).
 -- Campagne absente ou appelant qui n'en est pas le Boss : « Campagne introuvable. » en CT404, que le site change en 404.
+-- Lien d'invitation (story 2.4) : posé au passage sur invitation, gardé tant qu'elle le reste, retiré au passage en publique.
 create function public.modifier_campagne(p_campagne uuid, p_titre text, p_theme text, p_brief text, p_langages text[],
   p_visibilite text, p_role_boss text, p_max_participants integer, p_ouverture_inscriptions timestamptz,
   p_cloture_depot timestamptz, p_date_resultats timestamptz)
@@ -339,7 +342,8 @@ begin
   update public.campagne set titre = btrim(p_titre, E' \t\r\n\u00a0'), theme = btrim(p_theme, E' \t\r\n\u00a0'), brief = btrim(p_brief, E' \t\r\n\u00a0'),
     langages = array(select btrim(l, E' \t\r\n\u00a0') from unnest(p_langages) l), visibilite = p_visibilite, role_boss = p_role_boss,
     max_participants = p_max_participants, ouverture_inscriptions = p_ouverture_inscriptions,
-    cloture_depot = p_cloture_depot, date_resultats = p_date_resultats
+    cloture_depot = p_cloture_depot, date_resultats = p_date_resultats,
+    jeton_invitation = case when p_visibilite = 'invitation' then coalesce(jeton_invitation, encode(extensions.gen_random_bytes(32), 'hex')) end
   where id = p_campagne;
 end
 $$;
@@ -403,12 +407,11 @@ begin
 end
 $$;
 
--- Campagne vue du public (AD-1, AD-2, AD-10, AD-13) : vue du calculé, avec les droits de son propriétaire (security_invoker
--- = false), si bien que la visibilité se tient ici et nulle part ailleurs. Visible : ni bloquée, ni brouillon, ni expirée,
--- et publique ou dont l'appelant est le Boss (la story 2.4 ajoutera « ou inscrit »). Ni boss_id ni motif_blocage ; le Boss
--- est dit par son pseudo, seule donnée publique d'un compte.
+-- Campagne calculée (AD-1, AD-2, AD-10, AD-13) : vue du calculé, avec les droits de son propriétaire (security_invoker =
+-- false), pour campagne_phase et lire_invitation seules ; aucun client ne la lit (elle porte boss_id et le jeton). Hors
+-- d'elle : bloquées, brouillons, expirées.
 -- Phase d'une campagne ouverte : pas de fin d'inscription distincte, inscription et dépôt sont ouverts ensemble (SPECS § 3).
-create view public.campagne_phase with (security_invoker = false) as
+create view public.campagne_calculee with (security_invoker = false) as
 select c.id, c.slug, c.titre, c.theme, c.brief, c.langages, c.visibilite, c.role_boss, c.max_participants,
   c.ouverture_inscriptions, c.cloture_depot, c.date_resultats, c.statut,
   -- Calculé, jamais stocké (story 2.3) : la vue lit participation avec les droits de son propriétaire.
@@ -421,22 +424,32 @@ select c.id, c.slug, c.titre, c.theme, c.brief, c.langages, c.visibilite, c.role
     when now() < c.cloture_depot then 'inscriptions'
     else 'depots_clos'
   end as phase,
-  b.pseudo as boss_pseudo
+  b.pseudo as boss_pseudo,
+  c.boss_id, c.jeton_invitation
 from public.campagne c
 join public.compte b on b.id = c.boss_id
-where c.bloquee_le is null and c.statut not in ('brouillon', 'expiree')
-  and (c.visibilite = 'publique' or c.boss_id = (select auth.uid()));
+where c.bloquee_le is null and c.statut not in ('brouillon', 'expiree');
+
+-- Campagne vue du public : la visibilité se tient ici et nulle part ailleurs. Visible : publique, ou dont l'appelant est le
+-- Boss, ou à laquelle il est inscrit (story 2.4 ; un inscrit retiré ne la voit plus). Ni boss_id, ni motif_blocage, ni le
+-- jeton d'invitation ; le Boss est dit par son pseudo, seule donnée publique d'un compte.
+create view public.campagne_phase with (security_invoker = false) as
+select v.id, v.slug, v.titre, v.theme, v.brief, v.langages, v.visibilite, v.role_boss, v.max_participants,
+  v.ouverture_inscriptions, v.cloture_depot, v.date_resultats, v.statut, v.places_restantes, v.phase, v.boss_pseudo
+from public.campagne_calculee v
+where v.visibilite = 'publique' or v.boss_id = (select auth.uid())
+  or exists (select 1 from public.participation p where p.campagne_id = v.id and p.compte_id = (select auth.uid()) and p.etat = 'inscrit');
 
 
 -- Inscription et désinscription (story 2.3) ---------------------------------------------------------------
 
 -- Inscrit l'appelant à une campagne publique en phase d'inscription (AD-1, AD-2, SPECS § 3 et § 9) : premier arrivé, premier
--- servi, sous le verrou de la ligne campagne, si bien que deux inscriptions simultanées ne dépassent jamais les places. Cette
--- voie ne voit que ce que montre campagne_phase à un compte quelconque : une campagne sur invitation, un brouillon, une
--- campagne expirée ou bloquée répondent « introuvable » (la story 2.4 ajoutera la voie de l'invitation, avec son jeton).
--- Un Boss juge ne s'inscrit pas à sa campagne ; un Boss joueur y occupe une place. Exécutable par authenticated (PostgREST
+-- servi, sous le verrou de la ligne campagne, si bien que deux inscriptions simultanées ne dépassent jamais les places. Un
+-- brouillon, une campagne expirée ou bloquée répondent « introuvable ». Une campagne sur invitation aussi (story 2.4), sauf
+-- avec son jeton exact (le lien secret), pour son Boss ou pour un inscrit, comme campagne_phase ; une campagne publique
+-- ignore le jeton. Le jeton ne figure dans aucun message. Un Boss juge ne s'inscrit pas à sa campagne ; un Boss joueur y occupe une place. Exécutable par authenticated (PostgREST
 -- l'expose) : toutes les règles vivent ici, limite de débit par compte comprise.
-create function public.sinscrire(p_campagne uuid, p_connaissance boolean)
+create function public.sinscrire(p_campagne uuid, p_connaissance boolean, p_jeton text default null)
 returns void
 language plpgsql security definer set search_path = ''
 as $$
@@ -444,7 +457,9 @@ declare
   v_c public.campagne%rowtype;
 begin
   select * into v_c from public.campagne where id = p_campagne for update;
-  if not found or v_c.visibilite <> 'publique' or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null then
+  if not found or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null
+    or (v_c.visibilite = 'invitation' and v_c.boss_id is distinct from auth.uid() and p_jeton is distinct from v_c.jeton_invitation
+      and not exists (select 1 from public.participation where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit')) then
     raise exception 'Campagne introuvable.' using errcode = 'CT404';
   end if;
   if not public.campagne_vivante(p_campagne) then
@@ -481,8 +496,8 @@ end
 $$;
 
 -- Désinscrit l'appelant tant que la délibération n'a pas commencé (statut ouverte) : sa ligne passe à retire et sa place se
--- libère. Mêmes gardes, dans le même ordre, que sinscrire ; pas de limite de débit (sinscrire borne déjà les allers-retours).
--- shortcut: invitation en 404 comme dans sinscrire ; la story 2.4 ouvrira cette voie aux invités.
+-- libère. Mêmes gardes, dans le même ordre, que sinscrire (sans jeton : sur invitation, l'inscrit et le Boss voient la
+-- campagne) ; pas de limite de débit (sinscrire borne déjà les allers-retours).
 create function public.se_desinscrire(p_campagne uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -491,7 +506,9 @@ declare
   v_c public.campagne%rowtype;
 begin
   select * into v_c from public.campagne where id = p_campagne for update;
-  if not found or v_c.visibilite <> 'publique' or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null then
+  if not found or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null
+    or (v_c.visibilite = 'invitation' and v_c.boss_id is distinct from auth.uid()
+      and not exists (select 1 from public.participation where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit')) then
     raise exception 'Campagne introuvable.' using errcode = 'CT404';
   end if;
   if not public.campagne_vivante(p_campagne) then
@@ -508,5 +525,55 @@ begin
   if not found then
     raise exception 'Tu n''es pas inscrit à cette campagne.';
   end if;
+end
+$$;
+
+
+-- Invitation (story 2.4) -------------------------------------------------------------------------------------------
+
+-- Campagne d'un lien d'invitation, pour un compte connecté : mêmes colonnes que campagne_phase, jeton jamais rendu. Jeton
+-- hors forme ou inconnu, campagne bloquée, brouillon ou expirée : « Campagne introuvable. » en CT404, message fixe.
+-- Pas de limite de débit : 256 bits aléatoires ne se devinent pas par essais.
+create function public.lire_invitation(p_jeton text)
+returns setof public.campagne_phase
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  return query
+  select v.id, v.slug, v.titre, v.theme, v.brief, v.langages, v.visibilite, v.role_boss, v.max_participants,
+    v.ouverture_inscriptions, v.cloture_depot, v.date_resultats, v.statut, v.places_restantes, v.phase, v.boss_pseudo
+  from public.campagne_calculee v
+  where p_jeton ~ '^[0-9a-f]{64}$' and v.jeton_invitation = p_jeton;
+  if not found then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+end
+$$;
+
+-- Nouveau lien pour une campagne sur invitation de l'appelant : l'ancien n'ouvre plus rien, les inscrits gardent leur accès
+-- (campagne_phase les voit par leur participation). Mêmes gardes, dans le même ordre, que modifier_campagne. Rend le jeton.
+create function public.regenerer_invitation(p_campagne uuid)
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_visibilite text;
+  v_jeton text := encode(extensions.gen_random_bytes(32), 'hex');
+begin
+  select visibilite into v_visibilite from public.campagne where id = p_campagne for update;
+  if not found or not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est bloquée ou échue : son lien ne change plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_visibilite <> 'invitation' then
+    raise exception 'Seule une campagne sur invitation a un lien.';
+  end if;
+  update public.campagne set jeton_invitation = v_jeton where id = p_campagne;
+  return v_jeton;
 end
 $$;

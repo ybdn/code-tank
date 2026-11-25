@@ -34,8 +34,9 @@ insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visib
     timestamptz '2090-06-01 09:00 Europe/Paris' + interval '3 days');
 update public.campagne set statut = 'expiree' where slug = 'expiree-y';
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
-  ouverture_inscriptions, cloture_depot, date_resultats)
-select s, b::uuid, 'Titre ' || s, 'Thème', 'Brief', array['Go'], v, 'juge', 5, o, c, r
+  ouverture_inscriptions, cloture_depot, date_resultats, jeton_invitation)
+select s, b::uuid, 'Titre ' || s, 'Thème', 'Brief', array['Go'], v, 'juge', 5, o, c, r,
+  case v when 'invitation' then encode(extensions.gen_random_bytes(32), 'hex') end
 from (values
   ('pub-b', '80000000-0000-4000-8000-0000000000b1', 'publique'),
   ('inv-b2', '80000000-0000-4000-8000-0000000000b2', 'invitation'),

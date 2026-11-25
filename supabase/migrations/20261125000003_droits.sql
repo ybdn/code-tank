@@ -54,7 +54,8 @@ insert into public.critere (cle, libelle, jure, poids, calcule) values
   ('reponse_brief', 'Réponse au brief', 'pitch', 15, false),
   ('originalite_finition', 'Originalité et finition', 'pitch', 10, false);
 
--- campagne (story 2.1) : le Boss lit ses campagnes et rien d'autre (le public lit la vue campagne_phase, plus bas) ;
+-- campagne (story 2.1) : le Boss lit ses campagnes et rien d'autre, jeton d'invitation compris (le public lit la vue
+-- campagne_phase, plus bas, qui ne le porte pas) ;
 -- aucune écriture directe, pas même du rôle de service : creer_campagne, modifier_campagne, supprimer_brouillon et
 -- ouvrir_campagne seules. Ces quatre RPC sont exécutables par authenticated seul et tiennent toutes leurs règles (compte_actif(), est_boss, verrou
 -- de la ligne, campagne_vivante) : un appel direct par /rest/v1/rpc ne contourne rien. Les gardes est_boss et
@@ -80,8 +81,9 @@ grant execute on function
   to authenticated;
 
 -- campagne_phase (story 2.2) : lecture seule pour anon et authenticated, rien pour le rôle de service. La vue filtre
--- elle-même (brouillon, expirée, bloquée, invitation hors Boss) : elle lit campagne et compte avec les droits de postgres.
-revoke all on public.campagne_phase from service_role;
+-- elle-même (brouillon, expirée, bloquée, invitation hors Boss et inscrits) : elle lit campagne_calculee, campagne, compte et
+-- participation avec les droits de postgres. campagne_calculee (story 2.4), qui porte boss_id et le jeton : aucun droit client.
+revoke all on public.campagne_phase, public.campagne_calculee from service_role;
 grant select on public.campagne_phase to anon, authenticated;
 
 -- participation (story 2.3) : chaque compte lit ses lignes et rien d'autre (les places restantes se lisent dans
@@ -92,5 +94,11 @@ alter table public.participation enable row level security;
 revoke all on public.participation from service_role;
 grant select on public.participation to authenticated;
 create policy participation_lecture on public.participation for select to authenticated using (compte_id = (select auth.uid()));
-revoke all on function public.sinscrire(uuid, boolean), public.se_desinscrire(uuid) from service_role;
-grant execute on function public.sinscrire(uuid, boolean), public.se_desinscrire(uuid) to authenticated;
+revoke all on function public.sinscrire(uuid, boolean, text), public.se_desinscrire(uuid) from service_role;
+grant execute on function public.sinscrire(uuid, boolean, text), public.se_desinscrire(uuid) to authenticated;
+
+-- Invitation (story 2.4) : lire_invitation et regenerer_invitation, exécutables par authenticated seul. Leurs règles vivent
+-- dans les fonctions (forme et égalité du jeton ; Boss, verrou, campagne_vivante, compte_actif(), visibilité) : un appel direct
+-- par /rest/v1/rpc ne contourne rien. Le jeton ne se lit que par la ligne du Boss (campagne_lecture_boss) et par ces RPC.
+revoke all on function public.lire_invitation(text), public.regenerer_invitation(uuid) from service_role;
+grant execute on function public.lire_invitation(text), public.regenerer_invitation(uuid) to authenticated;
