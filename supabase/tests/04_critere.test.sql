@@ -8,7 +8,7 @@ select is(has_table_privilege('authenticated', 'public.critere', 'select'), true
 select is(has_table_privilege('anon', 'public.critere', 'insert,update,delete,truncate'), false, 'anon n''écrit pas');
 select is(has_table_privilege('authenticated', 'public.critere', 'insert,update,delete,truncate'), false, 'authenticated n''écrit pas');
 select is(has_table_privilege('service_role', 'public.critere', 'select'), true, 'service_role lit critere');
-select is(has_table_privilege('service_role', 'public.critere', 'insert,update,delete,truncate'), false, 'service_role n''écrit pas');
+select is(has_table_privilege('service_role', 'public.critere', 'insert,update,delete,truncate,references,trigger'), false, 'service_role n''écrit pas');
 
 select results_eq(
   'select cle, jure, poids, calcule from public.critere order by cle',

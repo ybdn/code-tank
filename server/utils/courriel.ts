@@ -19,9 +19,6 @@ function transport({ host, port, user, pass }: Config['smtp']) {
   })
 }
 
-// Panne du SMTP lui-même (et non refus d'un destinataire) : inutile d'insister auprès des suivants.
-export const estPanneSmtp = (e: unknown) => ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EAUTH'].includes((e as { code?: string }).code ?? '')
-
 // E-mail texte à un destinataire, signé. Lève si la configuration ou l'envoi sont en défaut ; l'appelant ne journalise
 // jamais le message d'erreur SMTP, qui peut citer l'adresse.
 export async function envoyerCourriel(config: Config, to: string, sujet: string, texte: string) {

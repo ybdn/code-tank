@@ -15,7 +15,8 @@ grant execute on function public.prendre_verrou(text, text, integer), public.ren
 
 -- critere : lecture par tous, aucune écriture, pas même du rôle de service (AD-8) : seule cette migration la remplit.
 alter table public.critere enable row level security;
-revoke insert, update, delete, truncate on public.critere from service_role;
+revoke all on public.critere from service_role;
+grant select on public.critere to service_role;
 grant select on public.critere to anon, authenticated;
 create policy critere_lecture on public.critere for select to anon, authenticated using (true);
 
