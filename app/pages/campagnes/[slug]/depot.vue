@@ -43,6 +43,7 @@ const nonActualisee = ref(false)
 const titreEtat = useTemplateRef<HTMLElement>('titreEtat')
 const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')
 const boutonAnnuler = useTemplateRef<HTMLButtonElement>('boutonAnnuler')
+const boutonRetrait = useTemplateRef<HTMLButtonElement>('boutonRetrait')
 
 // Relit la page sans toucher à ce qui est affiché en cas d'échec : une phrase et un bouton « Actualiser » le disent.
 async function actualiser() {
@@ -93,11 +94,11 @@ const deposer = (fichier: File, corps: { presentation: string; demande: string; 
 
 const retirer = () => agir(async () => { await $fetch<unknown>(`${url}/depot`, { method: 'DELETE', body: {} }) }, 'Dépôt retiré. Tu restes inscrit : tu peux redéposer avant la clôture.')
 
-// Le bouton cliqué disparaît : le focus va sur « Annuler », choix sans risque.
-async function demanderRetrait() {
-  confirmer.value = true
+// Le bouton cliqué disparaît : le focus va sur « Annuler », choix sans risque, et revient sur « Retirer » à l'annulation.
+async function demanderRetrait(v: boolean) {
+  confirmer.value = v
   await nextTick()
-  boutonAnnuler.value?.focus()
+  ;(v ? boutonAnnuler : boutonRetrait).value?.focus()
 }
 </script>
 
@@ -118,7 +119,11 @@ async function demanderRetrait() {
         </div>
 
         <template v-if="data.reception">
-          <p v-if="data.reception.statut === 'en_attente'">Contrôle en cours de ton archive envoyée le {{ dateParis(data.reception.cree_le) }}.</p>
+          <!-- Le contrôle se termine sans que la page le sache : « Actualiser » relit l'état. -->
+          <p v-if="data.reception.statut === 'en_attente'">
+            Contrôle en cours de ton archive envoyée le {{ dateParis(data.reception.cree_le) }}.
+            <button class="btn" type="button" :aria-disabled="occupe" @click="agir(async () => {}, 'État actualisé.')">Actualiser</button>
+          </p>
           <template v-else>
             <p>Ton archive envoyée le {{ dateParis(data.reception.cree_le) }} a été refusée. Corrige ce qui suit, puis redépose.</p>
             <ul>
@@ -131,12 +136,12 @@ async function demanderRetrait() {
           <p class="brief">{{ data.depot.presentation }}</p>
           <p v-if="data.depot.demande">Ta demande&nbsp;: {{ data.depot.demande }}</p>
           <p v-if="pasDeRetrait">{{ pasDeRetrait }}</p>
-          <p v-else-if="!confirmer" class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="demanderRetrait">Retirer mon dépôt</button></p>
+          <p v-else-if="!confirmer" class="btns"><button ref="boutonRetrait" class="btn" type="button" :aria-disabled="occupe" @click="demanderRetrait(true)">Retirer mon dépôt</button></p>
           <div v-else class="avis" role="group" aria-labelledby="retrait-titre">
             <p id="retrait-titre">Ton dépôt et son archive seront supprimés. Tu resteras inscrit.</p>
             <p class="btns">
               <button class="btn btn--primary" type="button" :aria-disabled="occupe" @click="retirer">Confirmer le retrait</button>
-              <button ref="boutonAnnuler" class="btn" type="button" :aria-disabled="occupe" @click="confirmer = false">Annuler</button>
+              <button ref="boutonAnnuler" class="btn" type="button" :aria-disabled="occupe" @click="demanderRetrait(false)">Annuler</button>
             </p>
           </div>
         </template>

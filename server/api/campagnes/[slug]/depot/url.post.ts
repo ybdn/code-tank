@@ -22,6 +22,8 @@ export default defineEventHandler(async (event) => {
     setResponseHeader(event, 'retry-after', attente)
     throw createError({ statusCode: 429, message: 'Trop d\'envois depuis ton compte. Réessaie plus tard.' })
   }
+  // shortcut: un objet envoyé mais jamais déposé (deposer refuse : 409, 429, réseau) reste dans le bucket ; objets_abandonnes
+  // (AD-11, epic 6) l'effacera.
   const chemin = `${id}/${participation}/${randomUUID()}.zip`
   const { data, error: erreurStockage } = await service.storage.from('depots').createSignedUploadUrl(chemin)
   if (erreurStockage) {

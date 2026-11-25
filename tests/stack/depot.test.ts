@@ -146,7 +146,7 @@ describe('dépôt', () => {
     expect(page).toContain('Contrôle en cours de ton archive')
     expect(page).toContain('Ton dépôt précédent est en cours de contrôle : attends son résultat pour redéposer.')
     expect(page).not.toContain('Déposer</button>')
-    expect((await lire(`/campagnes/${juge.slug}`, a.cookie)).texte).toContain('Retire d&#39;abord ton dépôt pour te désinscrire.')
+    expect((await lire(`/campagnes/${juge.slug}`, a.cookie)).texte).toContain('Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.')
 
     // Ni URL d'envoi (rien ne resterait orphelin dans le bucket), ni dépôt, tant que la réception attend.
     for (const route of ['depot/url', 'depot']) {
@@ -156,7 +156,7 @@ describe('dépôt', () => {
     expect(await envoyer('DELETE', `/api/campagnes/${juge.slug}/depot`, a.cookie))
       .toMatchObject({ statut: 409, json: { message: 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.' } })
     expect(await envoyer('DELETE', `/api/campagnes/${juge.slug}/inscription`, a.cookie))
-      .toMatchObject({ statut: 409, json: { message: 'Retire d\'abord ton dépôt pour te désinscrire.' } })
+      .toMatchObject({ statut: 409, json: { message: 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.' } })
   })
 
   it('refus : 415, 401, 404, case, présentation, chemin, non inscrit, Boss juge ; jamais 500', async () => {
@@ -170,6 +170,9 @@ describe('dépôt', () => {
       for (const slug of ['%00', '%ED%A0%80', `inconnue-${marque}`]) {
         expect((await envoyer('POST', route.replace(juge.slug, slug), a.cookie, corps)).statut, slug).toBe(404)
       }
+    }
+    for (const slug of ['%00', '%ED%A0%80', `inconnue-${marque}`]) {
+      expect((await envoyer('DELETE', depot.replace(juge.slug, slug), a.cookie)).statut, slug).toBe(404)
     }
     expect((await envoyer('DELETE', depot, a.cookie, {}, 'text/plain')).statut).toBe(415)
     expect((await envoyer('DELETE', depot, '')).statut).toBe(401)
@@ -214,6 +217,14 @@ describe('dépôt', () => {
     const page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
     expect(page).toContain('La date limite de dépôt est passée.')
     expect(page).not.toContain('Déposer</button>')
+    // Un dépôt accepté avant la clôture (prive, simulé) : il ne se retire plus, donc pas de désinscription non plus.
+    sql(`insert into public.depot (participation_id, chemin_stockage, sha256, nb_fichiers, nb_tokens_estime, presentation, droit_declare_le)
+      select p.id, '${chemin}', '${'e'.repeat(64)}', 1, 10, 'Clos.', now() from public.participation p where p.compte_id = '${a.u.id}'`)
+    expect(await envoyer('DELETE', `/api/campagnes/${c.slug}/inscription`, a.cookie))
+      .toMatchObject({ statut: 409, json: { message: 'Le dépôt est clos : tu ne peux plus te désinscrire.' } })
+    const fiche = (await lire(`/campagnes/${c.slug}`, a.cookie)).texte
+    expect(fiche).toContain('Le dépôt est clos : tu ne peux plus te désinscrire.')
+    expect(fiche).not.toContain('Me désinscrire</button>')
   })
 
   it('retrait : la ligne disparaît et les archives sont effacées du bucket', async () => {

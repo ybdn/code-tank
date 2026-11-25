@@ -5,15 +5,16 @@
 -- Les objets du bucket et les lignes depot (écrites par prive, story 3.4) sont posés en superutilisateur.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(77);
+select plan(83);
 
 insert into auth.users (id, email)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
-from unnest(array['a1', 'a2', 'a3', 'e1', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
+from unnest(array['a1', 'a2', 'a3', 'e1', 'c5', 'ad', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
 insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, '91' || h, 'depot_' || h, now(), '2026-11-25', now(),
-  case h when 'e1' then 'en_attente' else 'actif' end
-from unnest(array['a1', 'a2', 'a3', 'e1', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
+  case h when 'e1' then 'en_attente' when 'c5' then 'suspendu' else 'actif' end
+from unnest(array['a1', 'a2', 'a3', 'e1', 'c5', 'ad', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
+update public.compte set role = 'admin' where id = '91000000-0000-4000-8000-0000000000ad';
 
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
   ouverture_inscriptions, cloture_depot, date_resultats)
@@ -35,7 +36,8 @@ insert into public.participation (id, campagne_id, compte_id, connaissance_envoi
   ('91000000-0000-4000-8000-0000000000f3', current_setting('t.d_clos')::uuid, '91000000-0000-4000-8000-0000000000a1', now()),
   ('91000000-0000-4000-8000-0000000000f4', current_setting('t.d_jou')::uuid, '91000000-0000-4000-8000-0000000000b2', now()),
   ('91000000-0000-4000-8000-0000000000f5', current_setting('t.d_avenir')::uuid, '91000000-0000-4000-8000-0000000000a1', now()),
-  ('91000000-0000-4000-8000-0000000000f6', current_setting('t.d_delib')::uuid, '91000000-0000-4000-8000-0000000000a1', now());
+  ('91000000-0000-4000-8000-0000000000f6', current_setting('t.d_delib')::uuid, '91000000-0000-4000-8000-0000000000a1', now()),
+  ('91000000-0000-4000-8000-0000000000f7', current_setting('t.d_pub')::uuid, '91000000-0000-4000-8000-0000000000c5', now());
 -- Chemins : <campagne>/<participation>/<uuid>.zip. c1 à c4 pour A1, c9 pour A2, j1 pour le Boss joueur.
 select set_config('t.c' || n, current_setting('t.d_pub') || '/91000000-0000-4000-8000-0000000000f1/9a000000-0000-4000-8000-00000000000' || n || '.zip', true)
 from generate_series(0, 4) n;
@@ -122,6 +124,15 @@ set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a3","r
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Tu n''es pas inscrit à cette campagne.', 'compte non inscrit : refus');
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000e1","role":"authenticated"}';
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Ton compte n''est pas actif.', 'compte en attente : refus');
+-- Compte suspendu, inscrit avant sa suspension : aucune des trois RPC ne passe.
+set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000c5","role":"authenticated"}';
+select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton compte n''est pas actif.', 'compte suspendu : peut_deposer refuse');
+select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Ton compte n''est pas actif.', 'compte suspendu : deposer refuse');
+select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton compte n''est pas actif.', 'compte suspendu : retirer_depot refuse');
+-- Admin : aucun passe-droit, il n'est pas inscrit.
+set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000ad","role":"authenticated"}';
+select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Tu n''es pas inscrit à cette campagne.', 'admin non inscrit : deposer refuse');
+select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'CT404', 'Tu n''as pas de dépôt dans cette campagne.', 'admin : retirer_depot sans dépôt');
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000b1","role":"authenticated"}';
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Tu juges cette campagne : tu n''y déposes pas.', 'Boss juge : refus');
 select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Tu juges cette campagne : tu n''y déposes pas.', 'peut_deposer : mêmes gardes');
@@ -146,7 +157,7 @@ set local role authenticated;
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c2'), 'x', null, true)$$, 'P0001', 'Ton dépôt précédent est en cours de contrôle.', 'réception en attente : pas de second dépôt');
 select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton dépôt précédent est en cours de contrôle.', 'réception en attente : peut_deposer refuse aussi (pas d''URL d''envoi)');
 select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.', 'réception en attente : pas de retrait');
-select throws_ok($$select public.se_desinscrire(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Retire d''abord ton dépôt pour te désinscrire.', 'réception en attente : pas de désinscription');
+select throws_ok($$select public.se_desinscrire(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.', 'réception en attente : pas de désinscription');
 select throws_ok($$select chemin_stockage from public.reception$$, '42501', null, 'le candidat ne lit pas le chemin de sa réception');
 select throws_ok($$update public.reception set statut = 'refusee'$$, '42501', null, 'le candidat ne modifie pas sa réception');
 select throws_ok($$delete from public.reception$$, '42501', null, 'le candidat ne supprime pas sa réception');
@@ -190,12 +201,18 @@ update public.reception set statut = 'refusee' where participation_id = '9100000
 set local role authenticated;
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a2","role":"authenticated"}';
 select throws_ok($$select public.se_desinscrire(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Retire d''abord ton dépôt pour te désinscrire.', 'dépôt en place : pas de désinscription');
+reset role;
+insert into public.depot (participation_id, chemin_stockage, sha256, nb_fichiers, nb_tokens_estime, presentation, droit_declare_le)
+values ('91000000-0000-4000-8000-0000000000f3', current_setting('t.d_clos') || '/91000000-0000-4000-8000-0000000000f3/9a000000-0000-4000-8000-000000000005.zip', repeat('d', 64), 1, 10, 'Clos.', now());
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+select throws_ok($$select public.se_desinscrire(current_setting('t.d_clos')::uuid)$$, 'P0001', 'Le dépôt est clos : tu ne peux plus te désinscrire.', 'dépôt après la clôture : pas de désinscription');
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
 select throws_ok($$select public.retirer_depot(current_setting('t.d_clos')::uuid)$$, 'P0001', 'Le dépôt est clos : tu ne peux plus le retirer.', 'après la clôture : pas de retrait');
 select throws_ok($$select public.retirer_depot(current_setting('t.d_delib')::uuid)$$, 'P0001', 'Le dépôt est clos : tu ne peux plus le retirer.', 'délibération : pas de retrait');
 select results_eq($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$,
   $$values (array[current_setting('t.c0'), replace(current_setting('t.c0'), '.zip', '.filtre.zip')])$$, 'retrait : rend le zip et l''archive filtrée');
-select is_empty($$select 1 from public.depot$$, 'la ligne depot a disparu');
+select is_empty($$select 1 from public.depot where participation_id = '91000000-0000-4000-8000-0000000000f1'$$, 'la ligne depot a disparu');
 select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'CT404', 'Tu n''as pas de dépôt dans cette campagne.', 'sans dépôt : 404');
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a3","role":"authenticated"}';
 select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'CT404', 'Tu n''as pas de dépôt dans cette campagne.', 'non inscrit : 404');

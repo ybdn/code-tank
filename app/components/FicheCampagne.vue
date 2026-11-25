@@ -32,7 +32,8 @@ const pasDeRetrait = computed(() => {
   if (!c.compte_actif) return 'Ton compte n\'est pas actif : tu ne peux pas te désinscrire.'
   if (Date.parse(c.date_resultats) <= Date.now()) return 'Cette campagne est échue : on ne s\'en désinscrit plus.'
   if (c.statut !== 'ouverte') return 'La délibération a commencé : tu ne peux plus te désinscrire.'
-  if (c.depot || c.reception?.statut === 'en_attente') return 'Retire d\'abord ton dépôt pour te désinscrire.'
+  if (c.reception?.statut === 'en_attente') return 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.'
+  if (c.depot) return Date.parse(c.cloture_depot) <= Date.now() ? 'Le dépôt est clos : tu ne peux plus te désinscrire.' : 'Retire d\'abord ton dépôt pour te désinscrire.'
   return ''
 })
 const connaissance = ref(false)

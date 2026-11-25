@@ -520,10 +520,17 @@ begin
   if v_c.statut <> 'ouverte' then
     raise exception 'La délibération a commencé : tu ne peux plus te désinscrire.';
   end if;
-  -- Un dépôt appartient à un inscrit (story 3.3) : il se retire d'abord, par retirer_depot qui rend ses archives à effacer.
-  if exists (select 1 from public.participation p where p.campagne_id = p_campagne and p.compte_id = auth.uid()
-    and (exists (select 1 from public.depot where participation_id = p.id)
-      or exists (select 1 from public.reception where participation_id = p.id and statut = 'en_attente'))) then
+  -- Un dépôt appartient à un inscrit (story 3.3) : il se retire d'abord, par retirer_depot qui rend ses archives à effacer,
+  -- ce qui n'est possible qu'avant la clôture et hors contrôle en cours.
+  if exists (select 1 from public.reception r join public.participation p on p.id = r.participation_id
+    where p.campagne_id = p_campagne and p.compte_id = auth.uid() and r.statut = 'en_attente') then
+    raise exception 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.';
+  end if;
+  if exists (select 1 from public.depot d join public.participation p on p.id = d.participation_id
+    where p.campagne_id = p_campagne and p.compte_id = auth.uid()) then
+    if now() >= v_c.cloture_depot then
+      raise exception 'Le dépôt est clos : tu ne peux plus te désinscrire.';
+    end if;
     raise exception 'Retire d''abord ton dépôt pour te désinscrire.';
   end if;
   update public.participation set etat = 'retire', retire_le = now()
