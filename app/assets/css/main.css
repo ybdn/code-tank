@@ -234,9 +234,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .podium li[data-rang="1"] { border-top-color: var(--accent); }
 .podium__rang { color: var(--accent); font: 700 1.5rem var(--font-display); }
 .podium__nom { font-size: 1.15rem; }
-/* En-têtes et nombres ne se coupent qu'entre les mots ; le pseudo et sa mention passent à la ligne (sinon les colonnes de score s'écrasent lettre à lettre). */
-/* Au téléphone, la colonne figée du pseudo laisse de la place aux notes. */
-@media (max-width: 48rem) { .tableau.tableau--notes tbody th { white-space: normal; max-width: 9rem; } }
 .mention { display: block; margin-top: 4px; color: var(--muted); font-size: .85rem; font-weight: 400; }
 .jure { display: grid; grid-template-columns: 72px 1fr; gap: 16px 20px; padding: 20px; background: var(--surface); border-radius: 8px; }
 .jure + .jure { margin-top: 1rem; }
@@ -334,20 +331,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 }
 @keyframes clignote { 50% { opacity: 0; } }
 @keyframes remplit { from { background: var(--line); } }
-/* Listes (campagnes, participants) : toutes les colonnes tiennent dès la tablette ; dates et statuts se coupent entre les
-   mots (jamais au milieu), le titre garde une largeur lisible. */
-/* Au téléphone, une ligne devient une fiche : titre, statut, puis « libellé : valeur » (data-label). Les rôles ARIA posés
-   sur le tableau gardent sa sémantique malgré display: block. */
-@media (max-width: 40rem) {
-  .tableau--liste { overflow: visible; border: 0; }
-  .tableau--liste table { min-width: 0; }
-  .tableau--liste thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .tableau--liste :is(tbody, tr, th, td) { display: block; }
-  .tableau--liste tbody { display: grid; gap: 8px; }
-  .tableau--liste tr { display: grid; gap: 4px; padding: 14px 16px; background: var(--surface); clip-path: var(--pixel); }
-  .tableau--liste tbody :is(th, td) { min-width: 0; padding: 0; border: 0; white-space: normal; }
-  .tableau--liste td[data-label]::before { content: attr(data-label) " : "; color: var(--muted); font-size: .9rem; }
-}
 /* Téléphone, ou paysage peu haut : la console tient sur une rangée (mascotte et onglets), son titre reste lu par les lecteurs d'écran. */
 @media (max-width: 48rem), (max-height: 30rem) {
   .console__bar { flex-wrap: nowrap; gap: 4px; min-height: 0; }
