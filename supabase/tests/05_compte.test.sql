@@ -1,8 +1,8 @@
--- Compte et réglage : droits par rôle, creer_compte (rôle de service seul ; identité GitHub, charte, majorité, pseudo), gardes.
+-- Compte : droits par rôle, creer_compte (rôle de service seul ; identité GitHub, charte, majorité, pseudo), gardes.
 -- A et B ont une identité GitHub, C non. Identité simulée par le rôle et request.jwt.claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(35);
+select plan(33);
 
 insert into auth.users (id, email) values
   ('10000000-0000-4000-8000-00000000000a', 'a@example.org'),
@@ -22,10 +22,6 @@ select is(has_table_privilege('authenticated', 'public.compte', 'insert,update,d
   'authenticated : aucune écriture sur compte');
 select is(has_table_privilege('service_role', 'public.compte', 'select,insert,update,delete,truncate,references,trigger'), false,
   'service_role : aucun droit direct sur compte');
-select is_empty($$
-  select r from unnest(array['anon', 'authenticated', 'service_role']) r
-  where has_table_privilege(r, 'public.reglage', 'select,insert,update,delete,truncate,references,trigger')
-$$, 'aucun droit sur reglage, ni client ni rôle de service');
 select is(has_function_privilege('anon', 'public.creer_compte(uuid,text,text,boolean,boolean)', 'execute')
   or has_function_privilege('authenticated', 'public.creer_compte(uuid,text,text,boolean,boolean)', 'execute'), false,
   'ni anon ni authenticated n''exécutent creer_compte');
@@ -83,13 +79,6 @@ select throws_ok($$update public.compte set role = 'admin'$$, '42501', null, 'A 
 select throws_ok($$update public.compte set pseudo = 'autre'$$, '42501', null, 'ni son pseudo');
 set local request.jwt.claims = '{"sub":"10000000-0000-4000-8000-00000000000b","role":"authenticated"}';
 select is_empty('select 1 from public.compte', 'B ne lit pas le compte de A');
-reset role;
-
--- Mode d'accès autre qu'ouvert : personne n'entre (les autres modes arrivent avec la story 1.3).
-update public.reglage set mode_acces = 'ferme';
-set local role service_role;
-select throws_ok($$select public.creer_compte('10000000-0000-4000-8000-00000000000b', 'bob', '2026-11-25', true, true)$$, 'P0001',
-  'Les inscriptions sont fermées pour le moment.', 'mode non ouvert : création refusée');
 reset role;
 
 -- Gardes : admin posé à la main, suspendu --------------------------------------------------------

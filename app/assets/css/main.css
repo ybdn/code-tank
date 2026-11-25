@@ -184,7 +184,7 @@ main:focus { outline: none; }
 .champ :is(input, textarea)[readonly] { color: var(--muted); border-style: dashed; }
 .champ--case { grid-template-columns: 24px 1fr; align-items: center; column-gap: 12px; min-height: 44px; }
 .champ--case input { width: 24px; height: 24px; accent-color: var(--accent); }
-.champ--case .champ__erreur { grid-column: 2; }
+.champ--case :is(.champ__erreur, .champ__aide) { grid-column: 2; }
 button.btn { cursor: pointer; background: transparent; color: inherit; font: inherit; font-weight: 500; }
 button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .btn:disabled { opacity: .6; cursor: default; }

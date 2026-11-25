@@ -81,7 +81,10 @@ export type Database = {
             [_ in never]: never
           }
           Functions: {
-            "compte_actif":
+            "changer_pseudo":
+{ Args: { "p_pseudo": string }; Returns: undefined
+                           },
+"compte_actif":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "consommer_debit":
@@ -95,6 +98,9 @@ export type Database = {
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
+                           },
+"regler_mode_acces":
+{ Args: { "p_mode": string }; Returns: undefined
                            },
 "rendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean

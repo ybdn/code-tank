@@ -4,10 +4,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 // puis creer_compte (rôle de service seul, AD-1) reçoit l'id vérifié et la version de la charte du serveur. La base lit
 // l'identité GitHub et revérifie tout ; le corps ne fournit que le pseudo et les deux cases.
 export default defineEventHandler(async (event) => {
-  // JSON seulement : un formulaire d'un autre site (CSRF) ne peut pas l'envoyer sans requête préalable CORS.
-  if (getRequestHeader(event, 'content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
-    throw createError({ statusCode: 415, message: 'Envoie le formulaire au format JSON.' })
-  }
+  exigerJson(event)
   const { user } = await utilisateurVerifie(event)
   await limiter(event, 'compte')
   const corps = await readBody(event).catch(() => null)
