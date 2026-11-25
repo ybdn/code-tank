@@ -1,14 +1,15 @@
 # Mentions légales de Code Tank
 
-Mentions exigées par l'article 1-1 de la loi du 21 juin 2004 pour la confiance dans l'économie numérique (rédaction de 2024).
+Mentions prévues par l'article 1-1 de la loi du 21 juin 2004 pour la confiance dans l'économie numérique (rédaction de 2024), pour un site édité à titre non professionnel.
 
 Site&nbsp;: `code-tank.ybdn.io`
 
 ## 1. Éditeur du site
 
-- Éditeur&nbsp;: EI - YOANN BAUDRIN, exerçant sous la marque ybdn.io
-- Numéro d'identification&nbsp;: SIREN 994 347 979, SIRET du siège 994 347 979 00019
-- Adresse&nbsp;: 11 rue de la Sellerie, C612 - 95300 Pontoise - France
+Code Tank est un site personnel, édité à titre non professionnel par Yoann BAUDRIN, personne physique. Il n'a pas de but lucratif.
+
+Comme la loi le permet à un éditeur non professionnel, ses coordonnées personnelles ne sont pas publiées&nbsp;: elles ont été communiquées à l'hébergeur ci-dessous.
+
 - Contact&nbsp;: support@ybdn.io
 
 ## 2. Directeur de la publication
