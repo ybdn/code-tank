@@ -85,6 +85,7 @@ describe('invitation', () => {
     let page = (await lire(`/invitation/${jeton}`, a.cookie)).texte
     expect(page).toContain('S&#39;inscrire</button>')
     expect(page).not.toContain('Cette campagne se rejoint sur invitation.')
+    expect((await lire(`/campagnes/${pub.slug}?inscrit=1`, a.cookie)).texte).not.toMatch(/role="status"[^>]*>Tu es inscrit\.</)
     expect(page).toContain('name="robots" content="noindex"')
 
     const chemin = `/api/campagnes/${inv.slug}/inscription`
@@ -105,6 +106,8 @@ describe('invitation', () => {
     page = (await lire(`/campagnes/${inv.slug}`, a.cookie)).texte
     expect(page).toContain('Tu es inscrit.')
     expect(page).not.toContain(jeton)
+    // Adresse d'arrivée après l'inscription par le lien : l'annonce est rendue.
+    expect((await lire(`/campagnes/${inv.slug}?inscrit=1`, a.cookie)).texte).toMatch(/role="status"[^>]*>Tu es inscrit\.</)
 
     // Régénération : nouveau jeton, ancien lien en 404 partout, l'inscrit garde l'accès.
     const r = await envoyer('POST', `/api/boss/${inv.slug}/invitation`, inv.cookie)
@@ -168,6 +171,8 @@ describe('invitation', () => {
     }
     expect((await lire('/api/invitation/%00')).statut).toBe(404)
     const chemin = `/api/campagnes/${inv.slug}/inscription`
+    // Sans session, 401 avant toute vérification du jeton.
+    expect((await envoyer('POST', chemin, '', { connaissance: true, jeton: 'abc' })).statut).toBe(401)
     for (const j of ['abc', '\u0000', 42, jeton.toUpperCase()]) {
       expect((await envoyer('POST', chemin, a.cookie, { connaissance: true, jeton: j })).statut, String(j)).toBe(404)
     }

@@ -36,7 +36,11 @@ const pasDeRetrait = computed(() => {
 })
 const connaissance = ref(false)
 const occupe = ref(false)
-const annonce = ref('')
+const route = useRoute()
+const router = useRouter()
+// Arrivée depuis le lien d'invitation après l'inscription (?inscrit=1) : annonce, focus sur le titre de la section, puis
+// paramètre retiré pour qu'un rechargement ne la répète pas.
+const annonce = ref(route.query.inscrit && data.value?.inscrit ? 'Tu es inscrit.' : '')
 const alerte = ref('')
 const titreInscription = useTemplateRef<HTMLElement>('titreInscription')
 const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')
@@ -65,6 +69,10 @@ async function relire() {
 let minuterie: ReturnType<typeof setTimeout> | undefined
 const auRetour = () => { if (document.visibilityState === 'visible') actualiser() }
 onMounted(() => {
+  if (route.query.inscrit) {
+    titreInscription.value?.focus()
+    router.replace({ query: {} })
+  }
   document.addEventListener('visibilitychange', auRetour)
   const delai = data.value ? Date.parse(data.value.ouverture_inscriptions) - Date.now() : 0
   if (delai > 0 && delai < 86_400_000) minuterie = setTimeout(actualiser, delai + 1000)
@@ -82,6 +90,9 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
   alerte.value = ''
   try {
     await $fetch(`/api/campagnes/${encodeURIComponent(data.value!.slug)}/inscription`, { method: methode, body: methode === 'POST' ? { connaissance: connaissance.value, jeton: props.jeton } : {} })
+    // Inscrit par le lien : il passe sur l'adresse de la campagne, qui reste la sienne, alors que le lien mourra à la
+    // prochaine régénération.
+    if (methode === 'POST' && props.jeton) return await navigateTo(`/campagnes/${data.value!.slug}?inscrit=1`, { replace: true })
     await actualiser()
     connaissance.value = false
     annonce.value = fait
