@@ -59,3 +59,61 @@ begin
   return found;
 end
 $$;
+
+-- Gardes des RPC (AD-1) : l'appelant vient du JWT (auth.uid()), jamais d'un paramètre.
+create function public.est_admin()
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (select 1 from public.compte where id = auth.uid() and role = 'admin' and etat = 'actif')
+$$;
+
+create function public.compte_actif()
+returns boolean
+language sql stable security definer set search_path = ''
+as $$
+  select exists (select 1 from public.compte where id = auth.uid() and etat = 'actif')
+$$;
+
+-- Crée le compte de l'appelant. L'identifiant GitHub vient de auth.identities (écrite par Auth seul), jamais du client ;
+-- la version de la charte vient du serveur du site. Messages fixes : le site les renvoie tels quels en 409.
+create function public.creer_compte(p_pseudo text, p_version_charte text, p_charte_acceptee boolean, p_majeur boolean)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_github text;
+  v_contrainte text;
+begin
+  select provider_id into v_github from auth.identities where user_id = auth.uid() and provider = 'github';
+  if v_github is null then
+    raise exception 'Seule la connexion GitHub permet de créer un compte.';
+  end if;
+  if p_charte_acceptee is not true then
+    raise exception 'Accepte la charte pour créer ton compte.';
+  end if;
+  if p_majeur is not true then
+    raise exception 'Il faut avoir 18 ans ou plus.';
+  end if;
+  if p_pseudo is null or p_pseudo !~ '^[A-Za-z0-9_-]{3,39}$' then
+    raise exception 'Le pseudo fait 3 à 39 caractères : lettres sans accent, chiffres, tiret ou souligné.';
+  end if;
+  if p_version_charte is null or char_length(p_version_charte) not between 1 and 40 then
+    raise exception 'Version de la charte invalide.';
+  end if;
+  -- Les modes liste_attente et ferme arrivent avec la story 1.3 : d'ici là, hors mode ouvert, personne n'entre.
+  if (select mode_acces from public.reglage) is distinct from 'ouvert' then
+    raise exception 'Les inscriptions sont fermées pour le moment.';
+  end if;
+  insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
+  values (auth.uid(), v_github, p_pseudo, now(), p_version_charte, now(), 'actif');
+exception
+  -- Les contraintes d'unicité tranchent, même entre deux appels simultanés.
+  when unique_violation then
+    get stacked diagnostics v_contrainte = constraint_name;
+    if v_contrainte = 'compte_pseudo_unique' then
+      raise exception 'Ce pseudo est déjà pris.';
+    end if;
+    raise exception 'Tu as déjà un compte.';
+end
+$$;

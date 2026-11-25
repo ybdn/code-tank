@@ -1,4 +1,4 @@
--- revoke all par défaut : aucune table écrite ni aucune fonction exécutée directement par anon ou authenticated (AD-1).
+-- revoke all par défaut : aucune table écrite directement par anon ou authenticated, aucune fonction ouverte hors liste (AD-1).
 begin;
 create extension if not exists pgtap with schema extensions;
 select plan(6);
@@ -11,7 +11,8 @@ $$, 'aucune écriture de table pour anon ni authenticated');
 select is_empty($$
   select p.proname, r from pg_proc p join pg_namespace n on n.oid = p.pronamespace, unnest(array['anon', 'authenticated']) r
   where n.nspname = 'public' and has_function_privilege(r, p.oid, 'execute')
-$$, 'aucune fonction exécutable par anon ni authenticated');
+    and not (r = 'authenticated' and p.proname in ('creer_compte', 'est_admin', 'compte_actif'))
+$$, 'aucune fonction exécutable par anon ni authenticated, hors creer_compte et les gardes pour authenticated');
 select is_empty($$
   select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity

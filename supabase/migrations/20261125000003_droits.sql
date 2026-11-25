@@ -13,6 +13,16 @@ alter table public.verrou enable row level security;
 grant execute on function public.consommer_debit(text, text, integer, integer) to service_role;
 grant execute on function public.prendre_verrou(text, text, integer), public.rendre_verrou(text, text) to service_role;
 
+-- compte : chacun lit sa ligne et rien d'autre ; aucune écriture directe, seulement creer_compte (AD-1, AD-3).
+alter table public.compte enable row level security;
+grant select on public.compte to authenticated;
+create policy compte_lecture on public.compte for select to authenticated using (id = (select auth.uid()));
+grant execute on function public.creer_compte(text, text, boolean, boolean), public.est_admin(), public.compte_actif() to authenticated;
+
+-- reglage : aucun droit client (sa lecture se décide avec la story 1.3) ; ligne unique, mode ouvert.
+alter table public.reglage enable row level security;
+insert into public.reglage default values;
+
 -- critere : lecture par tous, aucune écriture, pas même du rôle de service (AD-8) : seule cette migration la remplit.
 alter table public.critere enable row level security;
 revoke all on public.critere from service_role;

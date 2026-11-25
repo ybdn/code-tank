@@ -34,3 +34,27 @@ create table public.critere (
   poids integer not null check (poids between 1 and 100),
   calcule boolean not null default false
 );
+
+-- Réglage du site (SPECS § 3) : une seule ligne, remplie par …_droits.sql. `mode_acces` fixe l'état d'un compte à sa création.
+create table public.reglage (
+  id boolean primary key default true check (id),
+  mode_acces text not null default 'ouvert' check (mode_acces in ('ouvert', 'liste_attente', 'ferme'))
+);
+
+-- Compte Code Tank (AD-3) : né de la connexion GitHub, écrit seulement par creer_compte et les RPC d'administration.
+-- L'e-mail reste dans auth.users (e-mail principal vérifié transmis par GitHub) ; la dernière connexion, dans
+-- auth.users.last_sign_in_at. Le pseudo, seule donnée publique, a la forme d'un identifiant GitHub et n'est jamais modifié.
+create table public.compte (
+  id uuid primary key references auth.users on delete cascade,
+  github_id text not null unique,
+  pseudo text not null check (pseudo ~ '^[A-Za-z0-9_-]{3,39}$'),
+  charte_acceptee_le timestamptz not null,
+  version_charte text not null check (char_length(version_charte) between 1 and 40),
+  majeur_declare_le timestamptz not null,
+  role text not null default 'membre' check (role in ('membre', 'admin')),
+  etat text not null check (etat in ('en_attente', 'actif', 'suspendu')),
+  etat_le timestamptz not null default now(),
+  cree_le timestamptz not null default now()
+);
+-- Unique sans tenir compte de la casse : « Ada » et « ada » sont le même pseudo.
+create unique index compte_pseudo_unique on public.compte (lower(pseudo));
