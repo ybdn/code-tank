@@ -75,6 +75,12 @@ git push origin propre:preprod propre:prod
 
 ## 5. Avant d'ouvrir les comptes
 
+- [ ] **Supabase préprod et prod, Auth → Providers** : GitHub activé avec l'application OAuth existante (sans scope en plus),
+  fournisseur e-mail désactivé (il ne sert qu'aux tests locaux).
+- [ ] **URL de retour** : `https://preprod.code-tank.ybdn.io/compte` et `https://code-tank.ybdn.io/compte` dans les
+  « Redirect URLs » d'Auth de chaque projet.
+- [ ] **Vercel** : `NUXT_SECRET_DEBIT` (32 caractères au moins) défini en préprod et en prod ; sans lui, la création de
+  compte répond 503.
 - [ ] Vérifier que `CRON_SECRET` est défini dans Vercel et que la tâche `/api/cron/conservation` tourne (journal des crons de Vercel) : c'est elle qui applique les durées de conservation promises.
 
 ## 6. En continu
