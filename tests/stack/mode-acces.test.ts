@@ -27,6 +27,16 @@ const creerCompte = (cookie: string, p = pseudo()) => post('/api/compte', cookie
 const regler = async (mode: string) => expect((await post('/api/admin/reglage', admin.cookie, { mode })).statut).toBe(200)
 const modeCourant = async () => (await (await lire('/api/admin/reglage', admin.cookie)).json()).mode
 
+// Requête au chemin envoyé tel quel (fetch normaliserait l'URL) : http.request.
+const brut = (methode: string, chemin: string, cookie?: string) => new Promise<number>((ok, ko) => {
+  const r = request(serveur.url + chemin, {
+    method: methode,
+    headers: { 'content-type': 'application/json', 'x-forwarded-for': ipNeuve(), ...(cookie ? { cookie } : {}) },
+  }, (res) => { res.resume(); ok(res.statusCode!) })
+  r.on('error', ko)
+  r.end(methode === 'POST' ? JSON.stringify({ mode: 'ferme' }) : undefined)
+})
+
 // Nouvel utilisateur GitHub connecté, avec ou sans compte créé (mode courant).
 async function inscrit(avecCompte = true) {
   const u = await utilisateur()
@@ -65,25 +75,21 @@ describe('accès à /admin', () => {
     ['GET', '/api/%61dmin/reglage'],
     ['POST', '/api/%61dmin/reglage'],
     ['GET', '/api/%41DMIN/reglage'],
+    ['GET', '/api/%2561dmin/reglage'],
     ['GET', '/api//admin/reglage'],
     ['GET', '/api/admin'],
     ['GET', '/ADMIN/'],
     ['GET', '/api/admin/reglage/'],
     ['GET', '/%E0'],
   ])('%s %s : 404 pour le visiteur et le membre (chemin encodé, casse, barres)', async (methode, chemin) => {
-    // Chemin envoyé tel quel (pas d'URL normalisée par fetch) : http.request.
-    for (const cookie of [undefined, membre.cookie]) {
-      const statutHttp = await new Promise<number>((ok, ko) => {
-        const r = request(serveur.url + chemin, {
-          method: methode,
-          headers: { 'content-type': 'application/json', 'x-forwarded-for': ipNeuve(), ...(cookie ? { cookie } : {}) },
-        }, (res) => { res.resume(); ok(res.statusCode!) })
-        r.on('error', ko)
-        r.end(methode === 'POST' ? JSON.stringify({ mode: 'ferme' }) : undefined)
-      })
-      expect(statutHttp).toBe(404)
-    }
+    for (const cookie of [undefined, membre.cookie]) expect(await brut(methode, chemin, cookie)).toBe(404)
     expect(await modeCourant()).toBe('ouvert')
+  })
+
+  // Témoin : la variante que le routeur décode atteint bien la route pour l'admin (le 404 ci-dessus n'est pas une route
+  // absente). Le routeur respecte la casse : /api/ADMIN/reglage n'existe pour personne.
+  it('/api/%61dmin/reglage : 200 pour l\'admin', async () => {
+    expect(await brut('GET', '/api/%61dmin/reglage', admin.cookie)).toBe(200)
   })
 
   it('un compte en attente reçoit aussi 404', async () => {

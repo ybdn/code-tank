@@ -37,7 +37,13 @@ describe('code du concours supprimé', () => {
     expect(html).not.toContain('id="campagnes"')
   })
 
-  it.each(['/admin', '/campagnes/une-campagne', '/api/campagnes', '/api/admin/comptes'])('%s répond 404', async (chemin) => {
+  it.each(['/campagnes/une-campagne', '/api/campagnes'])('%s répond 404', async (chemin) => {
+    expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
+  })
+})
+
+describe('administration', () => {
+  it.each(['/admin', '/api/admin/reglage', '/api/admin/comptes'])('/admin et /api/admin répondent 404 sans session ni base : %s', async (chemin) => {
     expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
   })
 })
