@@ -5,14 +5,9 @@ import { SECRET_MIN } from './secret'
 
 // Plafonds par adresse IP : au plus `max` appels par fenêtre de `secondes` (jamais plus de 24 h : durée de conservation).
 // C'est le seul endroit où ils se règlent.
-const HEURE = 3600
-const JOUR = 24 * HEURE
+const JOUR = 86_400
 export const PLAFONDS = {
   compte: { max: 5, secondes: JOUR }, // création de compte
-  depot: { max: 30, secondes: JOUR }, // demande d'URL de dépôt
-  inscription: { max: 20, secondes: JOUR },
-  suppression: { max: 5, secondes: JOUR },
-  jury: { max: 1, secondes: 60 }, // bouton « Relancer le jury » : un appel par minute
 } as const
 
 // Première adresse de x-forwarded-for : le proxy de l'hébergeur la fixe, sans la reprendre d'un client. Sans adresse
