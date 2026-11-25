@@ -59,3 +59,36 @@ create table public.compte (
 );
 -- Unique sans tenir compte de la casse : « Ada » et « ada » sont le même pseudo.
 create unique index compte_pseudo_unique on public.compte (lower(pseudo));
+
+-- Campagne (SPECS § 3, AD-2) : créée, réglée et supprimée par les RPC du Boss seulement. Le statut ne stocke que les actes ;
+-- le déclencheur garder_transition (…_fonctions.sql) tient le graphe. Critères, poids et modèle ne se règlent pas (AD-8) :
+-- aucune colonne pour eux. Le Boss est boss_id (AD-3) ; bloquee_le et motif_blocage ne sont posés que par la modération
+-- (AD-10, story 7.4).
+create table public.campagne (
+  id uuid primary key default gen_random_uuid(),
+  slug text not null unique check (slug ~ '^[a-z0-9]+(-[a-z0-9]+)*$' and char_length(slug) <= 60),
+  boss_id uuid not null references public.compte,
+  titre text not null check (char_length(titre) between 1 and 120),
+  theme text not null check (char_length(theme) between 1 and 200),
+  brief text not null check (char_length(brief) between 1 and 2000),
+  langages text[] not null check (cardinality(langages) between 1 and 20 and array_position(langages, null) is null),
+  visibilite text not null check (visibilite in ('publique', 'invitation')),
+  role_boss text not null check (role_boss in ('juge', 'joueur')),
+  max_participants integer not null check (max_participants between 1 and 10),
+  ouverture_inscriptions timestamptz not null,
+  cloture_depot timestamptz not null,
+  date_resultats timestamptz not null,
+  statut text not null default 'brouillon'
+    check (statut in ('brouillon', 'ouverte', 'deliberation', 'prete', 'publiee', 'archivee', 'expiree')),
+  regles_figees_le timestamptz,
+  bloquee_le timestamptz,
+  motif_blocage text check (char_length(motif_blocage) between 1 and 500),
+  cree_le timestamptz not null default now(),
+  constraint campagne_dates_ordre check (ouverture_inscriptions < cloture_depot and cloture_depot < date_resultats),
+  constraint campagne_duree_depot check (cloture_depot <= ouverture_inscriptions + interval '30 days'),
+  constraint campagne_duree_resultats check (date_resultats <= cloture_depot + interval '15 days'),
+  constraint campagne_blocage check ((bloquee_le is null) = (motif_blocage is null))
+);
+-- Une seule campagne active par Boss (AD-2), même entre deux créations simultanées.
+create unique index campagne_active_unique on public.campagne (boss_id)
+  where statut in ('brouillon', 'ouverte', 'deliberation', 'prete');

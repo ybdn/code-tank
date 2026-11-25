@@ -157,3 +157,194 @@ exception
     raise exception 'Ce pseudo est déjà pris.';
 end
 $$;
+
+-- Campagnes du Boss (story 2.1) -----------------------------------------------------------------
+
+-- Gardes (AD-1, AD-3, AD-10) : appelées par les RPC du Boss, après le verrou de la ligne. Être Boss, c'est boss_id = auth.uid().
+create function public.est_boss(p_campagne uuid)
+returns boolean
+language sql stable set search_path = ''
+as $$
+  select exists (select 1 from public.campagne where id = p_campagne and boss_id = auth.uid())
+$$;
+
+-- Vivante : non bloquée et échéance non passée. L'échéance court aussi pendant un blocage (AD-10).
+create function public.campagne_vivante(p_campagne uuid)
+returns boolean
+language sql stable set search_path = ''
+as $$
+  select exists (select 1 from public.campagne where id = p_campagne and bloquee_le is null and now() <= date_resultats)
+$$;
+
+-- Graphe des transitions (AD-2), quel que soit l'écrivain, rôle de service compris : une campagne naît brouillon ; expiree
+-- s'atteint depuis toute étape avant publiee. La suppression d'un brouillon passe par supprimer_brouillon.
+create function public.garder_transition()
+returns trigger
+language plpgsql set search_path = ''
+as $$
+begin
+  if tg_op = 'INSERT' then
+    if new.statut <> 'brouillon' then
+      raise exception 'Une campagne naît en brouillon.';
+    end if;
+  elsif new.statut is distinct from old.statut and (old.statut, new.statut) not in (
+    ('brouillon', 'ouverte'), ('ouverte', 'deliberation'), ('deliberation', 'prete'), ('prete', 'publiee'), ('publiee', 'archivee'),
+    ('brouillon', 'expiree'), ('ouverte', 'expiree'), ('deliberation', 'expiree'), ('prete', 'expiree')
+  ) then
+    raise exception 'Transition de statut interdite.';
+  end if;
+  return new;
+end
+$$;
+create trigger campagne_transition before insert or update of statut on public.campagne
+  for each row execute function public.garder_transition();
+
+-- Contrôle des réglages, commun à creer_campagne et modifier_campagne : messages clairs avant les contraintes de la table,
+-- qui restent le dernier mot. Les textes sont contrôlés une fois débarrassés des espaces de bord, comme ils sont enregistrés.
+create function public.verifier_reglages(p_titre text, p_theme text, p_brief text, p_langages text[], p_visibilite text,
+  p_role_boss text, p_max_participants integer, p_ouverture timestamptz, p_cloture timestamptz, p_resultats timestamptz)
+returns void
+language plpgsql set search_path = ''
+as $$
+begin
+  if char_length(btrim(p_titre)) not between 1 and 120 or p_titre is null then
+    raise exception 'Le titre fait 1 à 120 caractères.';
+  end if;
+  if char_length(btrim(p_theme)) not between 1 and 200 or p_theme is null then
+    raise exception 'Le thème fait 1 à 200 caractères.';
+  end if;
+  if char_length(btrim(p_brief)) not between 1 and 2000 or p_brief is null then
+    raise exception 'Le brief fait 1 à 2 000 caractères.';
+  end if;
+  if coalesce(cardinality(p_langages), 0) not between 1 and 20
+    or exists (select 1 from unnest(p_langages) l where l is null or char_length(btrim(l)) not between 1 and 40) then
+    raise exception 'Indique de 1 à 20 langages, de 40 caractères au plus chacun.';
+  end if;
+  if p_visibilite is null or p_visibilite not in ('publique', 'invitation') then
+    raise exception 'La visibilité est publique ou sur invitation.';
+  end if;
+  if p_role_boss is null or p_role_boss not in ('juge', 'joueur') then
+    raise exception 'Ton rôle est juge ou joueur.';
+  end if;
+  if p_max_participants is null or p_max_participants not between 1 and 10 then
+    raise exception 'Le nombre de places va de 1 à 10.';
+  end if;
+  if p_ouverture is null or p_cloture is null or p_resultats is null then
+    raise exception 'Les trois dates sont obligatoires.';
+  end if;
+  if not (p_ouverture < p_cloture and p_cloture < p_resultats) then
+    raise exception 'Les dates se suivent : ouverture des inscriptions, clôture du dépôt, puis résultats.';
+  end if;
+  if p_cloture > p_ouverture + interval '30 days' then
+    raise exception 'La clôture du dépôt tombe au plus 30 jours après l''ouverture des inscriptions.';
+  end if;
+  if p_resultats > p_cloture + interval '15 days' then
+    raise exception 'Les résultats tombent au plus 15 jours après la clôture du dépôt.';
+  end if;
+  if p_resultats <= now() then
+    raise exception 'La date des résultats est déjà passée.';
+  end if;
+end
+$$;
+
+-- Crée la campagne de l'appelant en brouillon et renvoie son slug : titre en minuscules sans accent, tirets, puis 6
+-- caractères hexadécimaux aléatoires. Une seule campagne active par Boss : l'index unique partiel tranche, même entre deux
+-- appels simultanés. Pas de ligne à verrouiller ni de campagne_vivante ici : la campagne n'existe pas encore.
+-- Exécutable par authenticated (PostgREST l'expose) : toutes les règles vivent ici.
+create function public.creer_campagne(p_titre text, p_theme text, p_brief text, p_langages text[], p_visibilite text,
+  p_role_boss text, p_max_participants integer, p_ouverture_inscriptions timestamptz, p_cloture_depot timestamptz,
+  p_date_resultats timestamptz)
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_base text;
+  v_slug text;
+  v_contrainte text;
+begin
+  if not public.compte_actif() then
+    raise exception 'Seul un compte actif crée une campagne.';
+  end if;
+  perform public.verifier_reglages(p_titre, p_theme, p_brief, p_langages, p_visibilite, p_role_boss, p_max_participants,
+    p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
+  v_base := trim(both '-' from left(trim(both '-' from regexp_replace(
+    translate(lower(p_titre), 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy'), '[^a-z0-9]+', '-', 'g')), 50));
+  -- Un titre sans lettre latine ni chiffre donne un slug fait du seul suffixe.
+  v_slug := concat_ws('-', nullif(v_base, ''), left(replace(gen_random_uuid()::text, '-', ''), 6));
+  insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
+    ouverture_inscriptions, cloture_depot, date_resultats)
+  values (v_slug, auth.uid(), btrim(p_titre), btrim(p_theme), btrim(p_brief),
+    array(select btrim(l) from unnest(p_langages) l), p_visibilite, p_role_boss, p_max_participants,
+    p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
+  return v_slug;
+exception
+  when unique_violation then
+    get stacked diagnostics v_contrainte = constraint_name;
+    if v_contrainte = 'campagne_active_unique' then
+      raise exception 'Tu as déjà une campagne en cours : une seule à la fois.';
+    end if;
+    raise exception 'La création a échoué. Réessaie.';
+end
+$$;
+
+-- Modifie les réglages d'une campagne en brouillon ou ouverte tant que les règles ne sont pas figées (premier dépôt).
+-- Campagne absente ou appelant qui n'en est pas le Boss : « Campagne introuvable. » en CT404, que le site change en 404.
+create function public.modifier_campagne(p_campagne uuid, p_titre text, p_theme text, p_brief text, p_langages text[],
+  p_visibilite text, p_role_boss text, p_max_participants integer, p_ouverture_inscriptions timestamptz,
+  p_cloture_depot timestamptz, p_date_resultats timestamptz)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_statut text;
+  v_figees timestamptz;
+begin
+  select statut, regles_figees_le into v_statut, v_figees from public.campagne where id = p_campagne for update;
+  if not found or not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est bloquée ou échue : elle ne se modifie plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_statut not in ('brouillon', 'ouverte') or v_figees is not null then
+    raise exception 'Les règles sont figées : la campagne ne se modifie plus.';
+  end if;
+  perform public.verifier_reglages(p_titre, p_theme, p_brief, p_langages, p_visibilite, p_role_boss, p_max_participants,
+    p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
+  update public.campagne set titre = btrim(p_titre), theme = btrim(p_theme), brief = btrim(p_brief),
+    langages = array(select btrim(l) from unnest(p_langages) l), visibilite = p_visibilite, role_boss = p_role_boss,
+    max_participants = p_max_participants, ouverture_inscriptions = p_ouverture_inscriptions,
+    cloture_depot = p_cloture_depot, date_resultats = p_date_resultats
+  where id = p_campagne;
+end
+$$;
+
+-- Supprime un brouillon de l'appelant ; toute autre étape refuse (AD-2).
+-- shortcut: un brouillon échu (date_resultats passée) ne se supprime pas (garde campagne_vivante) et occupe la place de
+-- campagne active jusqu'à son expiration par la tâche quotidienne ; à revoir avec la story qui pose expiree.
+create function public.supprimer_brouillon(p_campagne uuid)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_statut text;
+begin
+  select statut into v_statut from public.campagne where id = p_campagne for update;
+  if not found or not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est bloquée ou échue : elle ne se supprime plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_statut <> 'brouillon' then
+    raise exception 'Seul un brouillon se supprime.';
+  end if;
+  delete from public.campagne where id = p_campagne;
+end
+$$;
