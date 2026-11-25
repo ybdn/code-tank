@@ -218,33 +218,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .admin h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); }
 .admin h1 + * { margin-top: .75rem; }
 .admin :is(p, .form) + :is(p, .form) { margin-top: 1rem; }
-.fiche h3 { margin: 0; }
 .admin p { overflow-wrap: anywhere; }
-/* position: relative : contient les .sr-only des cellules, qui sinon élargissent la page. */
-.tableau { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
-.tableau table { width: 100%; min-width: 36rem; border-collapse: collapse; text-align: left; }
-.tableau :is(th, td) { padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: 400; }
-.tableau thead th { color: var(--muted); font-size: .85rem; font-weight: 600; }
-.tableau tbody th { font-weight: 600; }
-.tableau :is(tbody tr:last-child, tfoot tr) :is(th, td) { border-bottom: 0; }
-.tableau tfoot { border-top: 1px solid var(--line); }
-.tableau :is(input:not([type=checkbox]), select) { width: 100%; min-width: 8rem; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
-.tableau input.court { min-width: 5rem; width: 6rem; }
-.fiche { display: grid; gap: 12px; padding: 20px; background: var(--surface); border-radius: 8px; }
-.infos { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 6px 20px; margin: 0; }
-.infos dt { color: var(--muted); font-size: .9rem; }
-.infos dd { margin: 0; }
-@media (max-width: 36rem) { .infos { grid-template-columns: 1fr; gap: 0; } .infos dd { margin-bottom: 8px; } }
-.bloc { border: 1px solid var(--line); border-radius: 8px; }
-.bloc > summary { display: list-item; list-style-position: inside; min-height: 44px; padding: 9px 16px; cursor: pointer; }
-.bloc__corps { padding: 4px 16px 20px; }
-.bloc__corps > * + * { margin-top: 1rem; }
-.audit { padding: 16px; background: var(--surface); border-radius: 8px; }
-.audit > * + * { margin-top: .75rem; }
-.form--large { max-width: 56rem; }
-.champ :is(select) { width: 100%; min-height: 44px; padding: 10px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
-.champ input.court { max-width: 8rem; }
-.empreinte { overflow-wrap: anywhere; }
 
 /* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par les agents sont du texte. */
 .resultats :is(p, li, th, td, blockquote) { overflow-wrap: anywhere; }
@@ -260,18 +234,9 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .podium li[data-rang="1"] { border-top-color: var(--accent); }
 .podium__rang { color: var(--accent); font: 700 1.5rem var(--font-display); }
 .podium__nom { font-size: 1.15rem; }
-.tableau--serre table { min-width: 0; }
-.tableau--serre :is(th, td) { padding: 10px 8px; font-size: .95rem; }
-.tableau--serre :is(th, td):first-child { white-space: nowrap; }
 /* En-têtes et nombres ne se coupent qu'entre les mots ; le pseudo et sa mention passent à la ligne (sinon les colonnes de score s'écrasent lettre à lettre). */
-.tableau--serre :is(thead th, td) { overflow-wrap: normal; }
-.tableau.tableau--serre tbody th { white-space: normal; min-width: 8rem; }
-.tableau--notes table { min-width: 48rem; }
-.tableau--notes thead th { min-width: 7rem; }
-.tableau--notes tbody th { position: sticky; left: 0; background: var(--bg); min-width: 6rem; }
 /* Au téléphone, la colonne figée du pseudo laisse de la place aux notes. */
 @media (max-width: 48rem) { .tableau.tableau--notes tbody th { white-space: normal; max-width: 9rem; } }
-.tableau:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .mention { display: block; margin-top: 4px; color: var(--muted); font-size: .85rem; font-weight: 400; }
 .jure { display: grid; grid-template-columns: 72px 1fr; gap: 16px 20px; padding: 20px; background: var(--surface); border-radius: 8px; }
 .jure + .jure { margin-top: 1rem; }
@@ -310,19 +275,9 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .console__num { font: 700 .75rem var(--font-display); color: var(--accent); }
 
 .panneaux { display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); gap: 40px; align-items: start; margin-top: 2rem; }
-.panneaux__nav { position: sticky; top: calc(var(--nav-h) + 16px); display: grid; gap: 4px; }
-.panneaux__nav a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 12px 8px 16px; text-decoration: none; color: var(--muted); clip-path: var(--pixel); }
-@media (hover: hover) { .panneaux__nav a:hover { color: var(--ink); background: var(--surface); } }
-.panneaux__nav a[aria-current] { color: var(--ink); background: var(--surface); box-shadow: inset 4px 0 0 var(--accent); }
-.panneaux__nb { min-width: 2.25em; padding: 0 6px; background: var(--bg); font: 700 .8rem/1.8 var(--font-display); text-align: center; clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px)); }
-.panneaux__nb[data-urgent] { background: var(--accent); color: var(--accent-ink); }
-/* Jusqu'à 60rem, le menu latéral prendrait un tiers de la largeur : il passe en onglets au-dessus du panneau.
-   minmax(0, 1fr) : un tableau large défile dans son conteneur au lieu d'élargir la page. */
+/* Jusqu'à 60rem, une seule colonne. */
 @media (max-width: 60rem) {
   .panneaux { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .panneaux__nav { position: static; display: flex; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; border-bottom: 1px solid var(--line); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); padding-right: 24px; }
-  .panneaux__nav a { flex: none; }
-  .panneaux__nav a[aria-current] { box-shadow: inset 0 -4px 0 var(--accent); }
 }
 
 .tdb__tete { display: grid; gap: 12px; }
@@ -370,7 +325,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
   .invite__curseur { animation: clignote 1.1s steps(1) 5; }
   .indicateurs a, .taches a { transition: transform .2s ease; }
   .taches__fleche { transition: transform .2s ease, color .2s ease; }
-  .panneaux__nav a { transition: background-color .15s ease, color .15s ease; }
   .jauge i[data-plein] { animation: remplit .5s steps(1) both; }
   .jauge i:nth-child(n+6) { animation-delay: .05s; } .jauge i:nth-child(n+11) { animation-delay: .1s; } .jauge i:nth-child(n+16) { animation-delay: .15s; }
 }
@@ -382,9 +336,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 @keyframes remplit { from { background: var(--line); } }
 /* Listes (campagnes, participants) : toutes les colonnes tiennent dès la tablette ; dates et statuts se coupent entre les
    mots (jamais au milieu), le titre garde une largeur lisible. */
-.tableau--liste table { min-width: 0; }
-.tableau--liste td { overflow-wrap: normal; }
-.tableau--liste tbody th { min-width: 9rem; }
 /* Au téléphone, une ligne devient une fiche : titre, statut, puis « libellé : valeur » (data-label). Les rôles ARIA posés
    sur le tableau gardent sa sémantique malgré display: block. */
 @media (max-width: 40rem) {
@@ -528,8 +479,6 @@ h1 + .parcours { margin-top: 2rem; }
 @media (max-width: 30rem) { .terminal .dates div { grid-template-columns: 1fr; } }
 .terminal .dates dt { color: var(--muted); }
 .redepot > summary { font-weight: 600; }
-.tableau tbody th { white-space: nowrap; }
-.tableau tr[data-moi] :is(th, td) { background: rgb(255 74 31 / .1); }
 .moi { margin-left: 8px; padding: 1px 8px; background: var(--accent); color: var(--accent-ink); font: 700 .75rem var(--font-display); vertical-align: 2px; }
 .verdict-final { display: grid; gap: 10px; max-width: 36rem; padding: 24px; background: var(--trame), var(--surface); clip-path: var(--pixel); box-shadow: inset 0 4px 0 var(--line); }
 .verdict-final[data-rang="1"] { box-shadow: inset 0 4px 0 var(--accent); }
@@ -540,7 +489,7 @@ h1 + .parcours { margin-top: 2rem; }
 .verdict-final__score strong { color: var(--ink); font: 700 1.75rem var(--font-display); }
 
 /* Les liens découpés en cases (clip-path) perdent leur contour extérieur : le focus se dessine à l'intérieur. */
-:is(.indicateurs a, .taches a, .panneaux__nav a):focus-visible { outline-offset: -5px; }
+:is(.indicateurs a, .taches a):focus-visible { outline-offset: -5px; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
 @media (max-width: 24rem) {
   .logo { gap: 8px; font-size: 1rem; }

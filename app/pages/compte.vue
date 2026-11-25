@@ -46,8 +46,9 @@ onMounted(async () => {
   if (user.value) await charger()
   pret.value = true
 })
-watch(user, async (u) => {
-  if (!pret.value) return
+// Ne recharge qu'au changement de personne : un jeton rafraîchi ne démonte pas un formulaire en cours de saisie.
+watch(user, async (u, ancien) => {
+  if (!pret.value || u?.sub === ancien?.sub) return
   if (u) await charger()
   else compte.value = null
 })
@@ -63,6 +64,8 @@ async function deconnecter() {
 }
 
 async function creer() {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi (un refus 409 laisse le formulaire).
+  if (occupe.value) return
   alerte.value = ''
   erreurs.value = {}
   if (!PSEUDO.test(f.pseudo.trim())) erreurs.value.pseudo = 'Le pseudo fait 3 à 39 caractères : lettres sans accent, chiffres, tiret ou souligné.'
@@ -179,7 +182,7 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
             <p v-if="erreurs.majeur" id="err-majeur" class="champ__erreur">{{ erreurs.majeur }}</p>
           </div>
 
-          <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Envoi en cours…' : 'Créer mon compte' }}</button></p>
+          <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">{{ occupe ? 'Envoi en cours…' : 'Créer mon compte' }}</button></p>
         </form>
         <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
       </template>
