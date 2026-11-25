@@ -98,7 +98,15 @@ isOneToOne: false
                 }
           }
           Views: {
-            [_ in never]: never
+            "campagne_phase": {
+                  Row: {
+                    "boss_pseudo": string,"brief": string,"cloture_depot": string,"date_resultats": string,"id": string,"langages": (string)[],"max_participants": number,"ouverture_inscriptions": string,"phase": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                  }
+                  ComputedFields: never
+                  Relationships: [
+                    
+                  ]
+                }
           }
           Functions: {
             "campagne_vivante":
@@ -127,6 +135,9 @@ isOneToOne: false
                            },
 "modifier_campagne":
 { Args: { "p_brief": string,"p_campagne": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined
+                           },
+"ouvrir_campagne":
+{ Args: { "p_campagne": string }; Returns: undefined
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean

@@ -15,12 +15,17 @@ export function erreurCampagne(error: { code: string; message: string }, context
 
 export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le'
 
-// La campagne de l'adresse, si l'appelant en est le Boss. Sans session, ou pour tout autre compte : 404 (ressource hors droits).
-export async function campagneDuBoss(event: H3Event) {
-  // Un slug hors de la forme imposée par la table (caractère nul, UTF-8 invalide…) ne peut désigner aucune campagne : 404
-  // tout de suite, plutôt qu'une erreur de la base en 500.
+// Un slug hors de la forme imposée par la table (caractère nul, UTF-8 invalide…) ne peut désigner aucune campagne : 404
+// tout de suite, plutôt qu'une erreur de la base en 500.
+export function slugDeLaRoute(event: H3Event) {
   const slug = getRouterParam(event, 'slug', { decode: true }) ?? ''
   if (slug.length > 60 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
+  return slug
+}
+
+// La campagne de l'adresse, si l'appelant en est le Boss. Sans session, ou pour tout autre compte : 404 (ressource hors droits).
+export async function campagneDuBoss(event: H3Event) {
+  const slug = slugDeLaRoute(event)
   const client = await serverSupabaseClient(event)
   const { data: { user } } = await client.auth.getUser()
   if (!user) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })

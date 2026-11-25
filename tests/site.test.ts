@@ -37,7 +37,11 @@ describe('code du concours supprimé', () => {
     expect(html).not.toContain('id="campagnes"')
   })
 
-  it.each(['/campagnes/une-campagne', '/api/campagnes'])('%s répond 404', async (chemin) => {
+})
+
+describe('campagne publique', () => {
+  // Slug hors de la forme de la table : 404 avant toute lecture de la base.
+  it.each(['/api/campagnes/%00', '/api/campagnes/%ED%A0%80', '/api/campagnes/Majuscule'])('%s répond 404 sans base', async (chemin) => {
     expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
   })
 })

@@ -13,6 +13,10 @@ const echue = computed(() => !!data.value && Date.parse(data.value.date_resultat
 const actif = computed(() => !!data.value && data.value.compte_actif && !data.value.bloquee_le && !echue.value)
 // Réglable en brouillon ou ouverte, tant que les règles ne sont pas figées.
 const reglable = computed(() => actif.value && ['brouillon', 'ouverte'].includes(data.value!.statut) && !data.value!.regles_figees_le)
+// Ouvrable : brouillon d'un Boss actif, ni bloqué ni échu, dont la clôture des dépôts est à venir (sinon ouvrir_campagne refuse).
+const clotureAVenir = computed(() => !!data.value && Date.parse(data.value.cloture_depot) > Date.now())
+// Visible du public : ni brouillon, ni expirée, ni bloquée (vue campagne_phase).
+const publiee = computed(() => !!data.value && !['brouillon', 'expiree'].includes(data.value.statut) && !data.value.bloquee_le)
 const occupe = ref(false)
 const annonce = ref(route.query.cree ? 'Brouillon créé.' : '')
 const alerte = ref('')
@@ -49,6 +53,25 @@ async function enregistrer(corps: Record<string, unknown>) {
   }
 }
 
+async function ouvrir() {
+  if (occupe.value || !confirm('Ouvrir la campagne ? Elle devient visible et ne revient plus en brouillon.')) return
+  occupe.value = true
+  annonce.value = ''
+  alerte.value = ''
+  try {
+    await $fetch(`/api/boss/${encodeURIComponent(slug)}/ouverture`, { method: 'POST', body: {} })
+    await refresh()
+    annonce.value = 'Campagne ouverte.'
+    // Le bouton a disparu : le focus revient au titre, l'annonce est lue par la zone role="status".
+    await nextTick()
+    titre.value?.focus()
+  } catch (e) {
+    await echec(e)
+  } finally {
+    occupe.value = false
+  }
+}
+
 async function supprimer() {
   // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
   if (occupe.value || !confirm('Supprimer ce brouillon ? Il disparaît pour de bon.')) return
@@ -77,6 +100,16 @@ async function supprimer() {
         <div ref="zoneAlerte" tabindex="-1">
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
+        <p v-if="publiee" class="btns"><NuxtLink class="btn" :to="`/campagnes/${data.slug}`">Voir sa page publique</NuxtLink></p>
+        <p v-if="data.role_boss === 'juge'">Tu juges cette campagne&nbsp;: ton vote compte pour 33&nbsp;% du score final.</p>
+        <template v-if="data.statut === 'brouillon' && actif">
+          <h2>Ouvrir la campagne</h2>
+          <template v-if="clotureAVenir">
+            <p>{{ data.visibilite === 'publique' ? 'Elle apparaît sur l\'accueil et chacun peut lire ses règles.' : 'Elle reste hors de l\'accueil : seuls ses invités la verront.' }}</p>
+            <p class="btns"><button class="btn btn--primary" type="button" :aria-disabled="occupe" @click="ouvrir">Ouvrir la campagne</button></p>
+          </template>
+          <p v-else>La clôture des dépôts est passée&nbsp;: règle de nouvelles dates pour l'ouvrir.</p>
+        </template>
         <FormulaireCampagne v-if="reglable" :initial="data" :occupe="occupe" @envoyer="enregistrer" />
         <p v-else-if="!data.compte_actif">Ton compte n'est pas actif.</p>
         <p v-else>Les réglages ne se modifient plus&nbsp;: {{ data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>

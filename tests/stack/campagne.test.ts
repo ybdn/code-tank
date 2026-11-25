@@ -1,6 +1,6 @@
 // Campagnes du Boss (story 2.1) contre la pile locale et le serveur construit : création, réglage et suppression d'un
-// brouillon, 404 pour tout autre compte sur /api/boss/[slug] et /boss/[slug], 409 pour les règles métier, 415 hors JSON.
-// Les étapes postérieures au brouillon (ouverte, règles figées) sont posées en SQL : leurs RPC arrivent avec d'autres stories.
+// brouillon, son ouverture (story 2.2), 404 pour tout autre compte sur /api/boss/[slug] et /boss/[slug], 409 pour les règles
+// métier, 415 hors JSON. Les règles figées sont posées en SQL : leur RPC arrive avec une autre story.
 import { randomBytes, randomInt } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { API, connexion, demarrer, nettoyer, sql, statut, utilisateur } from './aide'
@@ -106,7 +106,14 @@ describe('campagne du Boss', () => {
     expect(await envoyer('PATCH', `/api/boss/${slug}`, boss.cookie, reglages('Nouveau titre'))).toEqual({ statut: 200, json: { slug } })
     expect((await lire(`/api/boss/${slug}`, boss.cookie)).json).toMatchObject({ slug, titre: 'Nouveau titre' })
 
-    sql(`update public.campagne set statut = 'ouverte' where slug = '${slug}'`)
+    // Ouverture : 415 hors JSON, 404 pour tout autre compte, puis ouverte une seule fois.
+    expect((await envoyer('POST', `/api/boss/${slug}/ouverture`, boss.cookie, {}, 'text/plain')).statut).toBe(415)
+    for (const cookie of [autre.cookie, undefined]) expect((await envoyer('POST', `/api/boss/${slug}/ouverture`, cookie)).statut).toBe(404)
+    expect((await lire(`/api/boss/${slug}`, boss.cookie)).json).toMatchObject({ statut: 'brouillon' })
+    expect(await envoyer('POST', `/api/boss/${slug}/ouverture`, boss.cookie)).toEqual({ statut: 200, json: { slug } })
+    expect((await lire(`/api/boss/${slug}`, boss.cookie)).json).toMatchObject({ statut: 'ouverte' })
+    expect(await envoyer('POST', `/api/boss/${slug}/ouverture`, boss.cookie))
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Seul un brouillon s\'ouvre.' }) })
     expect(await envoyer('DELETE', `/api/boss/${slug}`, boss.cookie))
       .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Seul un brouillon se supprime.' }) })
     sql(`update public.campagne set regles_figees_le = now() where slug = '${slug}'`)
@@ -122,6 +129,15 @@ describe('campagne du Boss', () => {
     expect((await lire(`/api/boss/${slug}`, autre.cookie)).statut).toBe(404)
     // Plus de campagne active : il peut en créer une autre.
     await creer(autre)
+  })
+
+  it('ouverture refusée quand la clôture des dépôts est passée', async () => {
+    const s = await inscrit()
+    const slug = await creer(s)
+    sql(`update public.campagne set ouverture_inscriptions = now() - interval '2 days', cloture_depot = now() - interval '1 day', date_resultats = now() + interval '1 day' where slug = '${slug}'`)
+    expect(await envoyer('POST', `/api/boss/${slug}/ouverture`, s.cookie))
+      .toEqual({ statut: 409, json: expect.objectContaining({ message: 'La clôture des dépôts est déjà passée.' }) })
+    expect((await lire(`/api/boss/${slug}`, s.cookie)).json).toMatchObject({ statut: 'brouillon' })
   })
 
   it('deux créations simultanées du même compte : une seule passe (index unique partiel)', async () => {
