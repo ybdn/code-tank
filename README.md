@@ -76,11 +76,13 @@ Avec Colima, exporter `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` ava
 
 Trois migrations datées du même jour (AD-13) :
 
-- `…_tables.sql` : `revoke all` par défaut pour `anon` et `authenticated` sur tout objet créé ensuite ; tables `debit` (limite
+- `…_tables.sql` : `revoke all` par défaut pour `anon` et `authenticated` sur les tables, séquences et fonctions créées
+  ensuite par `postgres`, et retrait de l'`EXECUTE` implicite de `PUBLIC` ; tables `debit` (limite
   de débit), `verrou` (bail global du jury) et `critere` (critères et poids du jury, seule source).
 - `…_fonctions.sql` : `consommer_debit` (compte, refuse ou enregistre en une transaction, verrou consultatif par empreinte et
   action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou`.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions réservées au rôle de service ; `critere` en lecture seule pour tous,
+  rôle de service compris,
   remplie des huit critères (100 points).
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des

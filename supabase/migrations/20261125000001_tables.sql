@@ -1,10 +1,12 @@
 -- Schéma neuf de la plateforme (AD-13) : socle commun aux epics suivants. Les droits sont dans …_droits.sql.
 
--- Par défaut, rien pour les clients : les objets créés ensuite par ces migrations n'ouvrent aucun privilège à public, anon ni
--- authenticated. Chaque droit est accordé explicitement dans …_droits.sql.
+-- Par défaut, rien pour les clients : une table, une séquence ou une fonction créée ensuite par postgres n'ouvre aucun
+-- privilège à anon ni authenticated, ni l'EXECUTE implicite de PUBLIC. Chaque droit est accordé dans …_droits.sql.
+-- L'EXECUTE de PUBLIC est une entrée globale : seule une règle sans « in schema » peut le retirer.
+alter default privileges for role postgres revoke execute on functions from public;
 alter default privileges for role postgres in schema public revoke all on tables from anon, authenticated;
 alter default privileges for role postgres in schema public revoke all on sequences from anon, authenticated;
-alter default privileges for role postgres in schema public revoke all on functions from public, anon, authenticated;
+alter default privileges for role postgres in schema public revoke all on functions from anon, authenticated;
 
 -- Limite de débit (SPECS § 9 et § 10) : une ligne par action autorisée, rangée sous l'empreinte de l'adresse IP.
 -- L'adresse n'arrive jamais ici : le serveur Nuxt envoie un HMAC-SHA-256 de l'IP avec un secret qu'il est seul à connaître.

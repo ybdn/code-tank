@@ -1,7 +1,7 @@
 -- revoke all par défaut : aucune table écrite ni aucune fonction exécutée directement par anon ou authenticated (AD-1).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(4);
+select plan(5);
 
 select is_empty($$
   select c.relname, r from pg_class c join pg_namespace n on n.oid = c.relnamespace, unnest(array['anon', 'authenticated']) r
@@ -21,6 +21,9 @@ $$, 'RLS activée sur toutes les tables');
 create table public.essai_defaut (id integer);
 select is(has_table_privilege('anon', 'public.essai_defaut', 'select') or has_table_privilege('authenticated', 'public.essai_defaut', 'select'),
   false, 'une nouvelle table n''ouvre rien par défaut');
+create function public.essai_fonction() returns integer language sql as 'select 1';
+select is(has_function_privilege('anon', 'public.essai_fonction()', 'execute') or has_function_privilege('authenticated', 'public.essai_fonction()', 'execute'),
+  false, 'une nouvelle fonction n''est exécutable ni par anon ni par authenticated');
 
 select * from finish();
 rollback;

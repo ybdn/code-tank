@@ -211,9 +211,6 @@ importers:
       '@nuxt/test-utils':
         specifier: ^4.4.0
         version: 4.4.0(cf4b1e8c8b453cdf51685919401cda2e)
-      '@supabase/supabase-js':
-        specifier: ^2.119.2
-        version: 2.119.2
       '@types/nodemailer':
         specifier: ^8.0.2
         version: 8.0.2

@@ -76,7 +76,6 @@ git push origin propre:preprod propre:prod
 
 ## 5. Avant d'ouvrir les comptes
 
-- [ ] Fixer `NUXT_VERSION_CHARTE` dans Vercel à la date de la version définitive de la charte (`AAAA-MM-JJ`).
 - [ ] Vérifier que `CRON_SECRET` est défini dans Vercel et que la tâche `/api/cron/conservation` tourne (journal des crons de Vercel) : c'est elle qui applique les durées de conservation promises.
 
 ## 6. En continu

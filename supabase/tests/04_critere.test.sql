@@ -1,12 +1,14 @@
 -- Critères du jury : lus par tous, jamais écrits par un client, les huit de SPECS § 5.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(13);
+select plan(15);
 
 select is(has_table_privilege('anon', 'public.critere', 'select'), true, 'anon lit critere');
 select is(has_table_privilege('authenticated', 'public.critere', 'select'), true, 'authenticated lit critere');
 select is(has_table_privilege('anon', 'public.critere', 'insert,update,delete,truncate'), false, 'anon n''écrit pas');
 select is(has_table_privilege('authenticated', 'public.critere', 'insert,update,delete,truncate'), false, 'authenticated n''écrit pas');
+select is(has_table_privilege('service_role', 'public.critere', 'select'), true, 'service_role lit critere');
+select is(has_table_privilege('service_role', 'public.critere', 'insert,update,delete,truncate'), false, 'service_role n''écrit pas');
 
 select results_eq(
   'select cle, jure, poids, calcule from public.critere order by cle',
