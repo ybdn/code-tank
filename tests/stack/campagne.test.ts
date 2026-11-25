@@ -67,7 +67,7 @@ describe('campagne du Boss', () => {
     expect((await envoyer('POST', '/api/boss', undefined, reglages())).statut).toBe(401)
     const slug = await creer(boss)
     expect(slug).toMatch(/^minuteur-de-pause-[0-9a-f]{6}$/)
-    expect(await lire(`/api/boss/${slug}`, boss.cookie)).toMatchObject({ statut: 200, json: { slug, statut: 'brouillon', max_participants: 5 } })
+    expect(await lire(`/api/boss/${slug}`, boss.cookie)).toMatchObject({ statut: 200, json: { slug, statut: 'brouillon', max_participants: 5, compte_actif: true } })
     expect((await lire('/api/boss', boss.cookie)).json).toMatchObject({ campagnes: [{ slug, statut: 'brouillon' }] })
     expect((await fetch(`${serveur.url}/boss/${slug}`, { headers: { cookie: boss.cookie } })).status).toBe(200)
 

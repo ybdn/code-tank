@@ -4,8 +4,11 @@ useHead({ title: 'Ma campagne' })
 const route = useRoute()
 const router = useRouter()
 // Sans session : 401, la page renvoie vers /compte. Compte actif sans campagne active : le formulaire de création.
-const { data, error, status } = await useFetch<{ etat: string | null; campagnes: { slug: string; titre: string; statut: string }[] }>('/api/boss')
-const active = computed(() => data.value?.campagnes.find((c) => STATUTS_ACTIFS.includes(c.statut)))
+type Ligne = { slug: string; titre: string; statut: string; date_resultats: string; bloquee_le: string | null }
+const { data, error, status } = await useFetch<{ etat: string | null; campagnes: Ligne[] }>('/api/boss')
+// Un brouillon échu et non bloqué ne compte pas : creer_campagne le fait passer en expiree.
+const echu = (c: Ligne) => c.statut === 'brouillon' && !c.bloquee_le && Date.parse(c.date_resultats) < Date.now()
+const active = computed(() => data.value?.campagnes.find((c) => STATUTS_ACTIFS.includes(c.statut) && !echu(c)))
 const occupe = ref(false)
 const alerte = ref('')
 const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')

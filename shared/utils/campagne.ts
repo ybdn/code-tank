@@ -9,6 +9,8 @@ export type CampagneBoss = {
   visibilite: 'publique' | 'invitation'; role_boss: 'juge' | 'joueur'; max_participants: number
   ouverture_inscriptions: string; cloture_depot: string; date_resultats: string
   statut: string; regles_figees_le: string | null; bloquee_le: string | null; cree_le: string
+  // Compte de l'appelant actif : sinon, ni réglage ni suppression.
+  compte_actif: boolean
 }
 export const STATUT_BOSS: Record<string, string> = {
   brouillon: 'Brouillon', ouverte: 'Ouverte', deliberation: 'Délibération', prete: 'Prête', publiee: 'Publiée', archivee: 'Archivée', expiree: 'Expirée',
@@ -27,5 +29,8 @@ export function depuisChampLocal(local: string): string {
   const t = Date.parse(`${local}:00Z`)
   if (Number.isNaN(t)) return ''
   const decalage = (instant: number) => Date.parse(`${versChampLocal(new Date(instant).toISOString())}:00Z`) - instant
-  return new Date(t - decalage(t - decalage(t))).toISOString()
+  const iso = new Date(t - decalage(t - decalage(t))).toISOString()
+  // Une date impossible (30 février, normalisée par Date.parse) ou une heure absente à Paris (changement d'heure) ne
+  // revient pas à la saisie : refusée.
+  return versChampLocal(iso) === local ? iso : ''
 }

@@ -32,9 +32,10 @@ pnpm build
 - `GET /api/admin/reglage` : mode d'accès courant (`{ mode }`). `POST /api/admin/reglage` : le règle par la RPC
   `regler_mode_acces`, avec le JWT de l'admin. Corps non JSON : **415** ; mode inconnu : **409**. Page : `/admin`
   (« Mode d'accès »), sans lien dans l'en-tête. Le rôle `admin` se pose à la main en SQL (voir `A-FAIRE.md`).
-- `GET /api/boss` : campagnes du compte connecté, lues sous son JWT (RLS). `POST /api/boss` : crée une campagne en
-  brouillon par la RPC `creer_campagne` (compte actif, une seule campagne active), renvoie `{ slug }`.
-  `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne, son réglage (`modifier_campagne`, brouillon ou ouverte, règles
+- `GET /api/boss` : état du compte connecté et ses campagnes, lus sous son JWT (RLS). `POST /api/boss` : crée une campagne en
+  brouillon par la RPC `creer_campagne` (compte actif, une seule campagne active ; un brouillon échu passe d'abord en
+  `expiree`), renvoie `{ slug }`.
+  `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne (avec `compte_actif`, qui dit à la page si elle propose les actions), son réglage (`modifier_campagne`, brouillon ou ouverte, règles
   non figées) et la suppression du brouillon (`supprimer_brouillon`), toutes avec le JWT de l'appelant. Tout autre compte
   que le Boss, visiteur compris : **404** ; corps non JSON (`POST`, `PATCH`, `DELETE`) : **415** ; règle métier : **409**.
   Correspondance des erreurs (`CT404` → 404, `P0001` → 409) : `server/utils/campagne.ts`. Pages : `/boss`, `/boss/[slug]`.

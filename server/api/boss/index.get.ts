@@ -4,7 +4,7 @@ export default defineEventHandler(async (event) => {
   const { client } = await utilisateurVerifie(event)
   const [compte, campagnes] = await Promise.all([
     client.from('compte').select('etat').maybeSingle(),
-    client.from('campagne').select('slug, titre, statut, cree_le').order('cree_le', { ascending: false }),
+    client.from('campagne').select('slug, titre, statut, date_resultats, bloquee_le, cree_le').order('cree_le', { ascending: false }),
   ])
   const error = compte.error ?? campagnes.error
   if (error) erreurCampagne(error, 'Lecture des campagnes :', 'Tes campagnes ne peuvent pas être lues pour le moment.')

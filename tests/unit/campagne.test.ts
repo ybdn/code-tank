@@ -16,4 +16,8 @@ describe('dates à l\'heure de Paris', () => {
     expect(depuisChampLocal('')).toBe('')
     expect(depuisChampLocal('2026-13-45')).toBe('')
   })
+  it('une date impossible ou une heure absente à Paris donne une chaîne vide', () => {
+    expect(depuisChampLocal('2027-02-30T09:30')).toBe('')
+    expect(depuisChampLocal('2026-03-29T02:30')).toBe('')
+  })
 })

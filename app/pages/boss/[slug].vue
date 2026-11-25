@@ -9,8 +9,10 @@ useHead({ title: () => data.value?.titre ?? 'Ma campagne' })
 
 // Échue : date des résultats passée ; la base refuse alors toute action du Boss (campagne_vivante).
 const echue = computed(() => !!data.value && Date.parse(data.value.date_resultats) < Date.now())
-// Réglable en brouillon ou ouverte, tant que les règles ne sont pas figées et la campagne ni bloquée ni échue.
-const reglable = computed(() => !!data.value && ['brouillon', 'ouverte'].includes(data.value.statut) && !data.value.regles_figees_le && !data.value.bloquee_le && !echue.value)
+// Actions du Boss (réglage, suppression) : compte actif, campagne ni bloquée ni échue. La base revérifie tout.
+const actif = computed(() => !!data.value && data.value.compte_actif && !data.value.bloquee_le && !echue.value)
+// Réglable en brouillon ou ouverte, tant que les règles ne sont pas figées.
+const reglable = computed(() => actif.value && ['brouillon', 'ouverte'].includes(data.value!.statut) && !data.value!.regles_figees_le)
 const occupe = ref(false)
 const annonce = ref(route.query.cree ? 'Brouillon créé.' : '')
 const alerte = ref('')
@@ -76,8 +78,8 @@ async function supprimer() {
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
         <FormulaireCampagne v-if="reglable" :initial="data" :occupe="occupe" @envoyer="enregistrer" />
-        <p v-else>Les réglages ne se modifient plus&nbsp;: {{ data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>
-        <template v-if="data.statut === 'brouillon' && !data.bloquee_le && !echue">
+        <p v-else>Les réglages ne se modifient plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>
+        <template v-if="data.statut === 'brouillon' && actif">
           <h2>Supprimer le brouillon</h2>
           <p>Tu changes d'avis&nbsp;? Le brouillon disparaît pour de bon.</p>
           <p class="btns"><button class="btn btn--danger" type="button" :aria-disabled="occupe" @click="supprimer">Supprimer le brouillon</button></p>

@@ -250,7 +250,9 @@ $$;
 
 -- Crée la campagne de l'appelant en brouillon et renvoie son slug : titre en minuscules sans accent, tirets, puis 6
 -- caractères hexadécimaux aléatoires. Une seule campagne active par Boss : l'index unique partiel tranche, même entre deux
--- appels simultanés. Pas de ligne à verrouiller ni de campagne_vivante ici : la campagne n'existe pas encore.
+-- appels simultanés. Pas de ligne à verrouiller ni de campagne_vivante ici : la campagne n'existe pas encore. Un brouillon
+-- échu de l'appelant, que la garde campagne_vivante empêche de supprimer, passe d'abord en expiree (arête d'AD-2) pour ne
+-- pas garder la place active ; bloqué, il reste tel quel (AD-10). Les autres étapes échues relèvent de la tâche quotidienne.
 -- Exécutable par authenticated (PostgREST l'expose) : toutes les règles vivent ici.
 create function public.creer_campagne(p_titre text, p_theme text, p_brief text, p_langages text[], p_visibilite text,
   p_role_boss text, p_max_participants integer, p_ouverture_inscriptions timestamptz, p_cloture_depot timestamptz,
@@ -268,6 +270,8 @@ begin
   end if;
   perform public.verifier_reglages(p_titre, p_theme, p_brief, p_langages, p_visibilite, p_role_boss, p_max_participants,
     p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
+  update public.campagne set statut = 'expiree'
+  where boss_id = auth.uid() and statut = 'brouillon' and bloquee_le is null and now() > date_resultats;
   v_base := trim(both '-' from left(trim(both '-' from regexp_replace(
     translate(lower(p_titre), 'àâäáãåçéèêëíìîïñóòôöõúùûüýÿ', 'aaaaaaceeeeiiiinooooouuuuyy'), '[^a-z0-9]+', '-', 'g')), 50));
   -- Un titre sans lettre latine ni chiffre donne un slug fait du seul suffixe.
@@ -323,9 +327,8 @@ begin
 end
 $$;
 
--- Supprime un brouillon de l'appelant ; toute autre étape refuse (AD-2).
--- shortcut: un brouillon échu (date_resultats passée) ne se supprime pas (garde campagne_vivante) et occupe la place de
--- campagne active jusqu'à son expiration par la tâche quotidienne ; à revoir avec la story qui pose expiree.
+-- Supprime un brouillon de l'appelant ; toute autre étape refuse (AD-2). Un brouillon échu ne se supprime pas (garde
+-- campagne_vivante) : creer_campagne le fait passer en expiree.
 create function public.supprimer_brouillon(p_campagne uuid)
 returns void
 language plpgsql security definer set search_path = ''

@@ -3,7 +3,7 @@
 -- attente (C), compte suspendu (S), rôle de service. Identité simulée par le rôle et request.jwt.claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(92);
+select plan(97);
 
 insert into auth.users (id, email) values
   ('70000000-0000-4000-8000-00000000000b', 'b@example.org'),
@@ -303,6 +303,26 @@ select throws_ok($$select public.modifier_campagne(current_setting('t.b2')::uuid
 reset role;
 update public.campagne set date_resultats = now() + interval '1 day' where id = current_setting('t.b2')::uuid;
 select is(public.campagne_vivante(current_setting('t.b2')::uuid), true, 'ni bloquée ni échue : campagne_vivante vrai');
+-- Brouillon échu : il ne se supprime pas, mais une nouvelle création le fait passer en expiree ; bloqué, il garde la place.
+insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('echu-1', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() - interval '3 days', now() - interval '2 days', now() - interval '1 day');
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"70000000-0000-4000-8000-00000000000e","role":"authenticated"}';
+select throws_ok($$select public.supprimer_brouillon((select id from public.campagne where slug = 'echu-1'))$$, 'P0001',
+  'Cette campagne est bloquée ou échue : elle ne se supprime plus.', 'brouillon échu : suppression refusée');
+select lives_ok($$select public.creer_campagne('Après', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
+  'brouillon échu : une nouvelle création passe');
+reset role;
+select results_eq($$select statut from public.campagne where slug = 'echu-1'$$, $$values ('expiree')$$, 'le brouillon échu est passé en expiree');
+delete from public.campagne where boss_id = '70000000-0000-4000-8000-00000000000e' and statut = 'brouillon';
+insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
+  values ('echu-2', '70000000-0000-4000-8000-00000000000e', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() - interval '3 days', now() - interval '2 days', now() - interval '1 day');
+update public.campagne set bloquee_le = now(), motif_blocage = 'Essai' where slug = 'echu-2';
+set local role authenticated;
+select throws_ok($$select public.creer_campagne('Après', 'T', 'B', array['Go'], 'publique', 'juge', 5, now() + interval '1 day', now() + interval '2 days', now() + interval '3 days')$$,
+  'P0001', 'Tu as déjà une campagne en cours : une seule à la fois.', 'brouillon échu et bloqué : il garde la place');
+reset role;
+select results_eq($$select statut from public.campagne where slug = 'echu-2'$$, $$values ('brouillon')$$, 'le brouillon bloqué n''a pas bougé');
 -- Boss suspendu : plus aucune RPC.
 update public.compte set etat = 'suspendu' where id = '70000000-0000-4000-8000-00000000000b';
 set local role authenticated;
