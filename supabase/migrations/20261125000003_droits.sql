@@ -53,3 +53,26 @@ insert into public.critere (cle, libelle, jure, poids, calcule) values
   ('outillage_doc', 'Outillage et doc : README, lint, CI, instructions de lancement', 'lint', 10, true),
   ('reponse_brief', 'Réponse au brief', 'pitch', 15, false),
   ('originalite_finition', 'Originalité et finition', 'pitch', 10, false);
+
+-- campagne (story 2.1) : le Boss lit ses campagnes et rien d'autre (la lecture publique arrive avec la story 2.2) ;
+-- aucune écriture directe, pas même du rôle de service : creer_campagne, modifier_campagne et supprimer_brouillon seules.
+-- Ces trois RPC sont exécutables par authenticated seul et tiennent toutes leurs règles (compte_actif(), est_boss, verrou
+-- de la ligne, campagne_vivante) : un appel direct par /rest/v1/rpc ne contourne rien. Les gardes est_boss et
+-- campagne_vivante, le contrôle verifier_reglages et le déclencheur ne sont exécutables par aucun client.
+alter table public.campagne enable row level security;
+revoke all on public.campagne from service_role;
+grant select on public.campagne to authenticated;
+create policy campagne_lecture_boss on public.campagne for select to authenticated using (boss_id = (select auth.uid()));
+revoke all on function public.est_boss(uuid), public.campagne_vivante(uuid), public.garder_transition(),
+  public.verifier_reglages(text, text, text, text[], text, text, integer, timestamptz, timestamptz, timestamptz)
+  from service_role;
+revoke all on function
+  public.creer_campagne(text, text, text, text[], text, text, integer, timestamptz, timestamptz, timestamptz),
+  public.modifier_campagne(uuid, text, text, text, text[], text, text, integer, timestamptz, timestamptz, timestamptz),
+  public.supprimer_brouillon(uuid)
+  from service_role;
+grant execute on function
+  public.creer_campagne(text, text, text, text[], text, text, integer, timestamptz, timestamptz, timestamptz),
+  public.modifier_campagne(uuid, text, text, text, text[], text, text, integer, timestamptz, timestamptz, timestamptz),
+  public.supprimer_brouillon(uuid)
+  to authenticated;

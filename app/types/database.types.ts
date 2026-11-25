@@ -5,7 +5,27 @@ export type Database = {
   
   "public": {
           Tables: {
-            "compte": {
+            "campagne": {
+                  Row: {
+                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"id"?: string,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
+                  }
+                  Update: {
+                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"id"?: string,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "campagne_boss_id_fkey"
+      columns: ["boss_id"]
+isOneToOne: false
+      referencedRelation: "compte"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"compte": {
                   Row: {
                     "charte_acceptee_le": string,"cree_le": string,"etat": string,"etat_le": string,"github_id": string,"id": string,"majeur_declare_le": string,"pseudo": string,"role": string,"version_charte": string
                   }
@@ -81,7 +101,10 @@ export type Database = {
             [_ in never]: never
           }
           Functions: {
-            "changer_pseudo":
+            "campagne_vivante":
+{ Args: { "p_campagne": string }; Returns: boolean
+                           },
+"changer_pseudo":
 { Args: { "p_pseudo": string }; Returns: undefined
                            },
 "compte_actif":
@@ -90,11 +113,20 @@ export type Database = {
 "consommer_debit":
 { Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
                            },
+"creer_campagne":
+{ Args: { "p_brief": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: string
+                           },
 "creer_compte":
 { Args: { "p_charte_acceptee": boolean,"p_compte": string,"p_majeur": boolean,"p_pseudo": string,"p_version_charte": string }; Returns: undefined
                            },
 "est_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"est_boss":
+{ Args: { "p_campagne": string }; Returns: boolean
+                           },
+"modifier_campagne":
+{ Args: { "p_brief": string,"p_campagne": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
@@ -104,6 +136,12 @@ export type Database = {
                            },
 "rendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean
+                           },
+"supprimer_brouillon":
+{ Args: { "p_campagne": string }; Returns: undefined
+                           },
+"verifier_reglages":
+{ Args: { "p_brief": string,"p_cloture": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture": string,"p_resultats": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined
                            }
           }
           Enums: {

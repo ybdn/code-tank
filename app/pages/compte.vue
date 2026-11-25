@@ -19,6 +19,9 @@ const VERSION = new Date(VERSION_CHARTE).toLocaleDateString('fr-FR', { day: 'num
 // Le serveur ne voit pas toujours la session au rendu : tout se lit après le montage.
 const pret = ref(false)
 const compte = ref<{ pseudo: string; etat: string } | null>(null)
+// Campagne active du compte (une au plus) : le lien mène à elle, sinon à la création ; lecture en échec (undefined) : lien
+// neutre vers /boss.
+const campagne = ref<{ slug: string } | null | undefined>(null)
 const f = reactive({ pseudo: '', charte: false, majeur: false })
 const erreurs = ref<Partial<Record<'pseudo' | 'charte' | 'majeur', string>>>({})
 const occupe = ref(false)
@@ -37,6 +40,12 @@ async function charger() {
   compte.value = data
   // En liste d'attente, le pseudo reste modifiable : le champ part du pseudo enregistré.
   if (data?.etat === 'en_attente') f.pseudo = data.pseudo
+  // La RLS ne laisse lire que ses propres campagnes.
+  if (data?.etat === 'actif') {
+    const lue = await supabase.from('campagne').select('slug, statut, bloquee_le, date_resultats').in('statut', STATUTS_ACTIFS).maybeSingle()
+    // Un brouillon échu ne compte plus : le lien mène à la création, comme sur /boss.
+    campagne.value = lue.error ? undefined : lue.data && !brouillonEchu(lue.data) ? lue.data : null
+  }
   chargement.value = false
 }
 
@@ -211,6 +220,9 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
           <p id="aide-pseudo-fige" class="champ__aide">Figé&nbsp;: c'est ton nom public, il ne se change pas.</p>
           <input id="pseudo-fige" type="text" :value="compte.pseudo" readonly aria-describedby="aide-pseudo-fige">
         </div>
+        <p v-if="compte.etat === 'actif'" class="btns">
+          <NuxtLink class="btn btn--primary" :to="campagne ? `/boss/${campagne.slug}` : '/boss'">{{ campagne === undefined ? 'Mes campagnes' : campagne ? 'Ma campagne' : 'Créer une campagne' }}</NuxtLink>
+        </p>
         <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
       </template>
     </div>
