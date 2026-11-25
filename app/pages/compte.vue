@@ -21,12 +21,17 @@ const erreurs = ref<Partial<Record<'pseudo' | 'charte' | 'majeur', string>>>({})
 const occupe = ref(false)
 const alerte = ref('')
 const formulaire = useTemplateRef<HTMLFormElement>('formulaire')
+const titreEtat = useTemplateRef<HTMLElement>('titreEtat')
+// Pendant la lecture, ni formulaire ni compte : au retour de GitHub, un compte existant ne voit pas le formulaire.
+const chargement = ref(false)
 
 async function charger() {
+  chargement.value = true
   // La RLS ne laisse lire que sa propre ligne.
   const { data, error } = await supabase.from('compte').select('pseudo, etat').maybeSingle()
   if (error) alerte.value = 'Impossible de lire ton compte pour le moment.'
   compte.value = data
+  chargement.value = false
 }
 
 onMounted(async () => {
@@ -66,6 +71,9 @@ async function creer() {
   try {
     await $fetch('/api/compte', { method: 'POST', body: { ...f } })
     await charger()
+    // Le formulaire a disparu : le focus va au titre de l'état, lu par les lecteurs d'écran.
+    await nextTick()
+    titreEtat.value?.focus()
   } catch (e) {
     const err = e as { statusCode?: number; data?: { message?: string } }
     const message = err.data?.message ?? 'Une erreur est survenue.'
@@ -100,7 +108,7 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
         <p v-if="!pret" class="note-claire">Le bouton s'active dès que la page est chargée.</p>
       </template>
 
-      <p v-else-if="!pret">Chargement de ton compte…</p>
+      <p v-else-if="!pret || chargement">Chargement de ton compte…</p>
 
       <template v-else-if="!compte">
         <p class="lead">Tu es connecté avec GitHub. Crée ton compte Code Tank&nbsp;: la charte, ta majorité et ton pseudo.</p>
@@ -135,7 +143,7 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
       </template>
 
       <template v-else>
-        <h2>État</h2>
+        <h2 ref="titreEtat" tabindex="-1">État</h2>
         <p class="etat etat--console" :data-etat="compte.etat">{{ ETATS[compte.etat as Etat] }}</p>
         <div class="champ">
           <label for="pseudo-fige">Pseudo</label>

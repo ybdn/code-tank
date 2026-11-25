@@ -9,8 +9,8 @@ onMounted(() => {
   monte.value = true
   watchEffect(() => (connecte.value = Boolean(user.value)))
 })
-// En cas d'échec, la page /compte propose de nouveau la connexion.
-const connecter = async () => (await connecterGithub()).error && navigateTo('/compte')
+// En cas d'échec, la page /compte affiche son message fixe et propose de nouveau la connexion.
+const connecter = async () => (await connecterGithub()).error && navigateTo('/compte?error=1')
 </script>
 
 <template>

@@ -106,7 +106,9 @@ describe('création du compte', () => {
       headers: { apikey: statut.ANON_KEY, authorization: `Bearer ${jeton}`, 'content-type': 'application/json' },
       body: JSON.stringify({ p_compte: u.id, p_pseudo: pseudo(), p_version_charte: '1999-01-01', p_charte_acceptee: true, p_majeur: true }),
     })
-    expect(r.ok).toBe(false)
+    // Refus de droit (permission denied), pas une autre erreur.
+    expect(r.status).toBe(403)
+    expect(await r.json()).toMatchObject({ code: '42501' })
     expect(await lireCompte(jeton)).toEqual([])
   })
 

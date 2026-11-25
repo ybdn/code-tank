@@ -21,7 +21,8 @@ pnpm build
 ## Utilitaires serveur
 
 - `POST /api/compte` : crée le compte de la personne connectée par GitHub (pseudo, charte, majorité) par la RPC
-  `creer_compte`, avec son jeton ; limite par IP `compte` d'abord. Règle métier refusée : **409** `{ message }` en français.
+  `creer_compte`, appelée avec la clé de service et l'id vérifié de la session ; limite par IP `compte` d'abord.
+  Corps non JSON : **415**. Règle métier refusée : **409** `{ message }` en français.
   La version de la charte est `VERSION_CHARTE` (`shared/utils/compte.ts`), jamais reçue du client.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -89,7 +90,7 @@ Trois migrations datées du même jour (AD-13) :
   gardes `est_admin()` et `compte_actif()` ; `creer_compte` (identité GitHub lue dans `auth.identities`, charte, majorité,
   pseudo ; compte `actif` en mode `ouvert`, refus sinon).
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
-  propriétaire seul, `creer_compte` et les gardes exécutables par `authenticated` ; `reglage` sans droit client ; `critere` en lecture seule pour tous,
+  propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes par `authenticated` ; `reglage` sans droit client ; `critere` en lecture seule pour tous,
   rôle de service compris,
   remplie des huit critères (100 points).
 
