@@ -155,9 +155,9 @@ Trois migrations datées du même jour (AD-13) :
   `campagne_vivante`, compte actif, campagne sur invitation) ; `jeton_invitation` (256 bits de pgcrypto en hexadécimal)
   posé par `creer_campagne` et `modifier_campagne` pour une campagne sur invitation, retiré au passage en publique ;
   `modifier_campagne` refuse moins de places que d'inscrits, un Boss inscrit qui deviendrait juge et tout changement de
-  visibilité dès le premier inscrit ; `peut_deposer` (gardes du dépôt, rend la participation), `deposer` (`for update` sur
+  visibilité dès le premier inscrit ; `peut_deposer` (gardes du dépôt, réception en attente refusée, rend la participation), `deposer` (`for update` sur
   la campagne, phase de dépôt, Boss juge refusé, case, présentation rognée 1 à 500, demande 80 au plus, chemin de sa
-  participation et objet présent dans le bucket, réception en attente refusée, limite de débit par compte 10 par 24 h,
+  participation et objet présent dans le bucket, limite de débit par compte 10 par 24 h,
   premier dépôt qui pose `regles_figees_le`), `retirer_depot` (`for update`, statut `ouverte` avant la clôture, rend les
   chemins de `effacer_archives`) et `effacer_archives(depot)` (zip et archive filtrée, seul chemin d'effacement, AD-11).
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son

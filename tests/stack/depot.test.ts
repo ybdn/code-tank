@@ -2,7 +2,7 @@
 // appel du jury (qui échoue ici : le dépôt réussit quand même), refus (415, 401, 404, 409), retrait et effacement des
 // archives, page de dépôt.
 import { createServer, type IncomingHttpHeaders } from 'node:http'
-import { randomBytes, randomInt } from 'node:crypto'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { API, connexion, demarrer, nettoyer, sql, statut, utilisateur } from './aide'
 
@@ -148,9 +148,11 @@ describe('dépôt', () => {
     expect(page).not.toContain('Déposer</button>')
     expect((await lire(`/campagnes/${juge.slug}`, a.cookie)).texte).toContain('Retire d&#39;abord ton dépôt pour te désinscrire.')
 
-    const chemin2 = await envoi(juge.slug, a.cookie)
-    expect(await envoyer('POST', `/api/campagnes/${juge.slug}/depot`, a.cookie, { ...corps, chemin: chemin2 }))
-      .toMatchObject({ statut: 409, json: { message: 'Ton dépôt précédent est en cours de contrôle.' } })
+    // Ni URL d'envoi (rien ne resterait orphelin dans le bucket), ni dépôt, tant que la réception attend.
+    for (const route of ['depot/url', 'depot']) {
+      expect(await envoyer('POST', `/api/campagnes/${juge.slug}/${route}`, a.cookie, corps))
+        .toMatchObject({ statut: 409, json: { message: 'Ton dépôt précédent est en cours de contrôle.' } })
+    }
     expect(await envoyer('DELETE', `/api/campagnes/${juge.slug}/depot`, a.cookie))
       .toMatchObject({ statut: 409, json: { message: 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.' } })
     expect(await envoyer('DELETE', `/api/campagnes/${juge.slug}/inscription`, a.cookie))
@@ -191,6 +193,16 @@ describe('dépôt', () => {
     expect((await lire(`/campagnes/inconnue-${marque}/depot`)).statut).toBe(404)
   })
 
+  it('limite d\'envois par compte : la 21e URL signée en 24 h répond 429 avec Retry-After', async () => {
+    const a = await inscrit(juge.slug)
+    const empreinte = createHash('sha256').update(`${a.u.id}:compte`).digest('hex')
+    sql(`insert into public.debit (empreinte, action) select '${empreinte}', 'envoi' from generate_series(1, 20)`)
+    const r = await fetch(`${serveur.url}/api/campagnes/${juge.slug}/depot/url`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: a.cookie }, body: '{}' })
+    expect(r.status).toBe(429)
+    expect(Number(r.headers.get('retry-after'))).toBeGreaterThan(0)
+    expect(await r.json()).toMatchObject({ message: 'Trop d\'envois depuis ton compte. Réessaie plus tard.' })
+  })
+
   it('date limite passée : URL et dépôt refusés, la page dit pourquoi', async () => {
     const c = await campagne('juge')
     const a = await inscrit(c.slug)
@@ -206,29 +218,28 @@ describe('dépôt', () => {
 
   it('retrait : la ligne disparaît et les archives sont effacées du bucket', async () => {
     const c = await campagne('joueur')
-    const boss = c
-    expect((await envoyer('POST', `/api/campagnes/${c.slug}/inscription`, boss.cookie, { connaissance: true })).statut).toBe(200)
-    const zip = await envoi(c.slug, boss.cookie)
-    expect((await envoyer('POST', `/api/campagnes/${c.slug}/depot`, boss.cookie, { chemin: zip, presentation: 'Le projet du Boss.', droit: true })).statut).toBe(200)
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/inscription`, c.cookie, { connaissance: true })).statut).toBe(200)
+    const zip = await envoi(c.slug, c.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/depot`, c.cookie, { chemin: zip, presentation: 'Le projet du Boss.', droit: true })).statut).toBe(200)
     // prive (story 3.4) accepte la réception : simulé en SQL, avec une archive filtrée posée par la clé de service.
     const filtre = zip.replace('.zip', '.filtre.zip')
     await deposerEnService(filtre)
-    const p = ligne(`select p.id from public.participation p where p.compte_id = '${boss.u.id}'`)
+    const p = ligne(`select p.id from public.participation p where p.compte_id = '${c.u.id}'`)
     sql(`delete from public.reception where participation_id = '${p}'`)
     sql(`insert into public.depot (participation_id, chemin_stockage, chemin_filtre, sha256, nb_fichiers, nb_tokens_estime, presentation, droit_declare_le)
       values ('${p}', '${zip}', '${filtre}', '${'a'.repeat(64)}', 1, 10, 'Le projet du Boss.', now())`)
     expect([objets(zip), objets(filtre)]).toEqual([1, 1])
 
-    expect((await lire(`/api/campagnes/${c.slug}`, boss.cookie)).json).toMatchObject({ reception: null, depot: { presentation: 'Le projet du Boss.' } })
-    const page = (await lire(`/campagnes/${c.slug}/depot`, boss.cookie)).texte
+    expect((await lire(`/api/campagnes/${c.slug}`, c.cookie)).json).toMatchObject({ reception: null, depot: { presentation: 'Le projet du Boss.' } })
+    const page = (await lire(`/campagnes/${c.slug}/depot`, c.cookie)).texte
     expect(page).toContain('Retirer mon dépôt</button>')
     expect(page).toContain('Redéposer</button>')
     expect((await lire(`/api/campagnes/${c.slug}`, (await inscrit(c.slug)).cookie)).json).toMatchObject({ reception: null, depot: null })
 
-    expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/depot`, boss.cookie)).statut).toBe(200)
+    expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/depot`, c.cookie)).statut).toBe(200)
     expect(ligne(`select count(*) from public.depot where participation_id = '${p}'`)).toBe('0')
     expect(objets(zip)).toBe(0)
     expect(objets(filtre)).toBe(0)
-    expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/inscription`, boss.cookie)).statut).toBe(200)
+    expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/inscription`, c.cookie)).statut).toBe(200)
   })
 })

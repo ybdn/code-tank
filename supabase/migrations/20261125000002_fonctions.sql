@@ -589,7 +589,7 @@ $$;
 
 -- Participation de l'appelant s'il peut déposer maintenant dans la campagne, sinon le refus de deposer. Mêmes gardes,
 -- dans le même ordre, que se_desinscrire, puis la phase de dépôt (mêmes bornes que sinscrire) et le Boss juge (un Boss
--- joueur inscrit dépose, SPECS § 2). Sans verrou : la route d'URL d'envoi la lit pour ne pas signer un envoi voué au refus,
+-- joueur inscrit dépose, SPECS § 2), puis la réception en attente. Sans verrou : la route d'URL d'envoi la lit pour ne pas signer un envoi voué au refus,
 -- deposer la rappelle sous le verrou de la campagne. Exécutable par authenticated : elle ne rend que l'id de sa propre
 -- participation.
 create function public.peut_deposer(p_campagne uuid)
@@ -623,6 +623,10 @@ begin
   end if;
   if v_participation is null then
     raise exception 'Tu n''es pas inscrit à cette campagne.';
+  end if;
+  -- Pas d'envoi pendant qu'un autre attend son contrôle : il serait refusé et resterait dans le bucket.
+  if exists (select 1 from public.reception where participation_id = v_participation and statut = 'en_attente') then
+    raise exception 'Ton dépôt précédent est en cours de contrôle.';
   end if;
   return v_participation;
 end
@@ -661,9 +665,6 @@ begin
     or exists (select 1 from public.reception where chemin_stockage = p_chemin)
     or exists (select 1 from public.depot where chemin_stockage = p_chemin) then
     raise exception 'Ton archive n''est pas arrivée : recommence l''envoi.';
-  end if;
-  if exists (select 1 from public.reception where participation_id = v_participation and statut = 'en_attente') then
-    raise exception 'Ton dépôt précédent est en cours de contrôle.';
   end if;
   -- Limite par compte (AD-1) : 10 dépôts par 24 h, sous l'empreinte SHA-256 de l'id, comme sinscrire.
   if public.consommer_debit(encode(sha256(convert_to(auth.uid()::text || ':compte', 'UTF8')), 'hex'), 'depot', 10, 86400) > 0 then

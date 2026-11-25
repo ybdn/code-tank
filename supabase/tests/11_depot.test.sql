@@ -5,7 +5,7 @@
 -- Les objets du bucket et les lignes depot (écrites par prive, story 3.4) sont posés en superutilisateur.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(76);
+select plan(77);
 
 insert into auth.users (id, email)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
@@ -144,6 +144,7 @@ select is((select count(*) from public.debit where action = 'depot'
   'débit rangé sous l''empreinte du compte');
 set local role authenticated;
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c2'), 'x', null, true)$$, 'P0001', 'Ton dépôt précédent est en cours de contrôle.', 'réception en attente : pas de second dépôt');
+select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton dépôt précédent est en cours de contrôle.', 'réception en attente : peut_deposer refuse aussi (pas d''URL d''envoi)');
 select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.', 'réception en attente : pas de retrait');
 select throws_ok($$select public.se_desinscrire(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Retire d''abord ton dépôt pour te désinscrire.', 'réception en attente : pas de désinscription');
 select throws_ok($$select chemin_stockage from public.reception$$, '42501', null, 'le candidat ne lit pas le chemin de sa réception');
