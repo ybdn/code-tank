@@ -4,8 +4,8 @@ Site public de Code Tank, plateforme de défis de code entre amis : chaque inscr
 Nuxt 4, TypeScript, rendu côté serveur, pnpm.
 
 Le site est en cours de réécriture sur un schéma neuf : il contient pour l'instant l'accueil, la charte, la politique de
-confidentialité, les mentions légales, les en-têtes de sécurité et le socle de la base (`supabase/`, voir plus bas). Les
-parcours (comptes, campagnes, dépôt, délibération) arrivent avec les epics suivants.
+confidentialité, les mentions légales, les en-têtes de sécurité, la création de compte par GitHub (`/compte`) et le socle de
+la base (`supabase/`, voir plus bas). Les autres parcours (campagnes, dépôt, délibération) arrivent avec les epics suivants.
 
 ## Commandes
 
@@ -20,6 +20,10 @@ pnpm build
 
 ## Utilitaires serveur
 
+- `POST /api/compte` : crée le compte de la personne connectée par GitHub (pseudo, charte, majorité) par la RPC
+  `creer_compte`, appelée avec la clé de service et l'id vérifié de la session ; limite par IP `compte` d'abord.
+  Corps non JSON : **415**. Règle métier refusée : **409** `{ message }` en français.
+  La version de la charte est `VERSION_CHARTE` (`shared/utils/compte.ts`), jamais reçue du client.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
   au-delà du plafond : **429** avec `Retry-After`.
@@ -33,13 +37,14 @@ pnpm build
 ### Pile locale et tests d'intégration
 
 ```sh
-pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
+pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle
 pnpm test:stack    # construit le site et le lance contre la pile (tests/stack/)
 pnpm stack:stop
 ```
 
-La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, etc.). Ports décalés : API 54421, base 54422, boîte mail
-54424 (web) et 54425 (SMTP, `smtp_port` dans `supabase/config.toml`). `pnpm db:types` régénère `app/types/database.types.ts`
+La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, boîte mail, etc.). Ports décalés : API 54421, base 54422.
+Les tests de pile créent leurs utilisateurs par l'API d'administration d'Auth, ajoutent l'identité `github` en SQL dans
+`auth.identities` et ouvrent la session par mot de passe (une vraie connexion GitHub est impossible en CI). `pnpm db:types` régénère `app/types/database.types.ts`
 depuis la base locale.
 
 ### Variables d'environnement (noms seulement, aucune valeur dans le dépôt)
@@ -56,7 +61,7 @@ sont l'alternative locale (tests, pile locale) et **l'emportent** sur `SUPABASE_
 | `CRON_SECRET` | Secret du planificateur (variable de Vercel, **sans préfixe `NUXT_`**), 32 caractères au moins ; sans lui, `/api/cron/conservation` répond 404 |
 | `NUXT_SECRET_DEBIT` | Secret HMAC de l'empreinte des adresses IP (limite de débit), **32 caractères au moins** ; sans lui, les routes limitées répondent 503 |
 | `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |
-| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, la boîte mail sur 54425, sans identifiant) |
+| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo) |
 | `NUXT_JURY_URL` | Facultatif : URL complète de `POST /api/jury` du projet Vercel du jury (dépôt privé). Sans elle ou sans le secret, le site n'appelle rien |
 | `NUXT_JURY_SECRET` | Le secret de ce jury (`JURY_SECRET` de son projet), **32 caractères au moins** |
 
@@ -78,10 +83,14 @@ Trois migrations datées du même jour (AD-13) :
 
 - `…_tables.sql` : `revoke all` par défaut pour `anon` et `authenticated` sur les tables, séquences et fonctions créées
   ensuite par `postgres`, et retrait de l'`EXECUTE` implicite de `PUBLIC` ; tables `debit` (limite
-  de débit), `verrou` (bail global du jury) et `critere` (critères et poids du jury, seule source).
+  de débit), `verrou` (bail global du jury), `critere` (critères et poids du jury, seule source), `reglage` (ligne unique,
+  `mode_acces`) et `compte` (né de GitHub, pseudo unique sans tenir compte de la casse, figé).
 - `…_fonctions.sql` : `consommer_debit` (compte, refuse ou enregistre en une transaction, verrou consultatif par empreinte et
-  action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou`.
-- `…_droits.sql` : RLS sur toutes les tables ; fonctions réservées au rôle de service ; `critere` en lecture seule pour tous,
+  action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou` ;
+  gardes `est_admin()` et `compte_actif()` ; `creer_compte` (identité GitHub lue dans `auth.identities`, charte, majorité,
+  pseudo ; compte `actif` en mode `ouvert`, refus sinon).
+- `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
+  propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes par `authenticated` ; `reglage` sans droit client ; `critere` en lecture seule pour tous,
   rôle de service compris,
   remplie des huit critères (100 points).
 

@@ -23,6 +23,7 @@ describe('pages publiques', () => {
     ['/charte', 'Charte'],
     ['/confidentialite', 'confidentialité'],
     ['/mentions-legales', 'Mentions légales'],
+    ['/compte', 'Mon compte'],
   ])('%s répond avec son contenu rendu côté serveur', async (chemin, texte) => {
     expect(await $fetch<string>(chemin)).toContain(texte)
   })
@@ -36,7 +37,7 @@ describe('code du concours supprimé', () => {
     expect(html).not.toContain('id="campagnes"')
   })
 
-  it.each(['/compte', '/admin', '/campagnes/une-campagne', '/api/campagnes', '/api/compte', '/api/admin/comptes'])('%s répond 404', async (chemin) => {
+  it.each(['/admin', '/campagnes/une-campagne', '/api/campagnes', '/api/admin/comptes'])('%s répond 404', async (chemin) => {
     expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
   })
 })

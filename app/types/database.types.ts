@@ -5,7 +5,21 @@ export type Database = {
   
   "public": {
           Tables: {
-            "critere": {
+            "compte": {
+                  Row: {
+                    "charte_acceptee_le": string,"cree_le": string,"etat": string,"etat_le": string,"github_id": string,"id": string,"majeur_declare_le": string,"pseudo": string,"role": string,"version_charte": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "charte_acceptee_le": string,"cree_le"?: string,"etat": string,"etat_le"?: string,"github_id": string,"id": string,"majeur_declare_le": string,"pseudo": string,"role"?: string,"version_charte": string
+                  }
+                  Update: {
+                    "charte_acceptee_le"?: string,"cree_le"?: string,"etat"?: string,"etat_le"?: string,"github_id"?: string,"id"?: string,"majeur_declare_le"?: string,"pseudo"?: string,"role"?: string,"version_charte"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
+                },"critere": {
                   Row: {
                     "calcule": boolean,"cle": string,"jure": string,"libelle": string,"poids": number
                   }
@@ -33,6 +47,20 @@ export type Database = {
                   Relationships: [
                     
                   ]
+                },"reglage": {
+                  Row: {
+                    "id": boolean,"mode_acces": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "id"?: boolean,"mode_acces"?: string
+                  }
+                  Update: {
+                    "id"?: boolean,"mode_acces"?: string
+                  }
+                  Relationships: [
+                    
+                  ]
                 },"verrou": {
                   Row: {
                     "detenteur": string,"expire_le": string,"nom": string
@@ -53,8 +81,17 @@ export type Database = {
             [_ in never]: never
           }
           Functions: {
-            "consommer_debit":
+            "compte_actif":
+{ Args: Record<PropertyKey, never>; Returns: boolean
+                           },
+"consommer_debit":
 { Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
+                           },
+"creer_compte":
+{ Args: { "p_charte_acceptee": boolean,"p_compte": string,"p_majeur": boolean,"p_pseudo": string,"p_version_charte": string }; Returns: undefined
+                           },
+"est_admin":
+{ Args: Record<PropertyKey, never>; Returns: boolean
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
