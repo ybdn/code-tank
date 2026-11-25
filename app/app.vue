@@ -3,7 +3,12 @@ const user = useSupabaseUser()
 const connecterGithub = useConnexionGithub()
 // Le serveur ne voit pas toujours la session au rendu : le bouton ne change qu'après le montage, sans écart d'hydratation.
 const connecte = ref(false)
-onMounted(() => watchEffect(() => (connecte.value = Boolean(user.value))))
+// Le bouton de connexion n'agit qu'une fois la page montée (comme celui de /compte).
+const monte = ref(false)
+onMounted(() => {
+  monte.value = true
+  watchEffect(() => (connecte.value = Boolean(user.value)))
+})
 // En cas d'échec, la page /compte propose de nouveau la connexion.
 const connecter = async () => (await connecterGithub()).error && navigateTo('/compte')
 </script>
@@ -19,7 +24,7 @@ const connecter = async () => (await connecterGithub()).error && navigateTo('/co
           <NuxtLink to="/charte">Charte</NuxtLink>
         </nav>
         <NuxtLink v-if="connecte" class="btn btn--primary" to="/compte">Mon compte</NuxtLink>
-        <button v-else class="btn btn--primary" type="button" @click="connecter">Se connecter avec GitHub</button>
+        <button v-else class="btn btn--primary" type="button" :disabled="!monte" @click="connecter">Se connecter avec GitHub</button>
       </div>
     </header>
     <main id="contenu" tabindex="-1"><NuxtPage /></main>

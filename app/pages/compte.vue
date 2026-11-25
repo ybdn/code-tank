@@ -3,11 +3,11 @@ useHead({ title: 'Mon compte' })
 
 const supabase = useSupabaseClient()
 const user = useSupabaseUser()
+const route = useRoute()
 const connecterGithub = useConnexionGithub()
 
-type Etat = 'en_attente' | 'actif' | 'suspendu'
+type Etat = 'actif' | 'suspendu'
 const ETATS: Record<Etat, string> = {
-  en_attente: 'En attente : ton compte n\'est pas encore ouvert.',
   actif: 'Compte actif.',
   suspendu: 'Ton compte est suspendu.',
 }
@@ -30,6 +30,8 @@ async function charger() {
 }
 
 onMounted(async () => {
+  // Retour d'un échec de connexion GitHub : message fixe, jamais error_description (texte venu de l'URL).
+  if (route.query.error || window.location.hash.includes('error=')) alerte.value = 'La connexion GitHub n\'a pas abouti. Réessaie.'
   if (user.value) await charger()
   pret.value = true
 })

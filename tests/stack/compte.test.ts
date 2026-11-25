@@ -44,10 +44,10 @@ const lireCompte = async (jeton: string) =>
 const ipNeuve = () => `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`
 let serveur: Awaited<ReturnType<typeof demarrer>>
 
-async function creer(cookie: string | undefined, corps: Record<string, unknown>, ip = ipNeuve()) {
+async function creer(cookie: string | undefined, corps: Record<string, unknown>, ip = ipNeuve(), type = 'application/json') {
   const r = await fetch(serveur.url + '/api/compte', {
     method: 'POST',
-    headers: { 'x-forwarded-for': ip, 'content-type': 'application/json', ...(cookie ? { cookie } : {}) },
+    headers: { 'x-forwarded-for': ip, 'content-type': type, ...(cookie ? { cookie } : {}) },
     body: JSON.stringify(corps),
   })
   return { statut: r.status, json: await r.json() as { message?: string } }
@@ -98,10 +98,31 @@ describe('création du compte', () => {
     expect(r).toEqual({ statut: 409, json: expect.objectContaining({ message: 'Ce pseudo est déjà pris.' }) })
   })
 
+  it('un inscrit ne peut pas appeler creer_compte directement par PostgREST (ni limite ni version contournées)', async () => {
+    const u = await utilisateur()
+    const { jeton } = await connexion(u)
+    const r = await fetch(`${API}/rest/v1/rpc/creer_compte`, {
+      method: 'POST',
+      headers: { apikey: statut.ANON_KEY, authorization: `Bearer ${jeton}`, 'content-type': 'application/json' },
+      body: JSON.stringify({ p_compte: u.id, p_pseudo: pseudo(), p_version_charte: '1999-01-01', p_charte_acceptee: true, p_majeur: true }),
+    })
+    expect(r.ok).toBe(false)
+    expect(await lireCompte(jeton)).toEqual([])
+  })
+
   it('refuse sans session (401) et sans identité GitHub (409)', async () => {
     expect((await creer(undefined, formulaire())).statut).toBe(401)
     const r = await creer((await connexion(await utilisateur(false))).cookie, formulaire())
     expect(r).toEqual({ statut: 409, json: expect.objectContaining({ message: 'Seule la connexion GitHub permet de créer un compte.' }) })
+  })
+
+  it('refuse en 415 un corps qui n\'est pas du JSON (formulaire d\'un autre site)', async () => {
+    const u = await utilisateur()
+    const { cookie, jeton } = await connexion(u)
+    for (const type of ['application/x-www-form-urlencoded', 'text/plain', 'multipart/form-data; boundary=x']) {
+      expect(await creer(cookie, formulaire(), ipNeuve(), type)).toEqual({ statut: 415, json: expect.objectContaining({ message: 'Envoie le formulaire au format JSON.' }) })
+    }
+    expect(await lireCompte(jeton)).toEqual([])
   })
 
   it('limite la création de compte par adresse IP', async () => {

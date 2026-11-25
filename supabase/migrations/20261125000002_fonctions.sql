@@ -75,9 +75,11 @@ as $$
   select exists (select 1 from public.compte where id = auth.uid() and etat = 'actif')
 $$;
 
--- Crée le compte de l'appelant. L'identifiant GitHub vient de auth.identities (écrite par Auth seul), jamais du client ;
--- la version de la charte vient du serveur du site. Messages fixes : le site les renvoie tels quels en 409.
-create function public.creer_compte(p_pseudo text, p_version_charte text, p_charte_acceptee boolean, p_majeur boolean)
+-- Crée le compte de p_compte. Réservée au rôle de service (AD-1) : le site l'appelle après avoir vérifié la session
+-- (p_compte = id de l'utilisateur vérifié) et passé la limite par IP ; la version de la charte vient de son serveur.
+-- L'identifiant GitHub vient de auth.identities (écrite par Auth seul), jamais d'un paramètre. Messages fixes : le site
+-- les renvoie tels quels en 409.
+create function public.creer_compte(p_compte uuid, p_pseudo text, p_version_charte text, p_charte_acceptee boolean, p_majeur boolean)
 returns void
 language plpgsql security definer set search_path = ''
 as $$
@@ -85,7 +87,7 @@ declare
   v_github text;
   v_contrainte text;
 begin
-  select provider_id into v_github from auth.identities where user_id = auth.uid() and provider = 'github';
+  select provider_id into v_github from auth.identities where user_id = p_compte and provider = 'github';
   if v_github is null then
     raise exception 'Seule la connexion GitHub permet de créer un compte.';
   end if;
@@ -101,12 +103,12 @@ begin
   if p_version_charte is null or char_length(p_version_charte) not between 1 and 40 then
     raise exception 'Version de la charte invalide.';
   end if;
-  -- Les modes liste_attente et ferme arrivent avec la story 1.3 : d'ici là, hors mode ouvert, personne n'entre.
+  -- shortcut: seul le mode ouvert est géré (hors mode ouvert, personne n'entre), story 1.3.
   if (select mode_acces from public.reglage) is distinct from 'ouvert' then
     raise exception 'Les inscriptions sont fermées pour le moment.';
   end if;
   insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
-  values (auth.uid(), v_github, p_pseudo, now(), p_version_charte, now(), 'actif');
+  values (p_compte, v_github, p_pseudo, now(), p_version_charte, now(), 'actif');
 exception
   -- Les contraintes d'unicité tranchent, même entre deux appels simultanés.
   when unique_violation then

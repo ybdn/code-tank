@@ -14,13 +14,18 @@ grant execute on function public.consommer_debit(text, text, integer, integer) t
 grant execute on function public.prendre_verrou(text, text, integer), public.rendre_verrou(text, text) to service_role;
 
 -- compte : chacun lit sa ligne et rien d'autre ; aucune écriture directe, seulement creer_compte (AD-1, AD-3).
+-- Le rôle de service n'a aucun droit direct : il ne fait qu'exécuter creer_compte (security definer).
 alter table public.compte enable row level security;
+revoke all on public.compte from service_role;
 grant select on public.compte to authenticated;
 create policy compte_lecture on public.compte for select to authenticated using (id = (select auth.uid()));
-grant execute on function public.creer_compte(text, text, boolean, boolean), public.est_admin(), public.compte_actif() to authenticated;
+revoke all on function public.est_admin(), public.compte_actif() from service_role;
+grant execute on function public.est_admin(), public.compte_actif() to authenticated;
+grant execute on function public.creer_compte(uuid, text, text, boolean, boolean) to service_role;
 
--- reglage : aucun droit client (sa lecture se décide avec la story 1.3) ; ligne unique, mode ouvert.
+-- reglage : aucun droit client ni du rôle de service (sa lecture se décide avec la story 1.3) ; ligne unique, mode ouvert.
 alter table public.reglage enable row level security;
+revoke all on public.reglage from service_role;
 insert into public.reglage default values;
 
 -- critere : lecture par tous, aucune écriture, pas même du rôle de service (AD-8) : seule cette migration la remplit.

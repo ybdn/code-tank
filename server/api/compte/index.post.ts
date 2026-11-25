@@ -1,10 +1,18 @@
-// Création du compte de la personne connectée par GitHub (story 1.2). La base (creer_compte) lit l'identité GitHub et
-// revérifie tout ; le corps ne fournit que le pseudo et les deux cases, la version de la charte vient du serveur.
+import { serverSupabaseServiceRole } from '#supabase/server'
+
+// Création du compte de la personne connectée par GitHub (story 1.2). La session est vérifiée, la limite par IP passée,
+// puis creer_compte (rôle de service seul, AD-1) reçoit l'id vérifié et la version de la charte du serveur. La base lit
+// l'identité GitHub et revérifie tout ; le corps ne fournit que le pseudo et les deux cases.
 export default defineEventHandler(async (event) => {
-  const { client } = await utilisateurVerifie(event)
+  // JSON seulement : un formulaire d'un autre site (CSRF) ne peut pas l'envoyer sans requête préalable CORS.
+  if (getRequestHeader(event, 'content-type')?.split(';')[0]?.trim().toLowerCase() !== 'application/json') {
+    throw createError({ statusCode: 415, message: 'Envoie le formulaire au format JSON.' })
+  }
+  const { user } = await utilisateurVerifie(event)
   await limiter(event, 'compte')
   const corps = await readBody(event).catch(() => null)
-  const { error } = await client.rpc('creer_compte', {
+  const { error } = await serverSupabaseServiceRole(event).rpc('creer_compte', {
+    p_compte: user.id,
     p_pseudo: typeof corps?.pseudo === 'string' ? corps.pseudo.trim() : '',
     p_version_charte: VERSION_CHARTE,
     p_charte_acceptee: corps?.charte === true,

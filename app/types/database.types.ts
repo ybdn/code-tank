@@ -88,7 +88,7 @@ export type Database = {
 { Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
                            },
 "creer_compte":
-{ Args: { "p_charte_acceptee": boolean,"p_majeur": boolean,"p_pseudo": string,"p_version_charte": string }; Returns: undefined
+{ Args: { "p_charte_acceptee": boolean,"p_compte": string,"p_majeur": boolean,"p_pseudo": string,"p_version_charte": string }; Returns: undefined
                            },
 "est_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean

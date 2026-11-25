@@ -11,8 +11,8 @@ $$, 'aucune écriture de table pour anon ni authenticated');
 select is_empty($$
   select p.proname, r from pg_proc p join pg_namespace n on n.oid = p.pronamespace, unnest(array['anon', 'authenticated']) r
   where n.nspname = 'public' and has_function_privilege(r, p.oid, 'execute')
-    and not (r = 'authenticated' and p.proname in ('creer_compte', 'est_admin', 'compte_actif'))
-$$, 'aucune fonction exécutable par anon ni authenticated, hors creer_compte et les gardes pour authenticated');
+    and not (r = 'authenticated' and p.proname in ('est_admin', 'compte_actif'))
+$$, 'aucune fonction exécutable par anon ni authenticated, hors les gardes est_admin et compte_actif pour authenticated');
 select is_empty($$
   select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
   where n.nspname = 'public' and c.relkind = 'r' and not c.relrowsecurity
