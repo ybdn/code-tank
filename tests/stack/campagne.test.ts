@@ -73,6 +73,14 @@ describe('campagne du Boss', () => {
     expect(await lire(`/api/boss/${slug}`, boss.cookie)).toMatchObject({ statut: 200, json: { slug, statut: 'brouillon', max_participants: 5, compte_actif: true } })
     expect((await lire('/api/boss', boss.cookie)).json).toMatchObject({ campagnes: [{ slug, statut: 'brouillon' }] })
     expect((await fetch(`${serveur.url}/boss/${slug}`, { headers: { cookie: boss.cookie } })).status).toBe(200)
+    // Boss suspendu : il lit encore sa campagne, mais compte_actif dit à la page de masquer réglage et suppression.
+    sql(`update public.compte set etat = 'suspendu' where id = '${boss.u.id}'`)
+    try {
+      expect(await lire(`/api/boss/${slug}`, boss.cookie)).toMatchObject({ statut: 200, json: { slug, compte_actif: false } })
+    } finally {
+      sql(`update public.compte set etat = 'actif' where id = '${boss.u.id}'`)
+    }
+    expect((await lire(`/api/boss/${slug}`, boss.cookie)).json).toMatchObject({ compte_actif: true })
 
     expect(await envoyer('POST', '/api/boss', boss.cookie, reglages('Deuxième')))
       .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Tu as déjà une campagne en cours : une seule à la fois.' }) })
