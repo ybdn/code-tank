@@ -114,3 +114,49 @@ create table public.participation (
   constraint participation_unique unique (campagne_id, compte_id),
   constraint participation_retrait check ((etat = 'retire') = (retire_le is not null))
 );
+
+-- Bucket des archives (story 3.3, AD-1) : privé, 20 Mo, zip seulement. Aucune politique sur storage.objects, donc refus par
+-- défaut pour anon et authenticated : le site signe l'envoi et efface avec la clé de service. Chemins :
+-- <campagne_id>/<participation_id>/<uuid>.zip, et <uuid>.filtre.zip pour l'archive filtrée (prive, story 3.4).
+insert into storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+values ('depots', 'depots', false, 20971520, array['application/zip']);
+
+-- Réception (story 3.3, SPECS § 4) : un zip envoyé, en attente du contrôle de prive (story 3.4), qui l'accepte (il devient le
+-- depot) ou la refuse avec ses motifs ({ code, message }, pour le candidat). Une ligne au plus par participation : deposer
+-- remplace une réception refusée et refuse tant qu'une autre attend. tentatives : essais de contrôle (story 3.4).
+create table public.reception (
+  id uuid primary key default gen_random_uuid(),
+  participation_id uuid not null unique references public.participation on delete cascade,
+  chemin_stockage text not null check (chemin_stockage ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.zip$'),
+  presentation text not null check (char_length(presentation) between 1 and 500),
+  demande text check (char_length(demande) between 1 and 80),
+  droit_declare_le timestamptz not null,
+  statut text not null default 'en_attente' check (statut in ('en_attente', 'refusee')),
+  motifs jsonb check (jsonb_typeof(motifs) = 'array'),
+  tentatives integer not null default 0 check (tentatives >= 0),
+  cree_le timestamptz not null default now()
+);
+
+-- Dépôt accepté (SPECS § 4 et § 13, AD-6, AD-11) : un seul actif par participation. Écrit par accepter_depot seule (rôle de
+-- service, prive, story 3.4), retiré par retirer_depot. nb_tokens_estime : compte local au contrôle ; nb_tokens_exact :
+-- count_tokens au lancement, qui pose trop_gros au-delà de 100 000. Alertes : lues du seul Boss juge (epic 5).
+create table public.depot (
+  id uuid primary key default gen_random_uuid(),
+  participation_id uuid not null unique references public.participation on delete cascade,
+  chemin_stockage text not null check (chemin_stockage ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.zip$'),
+  chemin_filtre text check (chemin_filtre ~ '^[0-9a-f-]{36}/[0-9a-f-]{36}/[0-9a-f-]{36}\.filtre\.zip$'),
+  sha256 text not null check (sha256 ~ '^[0-9a-f]{64}$'),
+  nb_fichiers integer not null check (nb_fichiers >= 0),
+  fichiers_exclus jsonb not null default '[]' check (jsonb_typeof(fichiers_exclus) = 'array'),
+  nb_tokens_estime integer not null check (nb_tokens_estime between 0 and 100000),
+  nb_tokens_exact integer check (nb_tokens_exact >= 0),
+  trop_gros boolean not null default false,
+  faits jsonb,
+  note_outillage integer check (note_outillage between 0 and 10),
+  alerte_manipulation boolean not null default false,
+  alertes_integrite jsonb not null default '[]' check (jsonb_typeof(alertes_integrite) = 'array'),
+  presentation text not null check (char_length(presentation) between 1 and 500),
+  demande text check (char_length(demande) between 1 and 80),
+  droit_declare_le timestamptz not null,
+  depose_le timestamptz not null default now()
+);

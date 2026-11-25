@@ -102,3 +102,27 @@ grant execute on function public.sinscrire(uuid, boolean, text), public.se_desin
 -- par /rest/v1/rpc ne contourne rien. Le jeton ne se lit que par la ligne du Boss (campagne_lecture_boss) et par ces RPC.
 revoke all on function public.lire_invitation(text), public.regenerer_invitation(uuid) from service_role;
 grant execute on function public.lire_invitation(text), public.regenerer_invitation(uuid) to authenticated;
+
+-- Dépôt (story 3.3) : reception et depot, chacun lit les lignes de ses participations et rien d'autre, ni l'autre candidat
+-- ni le Boss (la lecture du Boss juge vient à l'epic 5) ; colonnes choisies : ni les chemins de stockage, ni les tentatives,
+-- ni les faits, la note d'outillage et les alertes (lues du seul Boss juge, SPECS § 13). Aucune écriture directe, pas même
+-- du rôle de service, qui n'a aucun droit : deposer et retirer_depot seules (accepter_depot et les droits de prive viennent
+-- avec la story 3.4). deposer, retirer_depot et peut_deposer sont exécutables par authenticated seul et tiennent toutes
+-- leurs règles (verrou de la campagne, campagne_vivante, compte_actif(), phase, Boss juge, inscription, chemin et objet du
+-- bucket, limite de débit par compte) : un appel direct par /rest/v1/rpc ne contourne rien. effacer_archives : rôle de
+-- service seul (AD-11). Le bucket depots n'a aucune politique (…_tables.sql) : le site signe et efface avec la clé de service.
+alter table public.reception enable row level security;
+alter table public.depot enable row level security;
+revoke all on public.reception, public.depot from service_role;
+grant select (id, participation_id, presentation, demande, droit_declare_le, statut, motifs, cree_le) on public.reception to authenticated;
+grant select (id, participation_id, sha256, nb_fichiers, fichiers_exclus, nb_tokens_estime, nb_tokens_exact, trop_gros,
+  presentation, demande, droit_declare_le, depose_le) on public.depot to authenticated;
+create policy reception_lecture on public.reception for select to authenticated
+  using (exists (select 1 from public.participation p where p.id = participation_id and p.compte_id = (select auth.uid())));
+create policy depot_lecture on public.depot for select to authenticated
+  using (exists (select 1 from public.participation p where p.id = participation_id and p.compte_id = (select auth.uid())));
+revoke all on function public.peut_deposer(uuid), public.deposer(uuid, text, text, text, boolean), public.retirer_depot(uuid)
+  from service_role;
+grant execute on function public.peut_deposer(uuid), public.deposer(uuid, text, text, text, boolean), public.retirer_depot(uuid)
+  to authenticated;
+grant execute on function public.effacer_archives(public.depot) to service_role;
