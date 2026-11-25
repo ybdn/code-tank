@@ -1,45 +1,9 @@
 // Création du compte par GitHub (story 1.2) contre la pile locale et le serveur construit.
-// Une vraie connexion GitHub est impossible ici : l'utilisateur est créé par l'API d'administration d'Auth, son identité
-// github est ajoutée en SQL dans auth.identities (ce qu'écrit Auth à la connexion), puis sa session est ouverte par mot de passe.
-import { execFileSync } from 'node:child_process'
+// Utilisateurs de test : voir aide.ts.
 import { randomBytes, randomInt, randomUUID } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
 import { VERSION_CHARTE } from '../../shared/utils/compte'
-import { demarrer, statut } from './aide'
-
-const API = statut.API_URL as string
-const service = { apikey: statut.SERVICE_ROLE_KEY, authorization: `Bearer ${statut.SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }
-const sql = (requete: string) => execFileSync('docker', ['exec', 'supabase_db_code-tank-site', 'psql', '-U', 'postgres', '-d', 'postgres', '-c', requete], { stdio: 'pipe' })
-
-type Utilisateur = { id: string; email: string; githubId: string }
-const crees: string[] = []
-const MOT_DE_PASSE = 'mot-de-passe-de-test-1'
-
-async function utilisateur(github = true): Promise<Utilisateur> {
-  const email = `ada-${randomBytes(5).toString('hex')}@example.org`
-  const r = await fetch(`${API}/auth/v1/admin/users`, { method: 'POST', headers: service, body: JSON.stringify({ email, password: MOT_DE_PASSE, email_confirm: true }) })
-  const { id } = await r.json() as { id: string }
-  crees.push(id)
-  const githubId = String(randomInt(1e6, 1e9))
-  if (github) sql(`insert into auth.identities (user_id, provider, provider_id, identity_data, created_at, updated_at) values ('${id}', 'github', '${githubId}', '{"sub":"${githubId}"}', now(), now())`)
-  return { id, email, githubId }
-}
-
-// Nouvelle session (une connexion) ; le cookie est celui qu'écrit @supabase/ssr : base64url préfixé, en morceaux de 3180.
-async function connexion(u: Utilisateur) {
-  const r = await fetch(`${API}/auth/v1/token?grant_type=password`, {
-    method: 'POST', headers: { apikey: statut.ANON_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ email: u.email, password: MOT_DE_PASSE }),
-  })
-  const session = await r.json() as { access_token: string }
-  const valeur = 'base64-' + Buffer.from(JSON.stringify(session)).toString('base64url')
-  const morceaux = valeur.match(/.{1,3180}/g)!
-  const cookie = morceaux.length === 1 ? `sb-code-tank=${valeur}` : morceaux.map((m, i) => `sb-code-tank.${i}=${m}`).join('; ')
-  return { cookie, jeton: session.access_token }
-}
-
-// Lecture de compte avec le jeton de l'utilisateur, sous RLS, comme la page /compte.
-const lireCompte = async (jeton: string) =>
-  (await fetch(`${API}/rest/v1/compte?select=id,github_id,pseudo,version_charte,role,etat`, { headers: { apikey: statut.ANON_KEY, authorization: `Bearer ${jeton}` } })).json()
+import { API, connexion, demarrer, lireCompte, nettoyer, statut, utilisateur } from './aide'
 
 const ipNeuve = () => `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`
 let serveur: Awaited<ReturnType<typeof demarrer>>
@@ -58,7 +22,7 @@ const formulaire = (surcharge: Record<string, unknown> = {}) => ({ pseudo: pseud
 beforeAll(async () => (serveur = await demarrer(3912, { NUXT_SECRET_DEBIT: 'secret-debit-de-test-' + randomBytes(16).toString('hex') })))
 afterAll(async () => {
   serveur?.arreter()
-  for (const id of crees) await fetch(`${API}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: service }) // compte suit (cascade)
+  await nettoyer()
 })
 
 describe('création du compte', () => {

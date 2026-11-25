@@ -43,7 +43,8 @@ create table public.reglage (
 
 -- Compte Code Tank (AD-3) : né de la connexion GitHub, écrit seulement par creer_compte et les RPC d'administration.
 -- L'e-mail reste dans auth.users (e-mail principal vérifié transmis par GitHub) ; la dernière connexion, dans
--- auth.users.last_sign_in_at. Le pseudo, seule donnée publique, a la forme d'un identifiant GitHub et n'est jamais modifié.
+-- auth.users.last_sign_in_at. Le pseudo, seule donnée publique, a la forme d'un identifiant GitHub ; changer_pseudo le
+-- change tant que le compte est en_attente, il est figé ensuite.
 create table public.compte (
   id uuid primary key references auth.users on delete cascade,
   github_id text not null unique,

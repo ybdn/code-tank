@@ -23,7 +23,16 @@ pnpm build
 - `POST /api/compte` : crée le compte de la personne connectée par GitHub (pseudo, charte, majorité) par la RPC
   `creer_compte`, appelée avec la clé de service et l'id vérifié de la session ; limite par IP `compte` d'abord.
   Corps non JSON : **415**. Règle métier refusée : **409** `{ message }` en français.
-  La version de la charte est `VERSION_CHARTE` (`shared/utils/compte.ts`), jamais reçue du client.
+  La version de la charte est `VERSION_CHARTE` (`shared/utils/compte.ts`), jamais reçue du client. Le compte naît
+  `actif` en mode `ouvert`, `en_attente` en mode `liste_attente` ; en mode `ferme`, **409**.
+- `POST /api/compte/pseudo` : change le pseudo d'un compte `en_attente` par la RPC `changer_pseudo`, appelée avec le JWT
+  de la session (figé une fois le compte actif). Sans session : **401** ; corps non JSON : **415** ; refus : **409**.
+- `server/middleware/admin.ts` : `/admin` et `/api/admin/**` répondent **404** à quiconque n'est pas admin (visiteur
+  compris), d'après `est_admin()` appelée avec la session de l'utilisateur.
+- `GET /api/admin/reglage` : mode d'accès courant (`{ mode }`). `POST /api/admin/reglage` : le règle par la RPC
+  `regler_mode_acces`, avec le JWT de l'admin. Corps non JSON : **415** ; mode inconnu : **409**. Page : `/admin`
+  (« Mode d'accès »), sans lien dans l'en-tête. Le rôle `admin` se pose à la main en SQL (voir `A-FAIRE.md`).
+- `server/utils/json.ts` : `exigerJson`, **415** pour toute route POST dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
   au-delà du plafond : **429** avec `Retry-After`.
@@ -84,13 +93,16 @@ Trois migrations datées du même jour (AD-13) :
 - `…_tables.sql` : `revoke all` par défaut pour `anon` et `authenticated` sur les tables, séquences et fonctions créées
   ensuite par `postgres`, et retrait de l'`EXECUTE` implicite de `PUBLIC` ; tables `debit` (limite
   de débit), `verrou` (bail global du jury), `critere` (critères et poids du jury, seule source), `reglage` (ligne unique,
-  `mode_acces`) et `compte` (né de GitHub, pseudo unique sans tenir compte de la casse, figé).
+  `mode_acces`) et `compte` (né de GitHub, pseudo unique sans tenir compte de la casse, figé une fois le compte actif).
 - `…_fonctions.sql` : `consommer_debit` (compte, refuse ou enregistre en une transaction, verrou consultatif par empreinte et
   action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou` ;
   gardes `est_admin()` et `compte_actif()` ; `creer_compte` (identité GitHub lue dans `auth.identities`, charte, majorité,
-  pseudo ; compte `actif` en mode `ouvert`, refus sinon).
+  pseudo ; compte `actif` en mode `ouvert`, `en_attente` en mode `liste_attente`, refus en mode `ferme`) ;
+  `regler_mode_acces` (garde `est_admin()`, trois modes) ; `changer_pseudo` (compte de l'appelant, `en_attente` seulement).
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
-  propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes par `authenticated` ; `reglage` sans droit client ; `critere` en lecture seule pour tous,
+  propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
+  par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
+  `est_admin()`), sans droit du rôle de service ; `critere` en lecture seule pour tous,
   rôle de service compris,
   remplie des huit critères (100 points).
 

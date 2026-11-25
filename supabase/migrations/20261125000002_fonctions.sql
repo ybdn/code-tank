@@ -1,4 +1,4 @@
--- Fonctions du socle, réservées au rôle de service (droits dans …_droits.sql).
+-- Fonctions du socle ; qui exécute quoi : …_droits.sql.
 
 -- Compte les lignes de l'empreinte pour l'action dans la fenêtre : au-delà du maximum, renvoie le nombre de secondes à
 -- attendre ; sinon enregistre l'appel et renvoie 0. Le verrou consultatif (par empreinte et action, levé en fin de
@@ -85,11 +85,17 @@ language plpgsql security definer set search_path = ''
 as $$
 declare
   v_github text;
+  v_mode text;
   v_contrainte text;
 begin
   select provider_id into v_github from auth.identities where user_id = p_compte and provider = 'github';
   if v_github is null then
     raise exception 'Seule la connexion GitHub permet de créer un compte.';
+  end if;
+  -- Mode d'accès (SPECS § 3) : ouvert, le compte naît actif ; liste_attente, en attente ; ferme, aucune inscription.
+  select mode_acces into v_mode from public.reglage;
+  if coalesce(v_mode, 'ferme') = 'ferme' then
+    raise exception 'Les inscriptions sont fermées pour le moment.';
   end if;
   if p_charte_acceptee is not true then
     raise exception 'Accepte la charte pour créer ton compte.';
@@ -103,12 +109,8 @@ begin
   if p_version_charte is null or char_length(p_version_charte) not between 1 and 40 then
     raise exception 'Version de la charte invalide.';
   end if;
-  -- shortcut: seul le mode ouvert est géré (hors mode ouvert, personne n'entre), story 1.3.
-  if (select mode_acces from public.reglage) is distinct from 'ouvert' then
-    raise exception 'Les inscriptions sont fermées pour le moment.';
-  end if;
   insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
-  values (p_compte, v_github, p_pseudo, now(), p_version_charte, now(), 'actif');
+  values (p_compte, v_github, p_pseudo, now(), p_version_charte, now(), case v_mode when 'ouvert' then 'actif' else 'en_attente' end);
 exception
   -- Les contraintes d'unicité tranchent, même entre deux appels simultanés.
   when unique_violation then
@@ -117,5 +119,41 @@ exception
       raise exception 'Ce pseudo est déjà pris.';
     end if;
     raise exception 'Tu as déjà un compte.';
+end
+$$;
+
+-- Règle le mode d'accès (AD-3). Exécutable par authenticated : la garde est_admin() vit ici, pas dans la route.
+create function public.regler_mode_acces(p_mode text)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if not public.est_admin() then
+    raise exception 'Réservé à l''administration.';
+  end if;
+  if p_mode is null or p_mode not in ('ouvert', 'liste_attente', 'ferme') then
+    raise exception 'Mode d''accès inconnu.';
+  end if;
+  update public.reglage set mode_acces = p_mode where id; -- WHERE exigé par pg-safeupdate sous PostgREST
+end
+$$;
+
+-- Change le pseudo de l'appelant tant que son compte est en liste d'attente (SPECS § 3 : figé une fois actif ; un compte
+-- suspendu l'a été actif, il reste figé). Même règle et mêmes messages que creer_compte.
+create function public.changer_pseudo(p_pseudo text)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  if p_pseudo is null or p_pseudo !~ '^[A-Za-z0-9_-]{3,39}$' then
+    raise exception 'Le pseudo fait 3 à 39 caractères : lettres sans accent, chiffres, tiret ou souligné.';
+  end if;
+  update public.compte set pseudo = p_pseudo where id = auth.uid() and etat = 'en_attente';
+  if not found then
+    raise exception 'Ton pseudo ne se change plus : il est figé une fois ton compte actif.';
+  end if;
+exception
+  when unique_violation then
+    raise exception 'Ce pseudo est déjà pris.';
 end
 $$;

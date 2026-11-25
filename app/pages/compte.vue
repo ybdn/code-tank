@@ -6,11 +6,14 @@ const user = useSupabaseUser()
 const route = useRoute()
 const connecterGithub = useConnexionGithub()
 
-type Etat = 'actif' | 'suspendu'
+type Etat = 'en_attente' | 'actif' | 'suspendu'
 const ETATS: Record<Etat, string> = {
+  en_attente: 'Ton compte est en attente : tu pourras participer dès qu\'il sera actif.',
   actif: 'Compte actif.',
   suspendu: 'Ton compte est suspendu.',
 }
+// Message fixe de changer_pseudo quand le compte n'est plus en attente.
+const PSEUDO_FIGE = 'Ton pseudo ne se change plus : il est figé une fois ton compte actif.'
 const VERSION = new Date(VERSION_CHARTE).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
 // Le serveur ne voit pas toujours la session au rendu : tout se lit après le montage.
@@ -20,6 +23,7 @@ const f = reactive({ pseudo: '', charte: false, majeur: false })
 const erreurs = ref<Partial<Record<'pseudo' | 'charte' | 'majeur', string>>>({})
 const occupe = ref(false)
 const alerte = ref('')
+const annonce = ref('')
 const formulaire = useTemplateRef<HTMLFormElement>('formulaire')
 const titreEtat = useTemplateRef<HTMLElement>('titreEtat')
 // Pendant la lecture, ni formulaire ni compte : au retour de GitHub, un compte existant ne voit pas le formulaire.
@@ -31,6 +35,8 @@ async function charger() {
   const { data, error } = await supabase.from('compte').select('pseudo, etat').maybeSingle()
   if (error) alerte.value = 'Impossible de lire ton compte pour le moment.'
   compte.value = data
+  // En liste d'attente, le pseudo reste modifiable : le champ part du pseudo enregistré.
+  if (data?.etat === 'en_attente') f.pseudo = data.pseudo
   chargement.value = false
 }
 
@@ -87,6 +93,42 @@ async function creer() {
   }
 }
 
+async function changerPseudo() {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
+  if (occupe.value) return
+  alerte.value = ''
+  annonce.value = ''
+  erreurs.value = {}
+  const pseudo = f.pseudo.trim()
+  if (!PSEUDO.test(pseudo)) erreurs.value.pseudo = 'Le pseudo fait 3 à 39 caractères : lettres sans accent, chiffres, tiret ou souligné.'
+  else {
+    occupe.value = true
+    try {
+      await $fetch('/api/compte/pseudo', { method: 'POST', body: { pseudo } })
+      compte.value = { ...compte.value!, pseudo }
+      annonce.value = 'Pseudo enregistré.'
+      return
+    } catch (e) {
+      const err = e as { statusCode?: number; data?: { message?: string } }
+      const message = err.data?.message ?? 'Une erreur est survenue.'
+      if (err.statusCode === 409 && message === PSEUDO_FIGE) {
+        // Le compte est devenu actif entre-temps : la page passe à l'état actif, pseudo figé.
+        alerte.value = message
+        await charger()
+        await nextTick()
+        titreEtat.value?.focus()
+        return
+      }
+      if (err.statusCode === 409) erreurs.value.pseudo = message
+      else alerte.value = message
+    } finally {
+      occupe.value = false
+    }
+  }
+  await nextTick()
+  if (erreurs.value.pseudo) document.querySelector<HTMLElement>('#pseudo-attente')?.focus()
+}
+
 const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
   'aria-invalid': erreurs.value[n] ? ('true' as const) : undefined,
   'aria-describedby': [aide, erreurs.value[n] ? `err-${n}` : undefined].filter(Boolean).join(' ') || undefined,
@@ -120,7 +162,7 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
           <div class="champ">
             <label for="pseudo">Pseudo</label>
             <p id="aide-pseudo" class="champ__aide">
-              La seule chose publique. Il peut être ton identifiant GitHub. Il ne pourra plus être changé.
+              La seule chose publique. Il peut être ton identifiant GitHub. Il sera figé une fois ton compte actif.
             </p>
             <input id="pseudo" v-model="f.pseudo" type="text" autocomplete="nickname" autocapitalize="none" spellcheck="false" maxlength="39" required v-bind="champ('pseudo', 'aide-pseudo')">
             <p v-if="erreurs.pseudo" id="err-pseudo" class="champ__erreur">{{ erreurs.pseudo }}</p>
@@ -139,6 +181,22 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
 
           <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Envoi en cours…' : 'Créer mon compte' }}</button></p>
         </form>
+        <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
+      </template>
+
+      <template v-else-if="compte.etat === 'en_attente'">
+        <h2 ref="titreEtat" tabindex="-1">Tu es sur la liste d'attente</h2>
+        <p class="etat etat--console" data-etat="en_attente">{{ ETATS.en_attente }}</p>
+        <form class="form" novalidate @submit.prevent="changerPseudo">
+          <div class="champ">
+            <label for="pseudo-attente">Pseudo</label>
+            <p id="aide-pseudo-attente" class="champ__aide">Modifiable tant que ton compte n'est pas actif, figé ensuite.</p>
+            <input id="pseudo-attente" v-model="f.pseudo" type="text" autocomplete="nickname" autocapitalize="none" spellcheck="false" maxlength="39" required v-bind="champ('pseudo', 'aide-pseudo-attente')">
+            <p v-if="erreurs.pseudo" id="err-pseudo" class="champ__erreur">{{ erreurs.pseudo }}</p>
+          </div>
+          <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">{{ occupe ? 'Envoi en cours…' : 'Changer mon pseudo' }}</button></p>
+        </form>
+        <p role="status" aria-live="polite">{{ annonce }}</p>
         <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>
       </template>
 

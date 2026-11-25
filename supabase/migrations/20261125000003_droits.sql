@@ -13,7 +13,7 @@ alter table public.verrou enable row level security;
 grant execute on function public.consommer_debit(text, text, integer, integer) to service_role;
 grant execute on function public.prendre_verrou(text, text, integer), public.rendre_verrou(text, text) to service_role;
 
--- compte : chacun lit sa ligne et rien d'autre ; aucune écriture directe, seulement creer_compte (AD-1, AD-3).
+-- compte : chacun lit sa ligne et rien d'autre ; aucune écriture directe, seulement creer_compte et changer_pseudo (AD-1, AD-3).
 -- Le rôle de service n'a aucun droit direct : il ne fait qu'exécuter creer_compte (security definer).
 alter table public.compte enable row level security;
 revoke all on public.compte from service_role;
@@ -23,9 +23,17 @@ revoke all on function public.est_admin(), public.compte_actif() from service_ro
 grant execute on function public.est_admin(), public.compte_actif() to authenticated;
 grant execute on function public.creer_compte(uuid, text, text, boolean, boolean) to service_role;
 
--- reglage : aucun droit client ni du rôle de service (sa lecture se décide avec la story 1.3) ; ligne unique, mode ouvert.
+-- regler_mode_acces et changer_pseudo : authenticated seul ; les gardes (est_admin(), état en_attente) vivent dans les
+-- fonctions, si bien qu'un appel direct par /rest/v1/rpc ne contourne rien.
+revoke all on function public.regler_mode_acces(text), public.changer_pseudo(text) from service_role;
+grant execute on function public.regler_mode_acces(text), public.changer_pseudo(text) to authenticated;
+
+-- reglage : lu par l'admin seul (un visiteur apprend la fermeture par le refus de creer_compte), écrit par
+-- regler_mode_acces seul ; aucun droit du rôle de service ; ligne unique, mode ouvert.
 alter table public.reglage enable row level security;
 revoke all on public.reglage from service_role;
+grant select on public.reglage to authenticated;
+create policy reglage_lecture_admin on public.reglage for select to authenticated using ((select public.est_admin()));
 insert into public.reglage default values;
 
 -- critere : lecture par tous, aucune écriture, pas même du rôle de service (AD-8) : seule cette migration la remplit.
