@@ -1,7 +1,5 @@
 # Mentions légales de Code Tank
 
-> **PROJET, à faire relire par un avocat avant la mise en ligne.**
-
 Mentions prévues par l'article 1-1 de la loi du 21 juin 2004 pour la confiance dans l'économie numérique (rédaction de 2024), pour un site édité à titre non professionnel.
 
 Site&nbsp;: `code-tank.ybdn.io`
@@ -27,7 +25,7 @@ Yoann BAUDRIN.
 
 ## 4. Propriété intellectuelle
 
-Le code source du site est publié sous licence AGPL-3.0. Les textes et les mascottes sont la création de l'éditeur. Le nom Code Tank est utilisé par l'éditeur pour désigner ce service. Le code déposé par les candidats reste la propriété de leurs auteurs.
+Le code source du site est publié sous licence AGPL-3.0. Les textes et les personnages originaux sont la création de l'éditeur. Le nom Code Tank est utilisé par l'éditeur pour désigner ce service. Le code déposé par les candidats reste la propriété de leurs auteurs.
 
 ## 5. Signalement d'une faille de sécurité
 

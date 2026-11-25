@@ -1,7 +1,5 @@
 # Politique de confidentialité de Code Tank
 
-> **PROJET, à faire relire par un avocat avant l'ouverture des comptes.**
-
 Code Tank est un concours de code ouvert aux développeurs majeurs, à l'adresse `code-tank.ybdn.io`. Cette page explique quelles données nous collectons, pourquoi, et ce que tu peux faire.
 
 ## 1. Qui est responsable du traitement

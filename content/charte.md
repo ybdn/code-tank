@@ -1,7 +1,5 @@
 # Charte du concours de code Code Tank
 
-> **PROJET, à faire relire par un avocat avant l'ouverture des comptes.**
-
 En créant ton compte, tu coches la case «&nbsp;J'ai lu et j'accepte la charte&nbsp;». Cette charte est le règlement du concours. La charte et la déclaration de majorité sont acceptées à la création du compte. À chaque dépôt, tu déclares en plus que ce code précis est open source, avec son fichier `LICENSE`, ou déposé avec l'accord écrit de son propriétaire.
 
 Version&nbsp;: en vigueur à l'ouverture des comptes. Le numéro et la date de version sont enregistrés avec ta déclaration.

@@ -43,7 +43,7 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
         </template>
 
         <h2>Le classement final</h2>
-        <p class="note-claire">Score final = deux tiers du score Claude (sur 100) + un tiers de la note du Boss (sur 10, ramenée sur 100). Le tableau défile sur les petits écrans.</p>
+        <p class="note-claire">Score final = deux tiers du score des agents (sur 100) + un tiers de la note du Boss (sur 10, ramenée sur 100). Le tableau défile sur les petits écrans.</p>
         <div class="tableau tableau--serre" role="region" aria-labelledby="legende-classement" tabindex="0">
           <table>
             <caption id="legende-classement" class="sr-only">Classement final de {{ campagne.titre }}</caption>
@@ -52,7 +52,7 @@ const figure = computed(() => pseudo.value !== null && lignes.value.some((l) => 
                 <th scope="col">Rang</th>
                 <th scope="col">Candidat</th>
                 <th scope="col">Score final</th>
-                <th scope="col">Score Claude</th>
+                <th scope="col">Score des agents</th>
                 <th scope="col">Note du Boss</th>
               </tr>
             </thead>

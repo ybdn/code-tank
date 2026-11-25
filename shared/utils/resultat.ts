@@ -1,14 +1,14 @@
 import type { Critere } from './campagne'
 
 // Résultats d'une campagne publiée : classement public, entretien et rapport du candidat.
-// Les sorties des jurés viennent de Claude et du dépôt du candidat : rien n'est supposé de leur forme, tout est
+// Les sorties des jurés viennent des agents et du dépôt du candidat : rien n'est supposé de leur forme, tout est
 // reconstruit champ par champ (lireSortie), et les pages les rendent comme du texte.
 
 export const STATUTS_RESULTATS = ['publiee', 'archivee']
 export const STATUTS_DELIBERATION = ['deliberation', 'prete']
 
-// Ordre de l'entretien : les quatre jurés Claude, puis Le Boss.
-export const JURES_CLAUDE = [
+// Ordre de l'entretien : les quatre agents, puis Le Boss.
+export const JURES_AGENTS = [
   { jure: 'sudo', nom: 'Sudo' },
   { jure: 'refacto', nom: 'Refacto' },
   { jure: 'lint', nom: 'Lint' },
