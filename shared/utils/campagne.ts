@@ -20,6 +20,8 @@ export type CampagneBoss = {
   statut: string; regles_figees_le: string | null; bloquee_le: string | null; cree_le: string
   // Compte de l'appelant actif : sinon, ni réglage ni suppression.
   compte_actif: boolean
+  // Inscrits (story 2.3) : dès le premier, la visibilité ne change plus.
+  inscrits: number
 }
 export const STATUT_BOSS: Record<string, string> = {
   brouillon: 'Brouillon', ouverte: 'Ouverte', deliberation: 'Délibération', prete: 'Prête', publiee: 'Publiée', archivee: 'Archivée', expiree: 'Expirée',

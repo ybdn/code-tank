@@ -307,8 +307,9 @@ as $$
 declare
   v_statut text;
   v_figees timestamptz;
+  v_visibilite text;
 begin
-  select statut, regles_figees_le into v_statut, v_figees from public.campagne where id = p_campagne for update;
+  select statut, regles_figees_le, visibilite into v_statut, v_figees, v_visibilite from public.campagne where id = p_campagne for update;
   if not found or not public.est_boss(p_campagne) then
     raise exception 'Campagne introuvable.' using errcode = 'CT404';
   end if;
@@ -323,7 +324,11 @@ begin
   end if;
   perform public.verifier_reglages(p_titre, p_theme, p_brief, p_langages, p_visibilite, p_role_boss, p_max_participants,
     p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
-  -- Inscrits (story 2.3) : jamais plus d'inscrits que de places, jamais de Boss juge inscrit à sa campagne.
+  -- Inscrits (story 2.3) : jamais plus d'inscrits que de places, jamais de Boss juge inscrit à sa campagne, et la
+  -- visibilité figée dès le premier inscrit (passée sur invitation, la campagne échapperait à ses inscrits).
+  if p_visibilite <> v_visibilite and exists (select 1 from public.participation where campagne_id = p_campagne and etat = 'inscrit') then
+    raise exception 'La visibilité ne change plus une fois qu''il y a des inscrits.';
+  end if;
   if p_max_participants < (select count(*) from public.participation where campagne_id = p_campagne and etat = 'inscrit') then
     raise exception 'Il y a déjà plus d''inscrits que ce nombre de places.';
   end if;

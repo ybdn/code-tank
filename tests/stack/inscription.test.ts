@@ -135,6 +135,26 @@ describe('inscription', () => {
     expect((await lire(`/campagnes/${c.slug}`, a.cookie)).texte).toContain('Ton compte n&#39;est pas actif : tu ne peux pas te désinscrire.')
   })
 
+  it('visibilité figée dès le premier inscrit : PATCH en 409, choix désactivé sur /boss', async () => {
+    const c = await boss('juge', 2)
+    const a = await membre()
+    const reglages = (visibilite: string) => ({
+      titre: c.titre, theme: 'Un minuteur', brief: 'Écris un minuteur de pause.', langages: ['Go'], visibilite, role_boss: 'juge', max_participants: 2,
+      ...Object.fromEntries(['ouverture_inscriptions', 'cloture_depot', 'date_resultats'].map((k) => [k, (campagne as Record<string, string>)[k]])),
+    })
+    const campagne = (await lire(`/api/boss/${c.slug}`, c.cookie)).json
+    expect(campagne).toMatchObject({ inscrits: 0 })
+    expect((await lire(`/boss/${c.slug}`, c.cookie)).texte).not.toContain('La visibilité ne change plus')
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/inscription`, a.cookie, { connaissance: true })).statut).toBe(200)
+    expect((await lire(`/api/boss/${c.slug}`, c.cookie)).json).toMatchObject({ inscrits: 1 })
+    expect(await envoyer('PATCH', `/api/boss/${c.slug}`, c.cookie, reglages('invitation')))
+      .toMatchObject({ statut: 409, json: { message: 'La visibilité ne change plus une fois qu\'il y a des inscrits.' } })
+    expect((await envoyer('PATCH', `/api/boss/${c.slug}`, c.cookie, reglages('publique'))).statut).toBe(200)
+    const page = (await lire(`/boss/${c.slug}`, c.cookie)).texte
+    expect(page).toContain('La visibilité ne change plus une fois qu&#39;il y a des inscrits.')
+    expect(page).toMatch(/id="visibilite-invitation"[^>]*disabled/)
+  })
+
   it('concurrence : 6 comptes pour 2 places, exactement 2 inscrits', async () => {
     const c = await boss('juge', 2)
     const comptes = await Promise.all(Array.from({ length: 6 }, () => membre()))

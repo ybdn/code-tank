@@ -2,7 +2,9 @@
 // Page publique d'une campagne (story 2.2). L'API répond 404 pour un brouillon, une campagne bloquée ou expirée, et une
 // campagne sur invitation hors de son Boss : la page aussi.
 const slug = useRoute().params.slug as string
-const { data, error, refresh } = await useFetch(`/api/campagnes/${encodeURIComponent(slug)}`)
+const url = `/api/campagnes/${encodeURIComponent(slug)}`
+type Page = CampagnePublique & { criteres: Critere[]; connecte: boolean; compte_actif: boolean; est_boss: boolean; inscrit: boolean }
+const { data, error } = await useFetch<Page>(url)
 if (error.value?.statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Page introuvable', fatal: true })
 useHead({ title: () => data.value?.titre ?? 'Campagne' })
 const nomJure = (j: string) => j[0]!.toUpperCase() + j.slice(1)
@@ -36,6 +38,38 @@ const annonce = ref('')
 const alerte = ref('')
 const titreInscription = useTemplateRef<HTMLElement>('titreInscription')
 const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')
+const nonActualisee = ref(false)
+
+// Relit la campagne sans toucher à ce qui est affiché en cas d'échec : la section, la confirmation et la cible du focus
+// restent ; une phrase et un bouton « Actualiser » le disent.
+async function actualiser() {
+  try {
+    data.value = await $fetch<Page>(url)
+    nonActualisee.value = false
+  } catch {
+    nonActualisee.value = true
+  }
+}
+async function relire() {
+  if (occupe.value) return
+  occupe.value = true
+  await actualiser()
+  occupe.value = false
+}
+
+// Une page ouverte avant l'ouverture des inscriptions passe à la phase d'inscription sans rechargement : relecture quand
+// l'onglet redevient visible, et à l'heure d'ouverture si elle tombe dans moins de 24 h.
+let minuterie: ReturnType<typeof setTimeout> | undefined
+const auRetour = () => { if (document.visibilityState === 'visible') actualiser() }
+onMounted(() => {
+  document.addEventListener('visibilitychange', auRetour)
+  const delai = data.value ? Date.parse(data.value.ouverture_inscriptions) - Date.now() : 0
+  if (delai > 0 && delai < 86_400_000) minuterie = setTimeout(actualiser, delai + 1000)
+})
+onBeforeUnmount(() => {
+  document.removeEventListener('visibilitychange', auRetour)
+  clearTimeout(minuterie)
+})
 
 async function agir(methode: 'POST' | 'DELETE', fait: string) {
   // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
@@ -45,7 +79,7 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
   alerte.value = ''
   try {
     await $fetch(`/api/campagnes/${encodeURIComponent(slug)}/inscription`, { method: methode, body: methode === 'POST' ? { connaissance: connaissance.value } : {} })
-    await refresh()
+    await actualiser()
     connaissance.value = false
     annonce.value = fait
     // Le bouton a disparu : le focus revient au titre de la section, l'annonce est lue par la zone role="status".
@@ -55,7 +89,7 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
     const err = e as { statusCode?: number; data?: { message?: string } }
     alerte.value = err.data?.message ?? 'Une erreur est survenue.'
     // Une règle a pu changer entre-temps (complet, phase) : la page se remet à jour sans démonter la section.
-    if (err.statusCode === 409) await refresh()
+    if (err.statusCode === 409) await actualiser()
     await nextTick()
     zoneAlerte.value?.focus()
   } finally {
@@ -67,7 +101,7 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
 <template>
   <section class="section">
     <div class="wrap texte texte--etroit">
-      <p v-if="error" role="alert" class="avis avis--erreur">La campagne ne peut pas être lue pour le moment.</p>
+      <p v-if="error && !data" role="alert" class="avis avis--erreur">La campagne ne peut pas être lue pour le moment.</p>
       <template v-else-if="data">
         <h1>{{ data.titre }}</h1>
         <p class="etat etat--console">{{ LIBELLE_PHASE[data.phase] }}<template v-if="data.visibilite === 'invitation'"> · sur invitation</template></p>
@@ -76,6 +110,7 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
 
         <h2 ref="titreInscription" tabindex="-1">Inscription</h2>
         <p role="status" aria-live="polite">{{ annonce }}</p>
+        <p v-if="nonActualisee">La page n'a pas pu être actualisée. <button class="btn" type="button" :aria-disabled="occupe" @click="relire">Actualiser</button></p>
         <div ref="zoneAlerte" tabindex="-1">
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>

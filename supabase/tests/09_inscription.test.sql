@@ -5,7 +5,7 @@
 -- 2090, hors changement d'heure.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(72);
+select plan(76);
 
 insert into auth.users (id, email)
 select ('90000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
@@ -121,6 +121,10 @@ set local request.jwt.claims = '{"sub":"90000000-0000-4000-8000-0000000000b1","r
 select throws_ok($$select public.modifier_campagne(id, titre, theme, brief, langages, visibilite, role_boss, 1, ouverture_inscriptions,
   cloture_depot, date_resultats) from public.campagne where slug = 'pub'$$,
   'P0001', 'Il y a déjà plus d''inscrits que ce nombre de places.', 'Boss : pas moins de places que d''inscrits');
+select throws_ok($$select public.modifier_campagne(id, titre, theme, brief, langages, 'invitation', role_boss, max_participants, ouverture_inscriptions,
+  cloture_depot, date_resultats) from public.campagne where slug = 'pub'$$,
+  'P0001', 'La visibilité ne change plus une fois qu''il y a des inscrits.', 'Boss : pas de passage sur invitation avec des inscrits');
+select is((select visibilite from public.campagne where slug = 'pub'), 'publique', 'la visibilité reste publique');
 
 -- Désinscription et réinscription ---------------------------------------------------------------------
 set local request.jwt.claims = '{"sub":"90000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
@@ -174,6 +178,12 @@ reset role;
 select is((select count(*) from public.debit where action = 'inscription'
   and empreinte = encode(sha256(convert_to('90000000-0000-4000-8000-0000000000a4:compte', 'UTF8')), 'hex')), 20::bigint,
   'débit rangé sous l''empreinte du compte, jamais sous son id');
+
+-- Sans inscrit, la visibilité se change encore.
+set local request.jwt.claims = '{"sub":"90000000-0000-4000-8000-0000000000b5","role":"authenticated"}';
+select lives_ok($$select public.modifier_campagne(id, titre, theme, brief, langages, 'invitation', role_boss, max_participants, ouverture_inscriptions,
+  cloture_depot, date_resultats) from public.campagne where slug = 'avenir'$$, 'Boss sans inscrit : passage sur invitation accepté');
+select is((select visibilite from public.campagne where slug = 'avenir'), 'invitation', 'visibilité changée');
 
 -- Le verrou ne se prouve pas en pgTAP mono-session (test de concurrence dans tests/stack) : on vérifie qu'il est écrit.
 select ok(pg_get_functiondef('public.sinscrire(uuid, boolean)'::regprocedure) ~ 'for update', 'sinscrire verrouille la ligne campagne (for update)');
