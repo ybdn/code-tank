@@ -114,7 +114,9 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
         <div ref="zoneAlerte" tabindex="-1">
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
-        <template v-if="data.inscrit">
+        <!-- Données périmées (actualisation échouée) : aucune action, qui partirait sur un état faux et finirait en 409. -->
+        <template v-if="nonActualisee" />
+        <template v-else-if="data.inscrit">
           <p>Tu es inscrit.</p>
           <p v-if="pasDeRetrait">{{ pasDeRetrait }}</p>
           <p v-else class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="agir('DELETE', 'Tu es désinscrit.')">Me désinscrire</button></p>
