@@ -4,7 +4,7 @@
 // son Boss et de ses inscrits, et un lien inconnu ou régénéré : la page aussi. Le lien d'invitation exige une session (401).
 const props = defineProps<{ url: string; jeton?: string }>()
 const url = props.url
-type Page = CampagnePublique & { criteres: Critere[]; connecte: boolean; compte_actif: boolean; est_boss: boolean; inscrit: boolean }
+type Page = CampagnePublique & { criteres: Critere[]; connecte: boolean; compte_actif: boolean; est_boss: boolean; inscrit: boolean; reception: ReceptionLue | null; depot: DepotLu | null }
 const { data, error } = await useFetch<Page>(url)
 if (error.value?.statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Page introuvable', fatal: true })
 useHead({ title: () => data.value?.titre ?? 'Campagne' })
@@ -24,14 +24,16 @@ const pourquoiPas = computed(() => {
   if (c.places_restantes <= 0) return 'La campagne est complète.'
   return ''
 })
-// Désinscription : tant que la délibération n'a pas commencé, compte actif, campagne non échue ; sinon, pourquoi (une
-// campagne bloquée n'est plus dans la vue : la page répond 404).
+// Désinscription : tant que la délibération n'a pas commencé, compte actif, campagne non échue, sans dépôt ni réception en
+// attente (story 3.3) ; sinon, pourquoi (une campagne bloquée n'est plus dans la vue : la page répond 404).
 const pasDeRetrait = computed(() => {
   const c = data.value
   if (!c?.inscrit) return ''
   if (!c.compte_actif) return 'Ton compte n\'est pas actif : tu ne peux pas te désinscrire.'
   if (Date.parse(c.date_resultats) <= Date.now()) return 'Cette campagne est échue : on ne s\'en désinscrit plus.'
   if (c.statut !== 'ouverte') return 'La délibération a commencé : tu ne peux plus te désinscrire.'
+  if (c.reception?.statut === 'en_attente') return 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.'
+  if (c.depot) return Date.parse(c.cloture_depot) <= Date.now() ? 'Le dépôt est clos : tu ne peux plus te désinscrire.' : 'Retire d\'abord ton dépôt pour te désinscrire.'
   return ''
 })
 const connaissance = ref(false)
@@ -137,6 +139,7 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
         <template v-if="nonActualisee" />
         <template v-else-if="data.inscrit">
           <p>Tu es inscrit.<template v-if="jeton"> La campagne reste à <NuxtLink :to="`/campagnes/${data.slug}`">son adresse</NuxtLink>, même si le lien change.</template></p>
+          <p class="btns"><NuxtLink class="btn btn--primary" :to="`/campagnes/${data.slug}/depot`">{{ data.phase === 'inscriptions' ? 'Déposer mon projet' : 'Voir mon dépôt' }}</NuxtLink></p>
           <p v-if="pasDeRetrait">{{ pasDeRetrait }}</p>
           <p v-else class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="agir('DELETE', 'Tu es désinscrit.')">Me désinscrire</button></p>
         </template>

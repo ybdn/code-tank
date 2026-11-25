@@ -67,6 +67,26 @@ isOneToOne: false
                   Relationships: [
                     
                   ]
+                },"depot": {
+                  Row: {
+                    "alerte_manipulation": boolean,"alertes_integrite": NonNullable<Json>,"chemin_filtre": string | null,"chemin_stockage": string,"demande": string | null,"depose_le": string,"droit_declare_le": string,"faits": Json | null,"fichiers_exclus": NonNullable<Json>,"id": string,"nb_fichiers": number,"nb_tokens_estime": number,"nb_tokens_exact": number | null,"note_outillage": number | null,"participation_id": string,"presentation": string,"sha256": string,"trop_gros": boolean,"effacer_archives": (string)[] | null
+                  }
+                  ComputedFields: "effacer_archives"
+                  Insert: {
+                    "alerte_manipulation"?: boolean,"alertes_integrite"?: NonNullable<Json>,"chemin_filtre"?: string | null,"chemin_stockage": string,"demande"?: string | null,"depose_le"?: string,"droit_declare_le": string,"faits"?: Json | null,"fichiers_exclus"?: NonNullable<Json>,"id"?: string,"nb_fichiers": number,"nb_tokens_estime": number,"nb_tokens_exact"?: number | null,"note_outillage"?: number | null,"participation_id": string,"presentation": string,"sha256": string,"trop_gros"?: boolean
+                  }
+                  Update: {
+                    "alerte_manipulation"?: boolean,"alertes_integrite"?: NonNullable<Json>,"chemin_filtre"?: string | null,"chemin_stockage"?: string,"demande"?: string | null,"depose_le"?: string,"droit_declare_le"?: string,"faits"?: Json | null,"fichiers_exclus"?: NonNullable<Json>,"id"?: string,"nb_fichiers"?: number,"nb_tokens_estime"?: number,"nb_tokens_exact"?: number | null,"note_outillage"?: number | null,"participation_id"?: string,"presentation"?: string,"sha256"?: string,"trop_gros"?: boolean
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "depot_participation_id_fkey"
+      columns: ["participation_id"]
+isOneToOne: true
+      referencedRelation: "participation"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"participation": {
                   Row: {
                     "campagne_id": string,"compte_id": string | null,"connaissance_envoi_le": string,"etat": string,"id": string,"inscrit_le": string,"retire_le": string | null
@@ -102,6 +122,26 @@ isOneToOne: false
       columns: ["compte_id"]
 isOneToOne: false
       referencedRelation: "compte"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"reception": {
+                  Row: {
+                    "chemin_stockage": string,"cree_le": string,"demande": string | null,"droit_declare_le": string,"id": string,"motifs": Json | null,"participation_id": string,"presentation": string,"statut": string,"tentatives": number
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "chemin_stockage": string,"cree_le"?: string,"demande"?: string | null,"droit_declare_le": string,"id"?: string,"motifs"?: Json | null,"participation_id": string,"presentation": string,"statut"?: string,"tentatives"?: number
+                  }
+                  Update: {
+                    "chemin_stockage"?: string,"cree_le"?: string,"demande"?: string | null,"droit_declare_le"?: string,"id"?: string,"motifs"?: Json | null,"participation_id"?: string,"presentation"?: string,"statut"?: string,"tentatives"?: number
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "reception_participation_id_fkey"
+      columns: ["participation_id"]
+isOneToOne: true
+      referencedRelation: "participation"
       referencedColumns: ["id"]
     }
                   ]
@@ -179,6 +219,12 @@ isOneToOne: false
 "creer_compte":
 { Args: { "p_charte_acceptee": boolean,"p_compte": string,"p_majeur": boolean,"p_pseudo": string,"p_version_charte": string }; Returns: undefined
                            },
+"deposer":
+{ Args: { "p_campagne": string,"p_chemin": string,"p_demande": string,"p_droit_declare": boolean,"p_presentation": string }; Returns: undefined
+                           },
+"effacer_archives":
+{ Args: { "d": Omit<Database["public"]['Tables']["depot"]['Row'], Database["public"]['Tables']["depot"]['ComputedFields']> }; Returns: (string)[]
+                           },
 "est_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
                            },
@@ -216,6 +262,9 @@ isOneToOne: false
 "ouvrir_campagne":
 { Args: { "p_campagne": string }; Returns: undefined
                            },
+"peut_deposer":
+{ Args: { "p_campagne": string }; Returns: string
+                           },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
                            },
@@ -227,6 +276,9 @@ isOneToOne: false
                            },
 "rendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean
+                           },
+"retirer_depot":
+{ Args: { "p_campagne": string }; Returns: (string)[]
                            },
 "se_desinscrire":
 { Args: { "p_campagne": string }; Returns: undefined

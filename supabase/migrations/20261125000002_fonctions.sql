@@ -495,8 +495,8 @@ begin
 end
 $$;
 
--- Désinscrit l'appelant tant que la délibération n'a pas commencé (statut ouverte) : sa ligne passe à retire et sa place se
--- libère. Mêmes gardes, dans le même ordre, que sinscrire (sans jeton : sur invitation, l'inscrit et le Boss voient la
+-- Désinscrit l'appelant tant que la délibération n'a pas commencé (statut ouverte) et qu'il n'a ni dépôt ni réception en
+-- attente : sa ligne passe à retire et sa place se libère. Mêmes gardes, dans le même ordre, que sinscrire (sans jeton : sur invitation, l'inscrit et le Boss voient la
 -- campagne) ; pas de limite de débit (sinscrire borne déjà les allers-retours).
 create function public.se_desinscrire(p_campagne uuid)
 returns void
@@ -520,11 +520,28 @@ begin
   if v_c.statut <> 'ouverte' then
     raise exception 'La délibération a commencé : tu ne peux plus te désinscrire.';
   end if;
+  -- Un dépôt appartient à un inscrit (story 3.3) : il se retire d'abord, par retirer_depot qui rend ses archives à effacer,
+  -- ce qui n'est possible qu'avant la clôture et hors contrôle en cours.
+  if exists (select 1 from public.reception r join public.participation p on p.id = r.participation_id
+    where p.campagne_id = p_campagne and p.compte_id = auth.uid() and r.statut = 'en_attente') then
+    raise exception 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.';
+  end if;
+  if exists (select 1 from public.depot d join public.participation p on p.id = d.participation_id
+    where p.campagne_id = p_campagne and p.compte_id = auth.uid()) then
+    if now() >= v_c.cloture_depot then
+      raise exception 'Le dépôt est clos : tu ne peux plus te désinscrire.';
+    end if;
+    raise exception 'Retire d''abord ton dépôt pour te désinscrire.';
+  end if;
   update public.participation set etat = 'retire', retire_le = now()
   where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit';
   if not found then
     raise exception 'Tu n''es pas inscrit à cette campagne.';
   end if;
+  -- Une réception refusée ne survit pas au départ : sa présentation reviendrait à la réinscription.
+  -- shortcut: seule la ligne part ; son zip est effacé par prive au refus (story 3.4).
+  delete from public.reception r using public.participation p
+  where p.id = r.participation_id and p.campagne_id = p_campagne and p.compte_id = auth.uid();
 end
 $$;
 
@@ -575,5 +592,150 @@ begin
   end if;
   update public.campagne set jeton_invitation = v_jeton where id = p_campagne;
   return v_jeton;
+end
+$$;
+
+
+-- Dépôt (story 3.3) ------------------------------------------------------------------------------------------------
+
+-- Participation de l'appelant s'il peut déposer maintenant dans la campagne, sinon le refus de deposer. Mêmes gardes,
+-- dans le même ordre, que se_desinscrire, puis la phase de dépôt (mêmes bornes que sinscrire) et le Boss juge (un Boss
+-- joueur inscrit dépose, SPECS § 2), puis la réception en attente. Sans verrou : la route d'URL d'envoi la lit pour ne pas signer un envoi voué au refus,
+-- deposer la rappelle sous le verrou de la campagne. Exécutable par authenticated : elle ne rend que l'id de sa propre
+-- participation.
+create function public.peut_deposer(p_campagne uuid)
+returns uuid
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+  v_participation uuid;
+begin
+  select * into v_c from public.campagne where id = p_campagne;
+  select id into v_participation from public.participation where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit';
+  if v_c.id is null or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null
+    or (v_c.visibilite = 'invitation' and v_c.boss_id is distinct from auth.uid() and v_participation is null) then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est échue : on n''y dépose plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if now() >= v_c.cloture_depot then
+    raise exception 'La date limite de dépôt est passée.';
+  end if;
+  if v_c.statut <> 'ouverte' or now() < v_c.ouverture_inscriptions then
+    raise exception 'Le dépôt n''est pas ouvert.';
+  end if;
+  if v_c.boss_id = auth.uid() and v_c.role_boss = 'juge' then
+    raise exception 'Tu juges cette campagne : tu n''y déposes pas.';
+  end if;
+  if v_participation is null then
+    raise exception 'Tu n''es pas inscrit à cette campagne.';
+  end if;
+  -- Pas d'envoi pendant qu'un autre attend son contrôle : il serait refusé et resterait dans le bucket.
+  if exists (select 1 from public.reception where participation_id = v_participation and statut = 'en_attente') then
+    raise exception 'Ton dépôt précédent est en cours de contrôle.';
+  end if;
+  return v_participation;
+end
+$$;
+
+-- Dépose le zip déjà envoyé au chemin p_chemin (AD-1, AD-2, SPECS § 4) : crée la réception en_attente que prive contrôlera
+-- (story 3.4), ou remplace une réception refusée. Sous le verrou de la campagne, avec les gardes de peut_deposer. Le chemin
+-- doit être celui que la route a signé pour cette participation et l'objet doit être arrivé dans le bucket ; un chemin déjà
+-- porté par une réception ou un dépôt est refusé. Textes rognés de leurs blancs de bord ; demande vide : aucune. Le premier
+-- dépôt de la campagne fige ses règles et le rôle du Boss. Exécutable par authenticated (PostgREST l'expose) : toutes les
+-- règles vivent ici, limite de débit par compte comprise.
+-- shortcut: l'archive d'une réception refusée remplacée reste dans le bucket ; objets_abandonnes (AD-11, epic 6) l'effacera.
+create function public.deposer(p_campagne uuid, p_chemin text, p_presentation text, p_demande text, p_droit_declare boolean)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_participation uuid;
+  v_presentation text := btrim(p_presentation, E' \t\r\n\u00a0');
+  v_demande text := nullif(btrim(p_demande, E' \t\r\n\u00a0'), '');
+begin
+  perform 1 from public.campagne where id = p_campagne for update;
+  v_participation := public.peut_deposer(p_campagne);
+  if p_droit_declare is not true then
+    raise exception 'Coche la case : tu dois avoir le droit de déposer ce code.';
+  end if;
+  if v_presentation is null or char_length(v_presentation) not between 1 and 500 then
+    raise exception 'La présentation fait entre 1 et 500 caractères.';
+  end if;
+  if char_length(v_demande) > 80 then
+    raise exception 'La demande fait 80 caractères au plus.';
+  end if;
+  if p_chemin is null
+    or p_chemin !~ ('^' || p_campagne || '/' || v_participation || '/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\.zip$')
+    or not exists (select 1 from storage.objects where bucket_id = 'depots' and name = p_chemin)
+    or exists (select 1 from public.reception where chemin_stockage = p_chemin)
+    or exists (select 1 from public.depot where chemin_stockage = p_chemin) then
+    raise exception 'Ton archive n''est pas arrivée : recommence l''envoi.';
+  end if;
+  -- Limite par compte (AD-1) : 10 dépôts par 24 h, sous l'empreinte SHA-256 de l'id, comme sinscrire.
+  if public.consommer_debit(encode(sha256(convert_to(auth.uid()::text || ':compte', 'UTF8')), 'hex'), 'depot', 10, 86400) > 0 then
+    raise exception 'Trop de dépôts depuis ton compte. Réessaie plus tard.' using errcode = 'CT429';
+  end if;
+  insert into public.reception (participation_id, chemin_stockage, presentation, demande, droit_declare_le)
+  values (v_participation, p_chemin, v_presentation, v_demande, now())
+  on conflict (participation_id) do update
+    set chemin_stockage = excluded.chemin_stockage, presentation = excluded.presentation, demande = excluded.demande,
+      droit_declare_le = excluded.droit_declare_le, statut = 'en_attente', motifs = null, tentatives = 0, cree_le = now();
+  update public.campagne set regles_figees_le = coalesce(regles_figees_le, now()) where id = p_campagne;
+end
+$$;
+
+-- Chemins de stockage d'un dépôt : le zip et l'archive filtrée (AD-11). Seul chemin d'effacement des archives : l'appelant
+-- efface ce qu'elle rend. Réservée au rôle de service ; retirer_depot l'appelle avec les droits de son propriétaire.
+create function public.effacer_archives(d public.depot)
+returns text[]
+language sql immutable set search_path = ''
+as $$
+  select array_remove(array[d.chemin_stockage, d.chemin_filtre], null)
+$$;
+
+-- Retire le dépôt de l'appelant avant la délibération (statut ouverte, avant la clôture), sous le verrou de la campagne, et
+-- rend les chemins à effacer (effacer_archives) : la route les efface du bucket. Mêmes gardes, dans le même ordre, que
+-- se_desinscrire. Refusé tant qu'une réception attend son contrôle (prive pourrait l'accepter juste après). L'inscription
+-- reste : le candidat peut redéposer.
+create function public.retirer_depot(p_campagne uuid)
+returns text[]
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+  v_depot public.depot%rowtype;
+begin
+  select * into v_c from public.campagne where id = p_campagne for update;
+  if not found or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null
+    or (v_c.visibilite = 'invitation' and v_c.boss_id is distinct from auth.uid()
+      and not exists (select 1 from public.participation where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit')) then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est échue : on n''y retire plus de dépôt.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_c.statut <> 'ouverte' or now() >= v_c.cloture_depot then
+    raise exception 'Le dépôt est clos : tu ne peux plus le retirer.';
+  end if;
+  if exists (select 1 from public.reception r join public.participation p on p.id = r.participation_id
+    where p.campagne_id = p_campagne and p.compte_id = auth.uid() and r.statut = 'en_attente') then
+    raise exception 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.';
+  end if;
+  delete from public.depot d using public.participation p
+  where p.id = d.participation_id and p.campagne_id = p_campagne and p.compte_id = auth.uid()
+  returning d.* into v_depot;
+  if not found then
+    raise exception 'Tu n''as pas de dépôt dans cette campagne.' using errcode = 'CT404';
+  end if;
+  return public.effacer_archives(v_depot);
 end
 $$;

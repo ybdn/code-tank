@@ -5,7 +5,8 @@ Nuxt 4, TypeScript, rendu côté serveur, pnpm.
 
 Le site est en cours de réécriture sur un schéma neuf : il contient pour l'instant l'accueil, la charte, la politique de
 confidentialité, les mentions légales, les en-têtes de sécurité, la création de compte par GitHub (`/compte`) et le socle de
-la base (`supabase/`, voir plus bas). Les autres parcours (campagnes, dépôt, délibération) arrivent avec les epics suivants.
+la base (`supabase/`, voir plus bas), les campagnes, l'inscription et le dépôt. Le contrôle des dépôts et la délibération
+arrivent avec les stories suivantes.
 
 ## Commandes
 
@@ -57,7 +58,17 @@ pnpm build
   connaissance de l'envoi à Anthropic et, pour une campagne sur invitation, le jeton du lien, **404** hors forme) et `DELETE /api/campagnes/[slug]/inscription` : inscription par `sinscrire` et désinscription par
   `se_desinscrire`, avec le JWT de l'appelant. Corps non JSON : **415** ; sans session : **401** ; slug hors forme ou
   campagne hors de `campagne_phase` : **404** ; règle métier (complet, hors phase, Boss juge, case non cochée…) : **409** ;
-  limite de débit par compte (20 inscriptions par 24 h, tenue dans `sinscrire`, `CT429`) : **429**.
+  limite de débit par compte (20 inscriptions par 24 h, tenue dans `sinscrire`, `CT429`) : **429**. La désinscription
+  est refusée (**409**) tant qu'il y a un dépôt ou une réception en attente.
+- Dépôt (story 3.3), avec le JWT de l'appelant, corps JSON (**415** sinon), session (**401**), slug dans `campagne_phase`
+  (**404**) : `POST /api/campagnes/[slug]/depot/url` vérifie par `peut_deposer` qu'il peut déposer (mêmes gardes que
+  `deposer`, sauf la limite de dépôts, contrôlée par `deposer` ; **409**), passe la limite de 20 envois par compte et par 24 h (**429**), construit le chemin
+  `<campagne_id>/<participation_id>/<uuid>.zip` et le signe avec la clé de service (`{ chemin, jeton }`) : le zip part
+  directement au bucket privé `depots`. `POST /api/campagnes/[slug]/depot` (corps `{ chemin, presentation, demande, droit }`) :
+  `deposer` crée la réception `en_attente`, puis `appelerJury` sans attendre ; règle métier : **409**, limite de 10 dépôts
+  par compte et par 24 h : **429**. `DELETE /api/campagnes/[slug]/depot` : `retirer_depot`, puis effacement du bucket des
+  chemins rendus (clé de service ; un échec est journalisé) ; sans dépôt : **404**. `GET /api/campagnes/[slug]` renvoie
+  aussi `reception` et `depot` de l'inscrit (lus sous RLS). Page : `/campagnes/[slug]/depot`.
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -122,7 +133,9 @@ Trois migrations datées du même jour (AD-13) :
   `mode_acces`), `compte` (né de GitHub, pseudo unique sans tenir compte de la casse, figé une fois le compte actif) et
   `participation` (une ligne par compte et par campagne, `inscrit` ou `retire`, prise de connaissance datée ; `compte_id`
   nul si le compte est supprimé) et `campagne` (statut = actes d'AD-2, bornes de dates et 10 places par contraintes, une campagne active par Boss par index
-  unique partiel, `bloquee_le` et `motif_blocage` posés par la seule modération).
+  unique partiel, `bloquee_le` et `motif_blocage` posés par la seule modération) ; bucket privé `depots` (20 Mo, zip
+  seulement, aucune politique de stockage), `reception` (une par participation, `en_attente` ou `refusee` avec ses motifs,
+  `tentatives`) et `depot` (un seul actif par participation, colonnes du contrôle et des tokens, AD-6).
 - `…_fonctions.sql` : `consommer_debit` (compte, refuse ou enregistre en une transaction, verrou consultatif par empreinte et
   action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou` ;
   gardes `est_admin()` et `compte_actif()` ; `creer_compte` (identité GitHub lue dans `auth.identities`, charte, majorité,
@@ -137,12 +150,16 @@ Trois migrations datées du même jour (AD-13) :
   bloquée, et publique, ou dont l'appelant est le Boss, ou à laquelle il est inscrit, avec `places_restantes` calculées,
   sans `boss_id` ni jeton (elle lit la vue interne `campagne_calculee`) ; `sinscrire` (campagne publique, ou sur
   invitation avec son jeton exact, pour son Boss ou un inscrit, en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
-  `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`) ;
+  `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`, ni dépôt ni réception en attente ; efface une réception refusée) ;
   `lire_invitation` (campagne d'un jeton, colonnes de `campagne_phase`) et `regenerer_invitation` (Boss, `for update`,
   `campagne_vivante`, compte actif, campagne sur invitation) ; `jeton_invitation` (256 bits de pgcrypto en hexadécimal)
   posé par `creer_campagne` et `modifier_campagne` pour une campagne sur invitation, retiré au passage en publique ;
   `modifier_campagne` refuse moins de places que d'inscrits, un Boss inscrit qui deviendrait juge et tout changement de
-  visibilité dès le premier inscrit.
+  visibilité dès le premier inscrit ; `peut_deposer` (gardes du dépôt, réception en attente refusée, rend la participation), `deposer` (`for update` sur
+  la campagne, phase de dépôt, Boss juge refusé, case, présentation rognée 1 à 500, demande 80 au plus, chemin de sa
+  participation et objet présent dans le bucket, limite de débit par compte 10 par 24 h,
+  premier dépôt qui pose `regles_figees_le`), `retirer_depot` (`for update`, statut `ouverte` avant la clôture, rend les
+  chemins de `effacer_archives`) et `effacer_archives(depot)` (zip et archive filtrée, seul chemin d'effacement, AD-11).
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
@@ -155,7 +172,11 @@ Trois migrations datées du même jour (AD-13) :
   lisible par aucun client ; `lire_invitation` et `regenerer_invitation` exécutables par `authenticated` seul (leurs règles
   vivent dans les fonctions) ; `participation`
   lisible par son compte seul (RLS), sans écriture directe ni droit du rôle de service ; `sinscrire` et `se_desinscrire`
-  exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions).
+  exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions) ; `reception`
+  et `depot` lisibles par le compte de leur participation seul (RLS, colonnes choisies : ni chemins, ni tentatives, ni
+  faits, note d'outillage et alertes), sans écriture directe ni droit du rôle de service ; `peut_deposer`, `deposer` et
+  `retirer_depot` exécutables par `authenticated` seul (leurs règles vivent dans les fonctions) ; `effacer_archives` par
+  le rôle de service seul.
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux
