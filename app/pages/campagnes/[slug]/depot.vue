@@ -35,6 +35,7 @@ const pasDeRetrait = computed(() => {
 
 const supabase = useSupabaseClient()
 const occupe = ref(false)
+const envoi = ref(false) // un dépôt part : seul cas où le bouton du formulaire dit « Envoi en cours… »
 const confirmer = ref(false)
 const cle = ref(0) // change après un dépôt : le formulaire repart vide
 const annonce = ref('')
@@ -95,6 +96,7 @@ async function agir(action: () => Promise<void>, fait: string) {
 }
 
 const deposer = (fichier: File, corps: { presentation: string; demande: string; droit: boolean }) => agir(async () => {
+  envoi.value = true
   // 1. Le site vérifie qu'on peut déposer et signe un envoi vers un chemin qu'il choisit.
   const { chemin, jeton } = await $fetch<{ chemin: string; jeton: string }>(`${url}/depot/url`, { method: 'POST', body: {} })
   // 2. L'archive part directement au bucket. Type fixé sur le fichier lui-même (l'envoi est un formulaire multipart, qui prend le
@@ -104,7 +106,7 @@ const deposer = (fichier: File, corps: { presentation: string; demande: string; 
   // 3. deposer enregistre la réception, que le jury contrôlera.
   await $fetch<unknown>(`${url}/depot`, { method: 'POST', body: { chemin, ...corps } })
   cle.value++
-}, 'Archive reçue : son contrôle est en cours.')
+}, 'Archive reçue : son contrôle est en cours.').finally(() => { envoi.value = false })
 
 const retirer = () => agir(async () => { await $fetch<unknown>(`${url}/depot`, { method: 'DELETE', body: {} }) }, 'Dépôt retiré. Tu restes inscrit : tu peux redéposer avant la clôture.')
 
@@ -169,7 +171,7 @@ async function demanderRetrait(v: boolean) {
           </template>
           <template v-else>
             <h2>{{ data.depot ? 'Redéposer' : 'Déposer' }}</h2>
-            <FormulaireDepot :key="cle" :boss-pseudo="data.boss_pseudo" :occupe="occupe" :redepot="!!data.depot" @envoyer="deposer" />
+            <FormulaireDepot :key="cle" :boss-pseudo="data.boss_pseudo" :occupe="occupe" :envoi="envoi" :redepot="!!data.depot" @envoyer="deposer" />
           </template>
         </template>
       </template>

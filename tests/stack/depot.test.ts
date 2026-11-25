@@ -193,7 +193,7 @@ describe('dépôt', () => {
     expect(await envoyer('POST', `${depot}/url`, juge.cookie)).toMatchObject({ statut: 409, json: { message: 'Tu juges cette campagne : tu n\'y déposes pas.' } })
     expect((await lire(`/campagnes/${juge.slug}/depot`, juge.cookie)).texte).toContain('Tu juges cette campagne : tu n&#39;y déposes pas.')
     expect((await lire(`/campagnes/${juge.slug}/depot`)).texte).toContain('Connecte-toi avec GitHub pour déposer.')
-    expect((await lire(`/campagnes/inconnue-${marque}/depot`)).statut).toBe(404)
+    for (const slug of ['%00', '%ED%A0%80', `inconnue-${marque}`]) expect((await lire(`/campagnes/${slug}/depot`)).statut, slug).toBe(404)
   })
 
   it('limite d\'envois par compte : la 21e URL signée en 24 h répond 429 avec Retry-After', async () => {

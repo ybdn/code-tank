@@ -5,7 +5,7 @@
 -- Les objets du bucket et les lignes depot (écrites par prive, story 3.4) sont posés en superutilisateur.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(84);
+select plan(85);
 
 insert into auth.users (id, email)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
@@ -225,6 +225,8 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
 select lives_ok($$select public.se_desinscrire(current_setting('t.d_pub')::uuid)$$, 'sans dépôt ni réception en attente, la désinscription passe');
 reset role;
+select is((select count(*) from public.reception where participation_id = '91000000-0000-4000-8000-0000000000f1'), 0::bigint,
+  'la désinscription efface la réception refusée');
 
 -- Limite de débit par compte : 10 dépôts par 24 h -------------------------------------------------------------------------
 update public.participation set etat = 'inscrit', retire_le = null where id = '91000000-0000-4000-8000-0000000000f1';
@@ -234,7 +236,7 @@ set local role authenticated;
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c3'), 'x', null, true)$$, 'CT429', 'Trop de dépôts depuis ton compte. Réessaie plus tard.', '11e dépôt en 24 h : limite de débit');
 reset role;
-select is((select chemin_stockage from public.reception where participation_id = '91000000-0000-4000-8000-0000000000f1'), current_setting('t.c2'), 'le dépôt refusé n''a rien écrit');
+select is((select count(*) from public.reception where participation_id = '91000000-0000-4000-8000-0000000000f1'), 0::bigint, 'le dépôt refusé n''a rien écrit');
 
 select * from finish();
 rollback;

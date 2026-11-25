@@ -538,6 +538,10 @@ begin
   if not found then
     raise exception 'Tu n''es pas inscrit à cette campagne.';
   end if;
+  -- Une réception refusée ne survit pas au départ : sa présentation reviendrait à la réinscription.
+  -- shortcut: seule la ligne part ; son zip est effacé par prive au refus (story 3.4).
+  delete from public.reception r using public.participation p
+  where p.id = r.participation_id and p.campagne_id = p_campagne and p.compte_id = auth.uid();
 end
 $$;
 

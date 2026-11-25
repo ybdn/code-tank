@@ -1,7 +1,7 @@
 <script setup lang="ts">
 // Formulaire de dépôt (story 3.3, SPECS § 4). Fichier, présentation et case sont contrôlés ici pour ne pas envoyer 20 Mo
 // voués au refus, avec les messages de deposer, qui revérifie tout (la demande, bornée par maxlength, aussi).
-const props = defineProps<{ bossPseudo: string; occupe: boolean; redepot: boolean }>()
+const props = defineProps<{ bossPseudo: string; occupe: boolean; envoi: boolean; redepot: boolean }>()
 const emit = defineEmits<{ envoyer: [fichier: File, corps: { presentation: string; demande: string; droit: boolean }] }>()
 
 const fichier = ref<File | null>(null)
@@ -74,7 +74,7 @@ async function soumettre() {
     </p>
 
     <p class="btns">
-      <button class="btn btn--primary" type="submit" :aria-disabled="occupe">{{ occupe ? 'Envoi en cours…' : redepot ? 'Redéposer' : 'Déposer' }}</button>
+      <button class="btn btn--primary" type="submit" :aria-disabled="occupe">{{ envoi ? 'Envoi en cours…' : redepot ? 'Redéposer' : 'Déposer' }}</button>
     </p>
   </form>
 </template>

@@ -150,7 +150,7 @@ Trois migrations datées du même jour (AD-13) :
   bloquée, et publique, ou dont l'appelant est le Boss, ou à laquelle il est inscrit, avec `places_restantes` calculées,
   sans `boss_id` ni jeton (elle lit la vue interne `campagne_calculee`) ; `sinscrire` (campagne publique, ou sur
   invitation avec son jeton exact, pour son Boss ou un inscrit, en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
-  `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`) ;
+  `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`, ni dépôt ni réception en attente ; efface une réception refusée) ;
   `lire_invitation` (campagne d'un jeton, colonnes de `campagne_phase`) et `regenerer_invitation` (Boss, `for update`,
   `campagne_vivante`, compte actif, campagne sur invitation) ; `jeton_invitation` (256 bits de pgcrypto en hexadécimal)
   posé par `creer_campagne` et `modifier_campagne` pour une campagne sur invitation, retiré au passage en publique ;
