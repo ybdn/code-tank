@@ -61,8 +61,12 @@ async function relire() {
   occupe.value = true
   annonce.value = ''
   await actualiser()
-  if (!nonActualisee.value) annonce.value = 'État actualisé.'
   occupe.value = false
+  if (nonActualisee.value) return
+  annonce.value = 'État actualisé.'
+  // Le bouton a pu disparaître avec l'état (contrôle terminé) : le focus revient au titre de l'état.
+  await nextTick()
+  titreEtat.value?.focus()
 }
 
 // Action terminée : annonce lue par la zone role="status", focus sur le titre de l'état. Refus : alerte et focus dessus ;
