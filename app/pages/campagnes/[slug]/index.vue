@@ -59,6 +59,7 @@ async function relire() {
 
 // Une page ouverte avant l'ouverture des inscriptions passe à la phase d'inscription sans rechargement : relecture quand
 // l'onglet redevient visible, et à l'heure d'ouverture si elle tombe dans moins de 24 h.
+// shortcut: pas de minuteur au-delà de 24 h ; une page restée visible plus longtemps attend le retour sur l'onglet ou un rechargement. À chaîner si un besoin réel apparaît.
 let minuterie: ReturnType<typeof setTimeout> | undefined
 const auRetour = () => { if (document.visibilityState === 'visible') actualiser() }
 onMounted(() => {
