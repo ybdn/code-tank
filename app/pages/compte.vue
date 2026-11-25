@@ -12,6 +12,8 @@ const ETATS: Record<Etat, string> = {
   actif: 'Compte actif.',
   suspendu: 'Ton compte est suspendu.',
 }
+// Message fixe de changer_pseudo quand le compte n'est plus en attente.
+const PSEUDO_FIGE = 'Ton pseudo ne se change plus : il est figé une fois ton compte actif.'
 const VERSION = new Date(VERSION_CHARTE).toLocaleDateString('fr-FR', { day: 'numeric', month: 'long', year: 'numeric', timeZone: 'UTC' })
 
 // Le serveur ne voit pas toujours la session au rendu : tout se lit après le montage.
@@ -92,6 +94,8 @@ async function creer() {
 }
 
 async function changerPseudo() {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
+  if (occupe.value) return
   alerte.value = ''
   annonce.value = ''
   erreurs.value = {}
@@ -107,6 +111,14 @@ async function changerPseudo() {
     } catch (e) {
       const err = e as { statusCode?: number; data?: { message?: string } }
       const message = err.data?.message ?? 'Une erreur est survenue.'
+      if (err.statusCode === 409 && message === PSEUDO_FIGE) {
+        // Le compte est devenu actif entre-temps : la page passe à l'état actif, pseudo figé.
+        alerte.value = message
+        await charger()
+        await nextTick()
+        titreEtat.value?.focus()
+        return
+      }
       if (err.statusCode === 409) erreurs.value.pseudo = message
       else alerte.value = message
     } finally {
@@ -182,7 +194,7 @@ const champ = (n: 'pseudo' | 'charte' | 'majeur', aide?: string) => ({
             <input id="pseudo-attente" v-model="f.pseudo" type="text" autocomplete="nickname" autocapitalize="none" spellcheck="false" maxlength="39" required v-bind="champ('pseudo', 'aide-pseudo-attente')">
             <p v-if="erreurs.pseudo" id="err-pseudo" class="champ__erreur">{{ erreurs.pseudo }}</p>
           </div>
-          <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Envoi en cours…' : 'Changer mon pseudo' }}</button></p>
+          <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">{{ occupe ? 'Envoi en cours…' : 'Changer mon pseudo' }}</button></p>
         </form>
         <p role="status" aria-live="polite">{{ annonce }}</p>
         <p class="btns deconnexion"><button class="btn" type="button" @click="deconnecter">Se déconnecter</button></p>

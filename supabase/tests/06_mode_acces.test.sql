@@ -3,7 +3,7 @@
 -- D est un admin suspendu : est_admin() le refuse. Identité simulée par le rôle et request.jwt.claims.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(44);
+select plan(48);
 
 insert into auth.users (id, email) values
   ('20000000-0000-4000-8000-00000000000a', 'a@example.org'),
@@ -58,6 +58,8 @@ update public.reglage set mode_acces = 'ferme';
 set local role service_role;
 select throws_ok($$select public.creer_compte('20000000-0000-4000-8000-00000000000e', 'ferme_e', '2026-11-25', true, true)$$, 'P0001',
   'Les inscriptions sont fermées pour le moment.', 'ferme : création refusée');
+select throws_ok($$select public.creer_compte('20000000-0000-4000-8000-00000000000e', 'a b', '2026-11-25', false, true)$$, 'P0001',
+  'Les inscriptions sont fermées pour le moment.', 'ferme : le mode est contrôlé avant la charte et le pseudo');
 reset role;
 select is_empty($$select 1 from public.compte where id = '20000000-0000-4000-8000-00000000000e'$$, 'ferme : aucun compte créé');
 
@@ -132,6 +134,8 @@ select throws_ok($$select public.changer_pseudo('MEMBRE_B')$$, 'P0001', 'Ce pseu
   'pseudo pris, sans tenir compte de la casse');
 select throws_ok($$select public.changer_pseudo('a b')$$, 'P0001',
   'Le pseudo fait 3 à 39 caractères : lettres sans accent, chiffres, tiret ou souligné.', 'pseudo hors format refusé');
+select throws_ok($$select public.changer_pseudo(null)$$, 'P0001',
+  'Le pseudo fait 3 à 39 caractères : lettres sans accent, chiffres, tiret ou souligné.', 'pseudo nul refusé');
 set local request.jwt.claims = '{"sub":"20000000-0000-4000-8000-00000000000b","role":"authenticated"}';
 select throws_ok($$select public.changer_pseudo('autre_b')$$, 'P0001',
   'Ton pseudo ne se change plus : il est figé une fois ton compte actif.', 'actif : pseudo figé');
@@ -144,6 +148,20 @@ select throws_ok($$select public.changer_pseudo('sans_compte')$$, 'P0001',
 reset role;
 select results_eq($$select pseudo from public.compte where id in ('20000000-0000-4000-8000-00000000000b', '20000000-0000-4000-8000-00000000000d') order by pseudo$$,
   $$values ('membre_b'), ('suspendu_d')$$, 'les pseudos figés n''ont pas bougé');
+
+-- Un admin dont le compte n'est pas actif n'est pas admin.
+update public.compte set role = 'admin' where id = '20000000-0000-4000-8000-00000000000c';
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"20000000-0000-4000-8000-00000000000c","role":"authenticated"}';
+select is(public.est_admin(), false, 'admin en attente : est_admin() faux');
+reset role;
+
+-- Sans ligne de réglage, aucune inscription.
+delete from public.reglage;
+set local role service_role;
+select throws_ok($$select public.creer_compte('20000000-0000-4000-8000-00000000000e', 'vide_e', '2026-11-25', true, true)$$, 'P0001',
+  'Les inscriptions sont fermées pour le moment.', 'reglage vide : création refusée');
+reset role;
 
 select * from finish();
 rollback;

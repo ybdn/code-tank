@@ -84,10 +84,10 @@ git push origin propre:preprod propre:prod
 - [ ] Vérifier que `CRON_SECRET` est défini dans Vercel et que la tâche `/api/cron/conservation` tourne (journal des crons de Vercel) : c'est elle qui applique les durées de conservation promises.
 - [ ] **Rôle admin** (page `/admin`, mode d'accès) : en préprod puis en prod, une fois les migrations appliquées par
   l'Epic 8 et ton compte créé par GitHub, dans l'éditeur SQL de Supabase (remplacer `<ton-pseudo>`). Le site ne pose
-  jamais ce rôle.
+  jamais ce rôle. Vérifier qu'une ligne revient : sinon le pseudo est faux ou le compte n'est pas actif.
 
 ```sql
-update public.compte set role = 'admin' where pseudo = '<ton-pseudo>' and etat = 'actif';
+update public.compte set role = 'admin' where lower(pseudo) = lower('<ton-pseudo>') and etat = 'actif' returning id, pseudo, role;
 ```
 
 ## 6. En continu

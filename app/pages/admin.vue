@@ -19,6 +19,8 @@ const annonce = ref('')
 const alerte = ref('')
 
 async function enregistrer() {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
+  if (occupe.value) return
   annonce.value = ''
   alerte.value = ''
   occupe.value = true
@@ -50,7 +52,7 @@ async function enregistrer() {
               <p :id="`aide-${m.valeur}`" class="champ__aide">{{ m.aide }}</p>
             </div>
           </fieldset>
-          <p class="btns"><button class="btn btn--primary" type="submit" :disabled="occupe">{{ occupe ? 'Enregistrement…' : 'Enregistrer' }}</button></p>
+          <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">{{ occupe ? 'Enregistrement…' : 'Enregistrer' }}</button></p>
         </form>
         <p role="status" aria-live="polite">{{ annonce }}</p>
         <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>

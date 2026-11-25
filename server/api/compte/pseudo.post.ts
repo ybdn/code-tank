@@ -1,5 +1,6 @@
 // Changement de pseudo d'un compte en liste d'attente (story 1.3) par changer_pseudo, avec le JWT de la personne : la
 // fonction lit l'appelant dans le jeton et refuse tout compte qui n'est pas en_attente (pseudo figé une fois actif).
+// shortcut: pas de limite par IP ni par compte (RPC appelable par PostgREST), à revoir avec la story 7.2 si la liste d'attente s'ouvre au public
 export default defineEventHandler(async (event) => {
   exigerJson(event)
   const { client } = await utilisateurVerifie(event)

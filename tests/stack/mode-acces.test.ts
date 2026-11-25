@@ -2,7 +2,8 @@
 // réglage du mode, création de compte selon le mode, pseudo modifiable en liste d'attente.
 // Le rôle admin est posé en SQL (AD-3), jamais par une route du site.
 import { randomBytes, randomInt } from 'node:crypto'
-import { afterAll, beforeAll, describe, expect, it } from 'vitest'
+import { request } from 'node:http'
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest'
 import { API, connexion, demarrer, lireCompte, nettoyer, sql, statut, utilisateur } from './aide'
 
 type Session = Awaited<ReturnType<typeof connexion>> & { u: Awaited<ReturnType<typeof utilisateur>> }
@@ -42,6 +43,8 @@ beforeAll(async () => {
   admin = a
   membre = await inscrit()
 })
+// Chaque test repart du mode ouvert, même s'il échoue en cours de route.
+afterEach(() => { sql('update public.reglage set mode_acces = \'ouvert\'') })
 afterAll(async () => {
   serveur?.arreter()
   sql('update public.reglage set mode_acces = \'ouvert\'')
@@ -58,12 +61,36 @@ describe('accès à /admin', () => {
     else expect(await r.json()).toEqual({ mode: 'ouvert' })
   })
 
+  it.each([
+    ['GET', '/api/%61dmin/reglage'],
+    ['POST', '/api/%61dmin/reglage'],
+    ['GET', '/api/%41DMIN/reglage'],
+    ['GET', '/api//admin/reglage'],
+    ['GET', '/api/admin'],
+    ['GET', '/ADMIN/'],
+    ['GET', '/api/admin/reglage/'],
+    ['GET', '/%E0'],
+  ])('%s %s : 404 pour le visiteur et le membre (chemin encodé, casse, barres)', async (methode, chemin) => {
+    // Chemin envoyé tel quel (pas d'URL normalisée par fetch) : http.request.
+    for (const cookie of [undefined, membre.cookie]) {
+      const statutHttp = await new Promise<number>((ok, ko) => {
+        const r = request(serveur.url + chemin, {
+          method: methode,
+          headers: { 'content-type': 'application/json', 'x-forwarded-for': ipNeuve(), ...(cookie ? { cookie } : {}) },
+        }, (res) => { res.resume(); ok(res.statusCode!) })
+        r.on('error', ko)
+        r.end(methode === 'POST' ? JSON.stringify({ mode: 'ferme' }) : undefined)
+      })
+      expect(statutHttp).toBe(404)
+    }
+    expect(await modeCourant()).toBe('ouvert')
+  })
+
   it('un compte en attente reçoit aussi 404', async () => {
     await regler('liste_attente')
     const attente = await inscrit()
     expect((await lire('/admin', attente.cookie)).status).toBe(404)
     expect((await lire('/api/admin/reglage', attente.cookie)).status).toBe(404)
-    await regler('ouvert')
   })
 
   it('POST /api/admin/reglage : 404 hors admin, 415 hors JSON, 409 mode inconnu, 200 pour l\'admin', async () => {
@@ -75,7 +102,6 @@ describe('accès à /admin', () => {
       .toEqual({ statut: 409, json: expect.objectContaining({ message: 'Mode d\'accès inconnu.' }) })
     expect(await post('/api/admin/reglage', admin.cookie, { mode: 'ferme' })).toEqual({ statut: 200, json: { mode: 'ferme' } })
     expect(await modeCourant()).toBe('ferme')
-    await regler('ouvert')
   })
 
   it('un membre qui appelle regler_mode_acces par PostgREST est refusé par la fonction', async () => {
@@ -95,7 +121,6 @@ describe('création selon le mode', () => {
     await regler('liste_attente')
     const s = await inscrit()
     expect(await lireCompte(s.jeton)).toMatchObject([{ role: 'membre', etat: 'en_attente' }])
-    await regler('ouvert')
   })
 
   it('ferme : création refusée en 409, les comptes existants se connectent normalement', async () => {
@@ -106,7 +131,6 @@ describe('création selon le mode', () => {
     // Le membre existant rouvre une session et retrouve son compte ; l'admin garde /admin.
     expect(await lireCompte((await connexion(membre.u)).jeton)).toMatchObject([{ etat: 'actif' }])
     expect((await lire('/api/admin/reglage', admin.cookie)).status).toBe(200)
-    await regler('ouvert')
   })
 })
 
@@ -123,7 +147,6 @@ describe('pseudo en liste d\'attente', () => {
     expect((await post('/api/compte/pseudo', s.cookie, { pseudo: pseudo() }, 'text/plain')).statut).toBe(415)
     expect((await post('/api/compte/pseudo', undefined, { pseudo: pseudo() })).statut).toBe(401)
     expect(await lireCompte(s.jeton)).toMatchObject([{ pseudo: nouveau }])
-    await regler('ouvert')
   })
 
   it('un compte actif garde son pseudo figé', async () => {
