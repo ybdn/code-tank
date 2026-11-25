@@ -18,6 +18,8 @@ export type CampagneBoss = {
   visibilite: 'publique' | 'invitation'; role_boss: 'juge' | 'joueur'; max_participants: number
   ouverture_inscriptions: string; cloture_depot: string; date_resultats: string
   statut: string; regles_figees_le: string | null; bloquee_le: string | null; cree_le: string
+  // Lien secret d'une campagne sur invitation (story 2.4), nul pour une publique : lu par le Boss seul.
+  jeton_invitation: string | null
   // Compte de l'appelant actif : sinon, ni réglage ni suppression.
   compte_actif: boolean
   // Inscrits (story 2.3) : dès le premier, la visibilité ne change plus.

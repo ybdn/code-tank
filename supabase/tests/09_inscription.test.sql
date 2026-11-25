@@ -17,9 +17,10 @@ from unnest(array['a1', 'a2', 'a3', 'a4', 'e1', 'e2', 'b1', 'b2', 'b3', 'b4', 'b
 
 -- Une campagne par cas et par Boss (une seule campagne active par Boss), posée en SQL : naissance en brouillon, puis statut.
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
-  ouverture_inscriptions, cloture_depot, date_resultats)
+  ouverture_inscriptions, cloture_depot, date_resultats, jeton_invitation)
 select s, ('90000000-0000-4000-8000-0000000000' || b)::uuid, 'Titre ' || s, 'Thème', 'Brief', array['Go'], v, r, 2,
-  now() - interval '1 day', now() + interval '10 days', now() + interval '20 days'
+  now() - interval '1 day', now() + interval '10 days', now() + interval '20 days',
+  case v when 'invitation' then encode(extensions.gen_random_bytes(32), 'hex') end
 from (values ('pub', 'b1', 'publique', 'juge'), ('jou', 'b2', 'publique', 'joueur'), ('inv', 'b3', 'invitation', 'juge'),
   ('brouillon', 'b4', 'publique', 'juge'), ('bloquee', 'b6', 'publique', 'juge'), ('delib', 'b7', 'publique', 'juge')) v(s, b, v, r);
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
@@ -49,11 +50,11 @@ select is_empty($$
   where has_table_privilege(r, 'public.participation', 'select,insert,update,delete,truncate,references,trigger')
 $$, 'aucun droit sur participation pour anon ni pour le rôle de service');
 select is_empty($$
-  select f from unnest(array['public.sinscrire(uuid, boolean)', 'public.se_desinscrire(uuid)']) f
+  select f from unnest(array['public.sinscrire(uuid, boolean, text)', 'public.se_desinscrire(uuid)']) f
   where not has_function_privilege('authenticated', f, 'execute')
 $$, 'authenticated exécute sinscrire et se_desinscrire');
 select is_empty($$
-  select r, f from unnest(array['anon', 'service_role']) r, unnest(array['public.sinscrire(uuid, boolean)', 'public.se_desinscrire(uuid)']) f
+  select r, f from unnest(array['anon', 'service_role']) r, unnest(array['public.sinscrire(uuid, boolean, text)', 'public.se_desinscrire(uuid)']) f
   where has_function_privilege(r, f, 'execute')
 $$, 'ni anon ni le rôle de service n''exécutent sinscrire ni se_desinscrire');
 select col_is_unique('public', 'participation', array['campagne_id', 'compte_id'], 'une ligne par compte et par campagne');
@@ -81,7 +82,7 @@ select throws_ok($$insert into public.participation (campagne_id, compte_id, con
 select throws_ok($$update public.participation set etat = 'retire'$$, '42501', null, 'compte actif : pas de mise à jour directe');
 select throws_ok($$delete from public.participation$$, '42501', null, 'compte actif : pas de suppression directe');
 select throws_ok($$select public.sinscrire(gen_random_uuid(), true)$$, 'CT404', 'Campagne introuvable.', 'campagne absente : introuvable');
-select throws_ok($$select public.sinscrire(current_setting('t.inv')::uuid, true)$$, 'CT404', 'Campagne introuvable.', 'campagne sur invitation : introuvable par cette voie');
+select throws_ok($$select public.sinscrire(current_setting('t.inv')::uuid, true)$$, 'CT404', 'Campagne introuvable.', 'campagne sur invitation, sans jeton : introuvable');
 select throws_ok($$select public.sinscrire(current_setting('t.brouillon')::uuid, true)$$, 'CT404', 'Campagne introuvable.', 'brouillon : introuvable');
 select throws_ok($$select public.sinscrire(current_setting('t.bloquee')::uuid, true)$$, 'CT404', 'Campagne introuvable.', 'bloquée : introuvable');
 select throws_ok($$select public.sinscrire(current_setting('t.expiree')::uuid, true)$$, 'CT404', 'Campagne introuvable.', 'expirée : introuvable');
@@ -186,7 +187,7 @@ select lives_ok($$select public.modifier_campagne(id, titre, theme, brief, langa
 select is((select visibilite from public.campagne where slug = 'avenir'), 'invitation', 'visibilité changée');
 
 -- Le verrou ne se prouve pas en pgTAP mono-session (test de concurrence dans tests/stack) : on vérifie qu'il est écrit.
-select ok(pg_get_functiondef('public.sinscrire(uuid, boolean)'::regprocedure) ~ 'for update', 'sinscrire verrouille la ligne campagne (for update)');
+select ok(pg_get_functiondef('public.sinscrire(uuid, boolean, text)'::regprocedure) ~ 'for update', 'sinscrire verrouille la ligne campagne (for update)');
 
 -- Compte supprimé : la ligne reste, compte_id nul ------------------------------------------------------------
 delete from auth.users where id = '90000000-0000-4000-8000-0000000000a2';

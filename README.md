@@ -39,14 +39,22 @@ pnpm build
   non figées) et la suppression du brouillon (`supprimer_brouillon`), toutes avec le JWT de l'appelant. Tout autre compte
   que le Boss, visiteur compris : **404** ; corps non JSON (`POST`, `PATCH`, `DELETE`) : **415** ; règle métier : **409**.
   `POST /api/boss/[slug]/ouverture` : ouvre le brouillon par `ouvrir_campagne` (mêmes **404**, **415** et **409**).
+  `GET /api/boss/[slug]` renvoie aussi `jeton_invitation` (campagne sur invitation, sinon nul), seule réponse qui le porte ;
+  `POST /api/boss/[slug]/invitation` : nouveau lien par `regenerer_invitation`, renvoie `{ jeton_invitation }` (mêmes **404**
+  et **415** ; campagne publique, bloquée ou échue, compte non actif : **409**). L'ancien lien n'ouvre plus rien.
   Correspondance des erreurs (`CT404` → 404, `P0001` → 409) : `server/utils/campagne.ts`. Pages : `/boss`, `/boss/[slug]`.
 - `GET /api/campagnes` : campagnes publiques ouvertes de la vue `campagne_phase`, lues en anonyme (accueil). `GET
   /api/campagnes/[slug]` : une campagne de la vue, lue avec la session si elle existe (le Boss voit sa campagne sur
   invitation), sinon en anonyme, avec les critères et poids de `critere` ; hors de la vue (brouillon, invitation d'un
   autre, bloquée, expirée) ou slug hors forme : **404**. Avec une session, la page reçoit aussi `connecte`, `compte_actif`,
   `est_boss` et `inscrit` (lus sous RLS) ; les deux routes renvoient `places_restantes`. Pages : `/`, `/campagnes/[slug]`.
-- `POST /api/campagnes/[slug]/inscription` (corps `{ connaissance: boolean }`, la case de prise de connaissance de l'envoi à
-  Anthropic) et `DELETE /api/campagnes/[slug]/inscription` : inscription par `sinscrire` et désinscription par
+  Un inscrit voit aussi la campagne sur invitation par cette adresse, sans le lien.
+- `GET /api/invitation/[jeton]` : la campagne du lien d'invitation par `lire_invitation`, même forme que
+  `/api/campagnes/[slug]`, jamais le jeton. Jeton hors forme (64 caractères hexadécimaux), inconnu ou régénéré, campagne
+  bloquée, brouillon ou expirée : **404** ; sans session : **401** (la page `/invitation/[jeton]` propose la connexion).
+  Pas de limite de débit : 256 bits ne se devinent pas.
+- `POST /api/campagnes/[slug]/inscription` (corps `{ connaissance: boolean, jeton?: string }`, la case de prise de
+  connaissance de l'envoi à Anthropic et, pour une campagne sur invitation, le jeton du lien, **404** hors forme) et `DELETE /api/campagnes/[slug]/inscription` : inscription par `sinscrire` et désinscription par
   `se_desinscrire`, avec le JWT de l'appelant. Corps non JSON : **415** ; sans session : **401** ; slug hors forme ou
   campagne hors de `campagne_phase` : **404** ; règle métier (complet, hors phase, Boss juge, case non cochée…) : **409** ;
   limite de débit par compte (20 inscriptions par 24 h, tenue dans `sinscrire`, `CT429`) : **429**.
@@ -126,9 +134,13 @@ Trois migrations datées du même jour (AD-13) :
   prennent d'abord la ligne `for update`, puis la garde `campagne_vivante` ; vue `campagne_phase` (`security_invoker =
   false`) : ce que le public voit d'une campagne, phase déduite de `now()` et des dates (`a_venir`, `inscriptions` où
   inscription et dépôt sont ouverts ensemble, `depots_clos` ; hors `ouverte`, le statut), ni brouillon, ni expirée, ni
-  bloquée, et publique ou dont l'appelant est le Boss, avec `places_restantes` calculées ; `sinscrire` (campagne publique
-  en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
+  bloquée, et publique, ou dont l'appelant est le Boss, ou à laquelle il est inscrit, avec `places_restantes` calculées,
+  sans `boss_id` ni jeton (elle lit la vue interne `campagne_calculee`) ; `sinscrire` (campagne publique, ou sur
+  invitation avec son jeton exact, pour son Boss ou un inscrit, en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
   `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`) ;
+  `lire_invitation` (campagne d'un jeton, colonnes de `campagne_phase`) et `regenerer_invitation` (Boss, `for update`,
+  `campagne_vivante`, compte actif, campagne sur invitation) ; `jeton_invitation` (256 bits de pgcrypto en hexadécimal)
+  posé par `creer_campagne` et `modifier_campagne` pour une campagne sur invitation, retiré au passage en publique ;
   `modifier_campagne` refuse moins de places que d'inscrits, un Boss inscrit qui deviendrait juge et tout changement de
   visibilité dès le premier inscrit.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
@@ -139,7 +151,9 @@ Trois migrations datées du même jour (AD-13) :
   remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, sans droit du rôle de service ;
   `creer_campagne`, `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` exécutables par `authenticated` seul
   (leurs règles vivent dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun
-  client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service ; `participation`
+  client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service ; `campagne_calculee`
+  lisible par aucun client ; `lire_invitation` et `regenerer_invitation` exécutables par `authenticated` seul (leurs règles
+  vivent dans les fonctions) ; `participation`
   lisible par son compte seul (RLS), sans écriture directe ni droit du rôle de service ; `sinscrire` et `se_desinscrire`
   exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions).
 

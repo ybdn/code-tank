@@ -84,6 +84,9 @@ create table public.campagne (
   bloquee_le timestamptz,
   motif_blocage text check (char_length(motif_blocage) between 1 and 500),
   cree_le timestamptz not null default now(),
+  -- Lien secret d'une campagne sur invitation (story 2.4) : 256 bits aléatoires en hexadécimal, posés et retirés avec la
+  -- visibilité par creer_campagne et modifier_campagne, remplacés par regenerer_invitation. Lu par le Boss seul (RLS).
+  jeton_invitation text unique check (jeton_invitation ~ '^[0-9a-f]{64}$'),
   constraint campagne_dates_ordre check (ouverture_inscriptions < cloture_depot and cloture_depot < date_resultats),
   -- Jours comptés à l'heure de Paris, comme le formulaire, quel que soit le fuseau de la session (UTC sous PostgREST) :
   -- 30 jours qui traversent le passage à l'heure d'hiver ne deviennent pas 30 jours et 1 heure.
@@ -91,7 +94,8 @@ create table public.campagne (
     check (cloture_depot at time zone 'Europe/Paris' <= (ouverture_inscriptions at time zone 'Europe/Paris') + interval '30 days'),
   constraint campagne_duree_resultats
     check (date_resultats at time zone 'Europe/Paris' <= (cloture_depot at time zone 'Europe/Paris') + interval '15 days'),
-  constraint campagne_blocage check ((bloquee_le is null) = (motif_blocage is null))
+  constraint campagne_blocage check ((bloquee_le is null) = (motif_blocage is null)),
+  constraint campagne_jeton check ((visibilite = 'invitation') = (jeton_invitation is not null))
 );
 -- Une seule campagne active par Boss (AD-2), même entre deux créations simultanées.
 create unique index campagne_active_unique on public.campagne (boss_id)

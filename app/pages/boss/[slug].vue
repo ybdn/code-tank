@@ -72,6 +72,44 @@ async function ouvrir() {
   }
 }
 
+// Lien d'invitation (story 2.4) : URL absolue à partir de l'origine de la requête, la même au rendu serveur et dans le navigateur.
+const origine = useRequestURL().origin
+const lien = computed(() => data.value?.jeton_invitation ? `${origine}/invitation/${data.value.jeton_invitation}` : '')
+const annonceLien = ref('')
+const titreLien = useTemplateRef<HTMLElement>('titreLien')
+
+async function copier() {
+  // Vidée puis remplie : un second clic redit l'annonce.
+  annonceLien.value = ''
+  await nextTick()
+  try {
+    await navigator.clipboard.writeText(lien.value)
+    annonceLien.value = 'Lien copié.'
+  } catch {
+    annonceLien.value = 'La copie a échoué : sélectionne le lien et copie-le.'
+  }
+}
+
+async function regenerer() {
+  if (occupe.value || !confirm('Régénérer le lien ? L\'ancien n\'ouvrira plus rien.')) return
+  occupe.value = true
+  annonceLien.value = ''
+  alerte.value = ''
+  await nextTick()
+  try {
+    const r = await $fetch<{ jeton_invitation: string }>(`/api/boss/${encodeURIComponent(slug)}/invitation`, { method: 'POST', body: {} })
+    // Le nouveau jeton vient de la réponse : pas de relecture qui pourrait échouer après une régénération réussie.
+    data.value = { ...data.value!, jeton_invitation: r.jeton_invitation }
+    annonceLien.value = 'Nouveau lien créé : l\'ancien n\'ouvre plus rien.'
+    await nextTick()
+    titreLien.value?.focus()
+  } catch (e) {
+    await echec(e)
+  } finally {
+    occupe.value = false
+  }
+}
+
 async function supprimer() {
   // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
   if (occupe.value || !confirm('Supprimer ce brouillon ? Il disparaît pour de bon.')) return
@@ -101,6 +139,18 @@ async function supprimer() {
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
         <p v-if="publiee" class="btns"><NuxtLink class="btn" :to="`/campagnes/${data.slug}`">Voir sa page publique</NuxtLink></p>
+        <template v-if="lien">
+          <h2 ref="titreLien" tabindex="-1">Lien d'invitation</h2>
+          <p>Seuls ceux qui ont ce lien entrent dans la campagne.{{ data.statut === 'brouillon' ? ' Il y mène dès son ouverture.' : '' }}</p>
+          <div class="champ"><label for="lien-invitation">Lien</label><input id="lien-invitation" type="text" readonly :value="lien"></div>
+          <p class="btns"><button class="btn" type="button" @click="copier">Copier</button></p>
+          <p role="status" aria-live="polite">{{ annonceLien }}</p>
+          <template v-if="actif">
+            <p>Le régénérer crée un nouveau lien&nbsp;: l'ancien n'ouvrira plus rien, les inscrits gardent leur accès.</p>
+            <p class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="regenerer">Régénérer le lien</button></p>
+          </template>
+          <p v-else>Le lien ne se régénère plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : 'la date des résultats est passée.' }}</p>
+        </template>
         <p v-if="data.role_boss === 'juge'">Tu juges cette campagne&nbsp;: ton vote compte pour 33&nbsp;% du score final.</p>
         <template v-if="data.statut === 'brouillon' && actif">
           <h2>Ouvrir la campagne</h2>
