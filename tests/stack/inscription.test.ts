@@ -122,6 +122,19 @@ describe('inscription', () => {
     expect((await envoyer('DELETE', `/api/campagnes/${joueur.slug}/inscription`, joueur.cookie)).statut).toBe(200)
   })
 
+  it('inscrit qui ne peut plus se désinscrire : la page dit pourquoi', async () => {
+    const c = await boss('juge', 2)
+    const a = await membre()
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/inscription`, a.cookie, { connaissance: true })).statut).toBe(200)
+    sql(`update public.campagne set statut = 'deliberation' where slug = '${c.slug}'`)
+    const page = (await lire(`/campagnes/${c.slug}`, a.cookie)).texte
+    expect(page).toContain('Tu es inscrit.')
+    expect(page).toContain('La délibération a commencé : tu ne peux plus te désinscrire.')
+    expect(page).not.toContain('Me désinscrire</button>')
+    sql(`update public.compte set etat = 'suspendu' where id = '${a.u.id}'`)
+    expect((await lire(`/campagnes/${c.slug}`, a.cookie)).texte).toContain('Ton compte n&#39;est pas actif : tu ne peux pas te désinscrire.')
+  })
+
   it('concurrence : 6 comptes pour 2 places, exactement 2 inscrits', async () => {
     const c = await boss('juge', 2)
     const comptes = await Promise.all(Array.from({ length: 6 }, () => membre()))

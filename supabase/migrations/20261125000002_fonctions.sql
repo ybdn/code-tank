@@ -407,6 +407,7 @@ create view public.campagne_phase with (security_invoker = false) as
 select c.id, c.slug, c.titre, c.theme, c.brief, c.langages, c.visibilite, c.role_boss, c.max_participants,
   c.ouverture_inscriptions, c.cloture_depot, c.date_resultats, c.statut,
   -- Calculé, jamais stocké (story 2.3) : la vue lit participation avec les droits de son propriétaire.
+  -- shortcut: une participation dont le compte est supprimé garde sa place ; la story 6.4 (suppression de compte, AD-11) la retire.
   c.max_participants - (select count(*) from public.participation p where p.campagne_id = c.id and p.etat = 'inscrit')::integer
     as places_restantes,
   case

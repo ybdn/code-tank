@@ -20,9 +20,16 @@ const pourquoiPas = computed(() => {
   if (c.places_restantes <= 0) return 'La campagne est complète.'
   return ''
 })
-// Désinscription : tant que la délibération n'a pas commencé, compte actif, campagne non échue.
-const desinscriptible = computed(() => !!data.value && data.value.inscrit && data.value.compte_actif
-  && data.value.statut === 'ouverte' && Date.parse(data.value.date_resultats) > Date.now())
+// Désinscription : tant que la délibération n'a pas commencé, compte actif, campagne non échue ; sinon, pourquoi (une
+// campagne bloquée n'est plus dans la vue : la page répond 404).
+const pasDeRetrait = computed(() => {
+  const c = data.value
+  if (!c?.inscrit) return ''
+  if (!c.compte_actif) return 'Ton compte n\'est pas actif : tu ne peux pas te désinscrire.'
+  if (Date.parse(c.date_resultats) <= Date.now()) return 'Cette campagne est échue : on ne s\'en désinscrit plus.'
+  if (c.statut !== 'ouverte') return 'La délibération a commencé : tu ne peux plus te désinscrire.'
+  return ''
+})
 const connaissance = ref(false)
 const occupe = ref(false)
 const annonce = ref('')
@@ -74,7 +81,8 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
         </div>
         <template v-if="data.inscrit">
           <p>Tu es inscrit.</p>
-          <p v-if="desinscriptible" class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="agir('DELETE', 'Tu es désinscrit.')">Me désinscrire</button></p>
+          <p v-if="pasDeRetrait">{{ pasDeRetrait }}</p>
+          <p v-else class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="agir('DELETE', 'Tu es désinscrit.')">Me désinscrire</button></p>
         </template>
         <p v-else-if="pourquoiPas">{{ pourquoiPas }}</p>
         <form v-else @submit.prevent="agir('POST', 'Tu es inscrit.')">

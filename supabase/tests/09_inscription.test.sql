@@ -5,7 +5,7 @@
 -- 2090, hors changement d'heure.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(68);
+select plan(72);
 
 insert into auth.users (id, email)
 select ('90000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
@@ -166,15 +166,24 @@ select throws_ok($$select public.sinscrire(current_setting('t.jou')::uuid, true)
 select is((select etat from public.participation), 'retire', 'la 21e n''a rien écrit');
 set local request.jwt.claims = '{"sub":"90000000-0000-4000-8000-0000000000a3","role":"authenticated"}';
 select lives_ok($$select public.sinscrire(current_setting('t.jou')::uuid, true)$$, 'un autre compte n''est pas touché par cette limite');
+-- jou est désormais rempli jusqu'à max_participants (le Boss joueur et A3) : le compte de plus est refusé.
+set local request.jwt.claims = '{"sub":"90000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+select is((select places_restantes from public.campagne_phase where slug = 'jou'), 0, 'jou rempli jusqu''à max_participants');
+select throws_ok($$select public.sinscrire(current_setting('t.jou')::uuid, true)$$, 'P0001', 'La campagne est complète.', 'le compte de plus est refusé');
 reset role;
 select is((select count(*) from public.debit where action = 'inscription'
   and empreinte = encode(sha256(convert_to('90000000-0000-4000-8000-0000000000a4:compte', 'UTF8')), 'hex')), 20::bigint,
   'débit rangé sous l''empreinte du compte, jamais sous son id');
 
+-- Le verrou ne se prouve pas en pgTAP mono-session (test de concurrence dans tests/stack) : on vérifie qu'il est écrit.
+select ok(pg_get_functiondef('public.sinscrire(uuid, boolean)'::regprocedure) ~ 'for update', 'sinscrire verrouille la ligne campagne (for update)');
+
 -- Compte supprimé : la ligne reste, compte_id nul ------------------------------------------------------------
 delete from auth.users where id = '90000000-0000-4000-8000-0000000000a2';
 select results_eq($$select etat from public.participation where campagne_id = current_setting('t.pub')::uuid and compte_id is null$$,
   array['inscrit'], 'compte supprimé : sa ligne reste, compte_id nul');
+select is((select places_restantes from public.campagne_phase where slug = 'pub'), 0,
+  'compte supprimé : sa place reste prise jusqu''à la story 6.4 (AD-11)');
 select is_empty($$select 1 from pg_constraint where conrelid = 'public.participation'::regclass and contype = 'f'
   and confrelid = 'public.campagne'::regclass and confdeltype <> 'c'$$, 'campagne supprimée : ses participations suivent (cascade)');
 
