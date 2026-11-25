@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { depuisChampLocal, versChampLocal } from '../../shared/utils/campagne'
+import { brouillonEchu, depuisChampLocal, versChampLocal } from '../../shared/utils/campagne'
 
 describe('dates à l\'heure de Paris', () => {
   it('aller-retour, heure d\'hiver et heure d\'été', () => {
@@ -19,5 +19,15 @@ describe('dates à l\'heure de Paris', () => {
   it('une date impossible ou une heure absente à Paris donne une chaîne vide', () => {
     expect(depuisChampLocal('2027-02-30T09:30')).toBe('')
     expect(depuisChampLocal('2026-03-29T02:30')).toBe('')
+  })
+})
+
+describe('brouillon échu', () => {
+  const maintenant = Date.parse('2026-12-01T12:00:00Z')
+  it('seul un brouillon non bloqué dont la date des résultats est passée est échu', () => {
+    expect(brouillonEchu({ statut: 'brouillon', bloquee_le: null, date_resultats: '2026-12-01T11:59:00Z' }, maintenant)).toBe(true)
+    expect(brouillonEchu({ statut: 'brouillon', bloquee_le: null, date_resultats: '2026-12-01T12:01:00Z' }, maintenant)).toBe(false)
+    expect(brouillonEchu({ statut: 'brouillon', bloquee_le: '2026-11-30T00:00:00Z', date_resultats: '2026-12-01T11:59:00Z' }, maintenant)).toBe(false)
+    expect(brouillonEchu({ statut: 'ouverte', bloquee_le: null, date_resultats: '2026-12-01T11:59:00Z' }, maintenant)).toBe(false)
   })
 })

@@ -7,8 +7,7 @@ const router = useRouter()
 type Ligne = { slug: string; titre: string; statut: string; date_resultats: string; bloquee_le: string | null }
 const { data, error, status, refresh } = await useFetch<{ etat: string | null; campagnes: Ligne[] }>('/api/boss')
 // Un brouillon échu et non bloqué ne compte pas : creer_campagne le fait passer en expiree.
-const echu = (c: Ligne) => c.statut === 'brouillon' && !c.bloquee_le && Date.parse(c.date_resultats) < Date.now()
-const active = computed(() => data.value?.campagnes.find((c) => STATUTS_ACTIFS.includes(c.statut) && !echu(c)))
+const active = computed(() => data.value?.campagnes.find((c) => STATUTS_ACTIFS.includes(c.statut) && !brouillonEchu(c)))
 const occupe = ref(false)
 const alerte = ref('')
 const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')
@@ -31,11 +30,12 @@ async function creer(corps: Record<string, unknown>) {
   } catch (e) {
     const err = e as { statusCode?: number; data?: { message?: string } }
     alerte.value = err.data?.message ?? 'Une erreur est survenue.'
-    // Une campagne a pu être créée entre-temps (autre onglet) : la page affiche alors son lien.
+    // Une campagne a pu être créée entre-temps (autre onglet) : la page affiche alors son lien. Le formulaire reste monté
+    // pendant le rechargement : la saisie n'est pas perdue.
     if (err.statusCode === 409) await refresh()
-    // Le refus s'affiche au-dessus du formulaire : le focus y va, le message est lu.
     await nextTick()
-    zoneAlerte.value?.focus()
+    // Le focus va au lien de la campagne existante s'il est apparu, sinon au refus : dans les deux cas, le message est lu.
+    ;(document.querySelector<HTMLElement>('#lien-active') ?? zoneAlerte.value)?.focus()
   } finally {
     occupe.value = false
   }
@@ -47,20 +47,22 @@ async function creer(corps: Record<string, unknown>) {
     <div class="wrap texte texte--etroit">
       <h1 ref="titre" tabindex="-1">Ma campagne</h1>
       <p v-if="supprime" role="status" class="avis">Brouillon supprimé.</p>
-      <p v-if="status === 'pending'">Chargement…</p>
+      <!-- Hors des branches : le refus reste lu même quand le formulaire laisse place au lien de la campagne existante. -->
+      <div ref="zoneAlerte" tabindex="-1">
+        <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
+      </div>
+      <!-- Chargement seulement au premier affichage : un rechargement garde le formulaire et sa saisie. -->
+      <p v-if="status === 'pending' && !data">Chargement…</p>
       <p v-else-if="error?.statusCode === 401">Pour créer une campagne, <NuxtLink to="/compte">connecte-toi</NuxtLink> avec un compte actif.</p>
       <p v-else-if="error" role="alert" class="avis avis--erreur">Tes campagnes ne peuvent pas être lues pour le moment.</p>
       <template v-else-if="active">
-        <p>Tu as une campagne en cours, une seule à la fois&nbsp;: <NuxtLink :to="`/boss/${active.slug}`">{{ active.titre }}</NuxtLink> ({{ STATUT_BOSS[active.statut] }}).</p>
+        <p>Tu as une campagne en cours, une seule à la fois&nbsp;: <NuxtLink id="lien-active" :to="`/boss/${active.slug}`">{{ active.titre }}</NuxtLink> ({{ STATUT_BOSS[active.statut] }}).</p>
       </template>
       <p v-else-if="data?.etat !== 'actif'">
         Seul un compte actif crée une campagne. <NuxtLink to="/compte">{{ data?.etat ? 'Voir l\'état de ton compte' : 'Crée ton compte' }}</NuxtLink>.
       </p>
       <template v-else>
         <p class="lead">Crée ta campagne en brouillon&nbsp;: tu en es le Boss. Tu la règles tant que tu veux avant de l'ouvrir.</p>
-        <div ref="zoneAlerte" tabindex="-1">
-          <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
-        </div>
         <FormulaireCampagne :occupe="occupe" @envoyer="creer" />
       </template>
     </div>

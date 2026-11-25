@@ -42,8 +42,9 @@ async function charger() {
   if (data?.etat === 'en_attente') f.pseudo = data.pseudo
   // La RLS ne laisse lire que ses propres campagnes.
   if (data?.etat === 'actif') {
-    const lue = await supabase.from('campagne').select('slug').in('statut', STATUTS_ACTIFS).maybeSingle()
-    campagne.value = lue.error ? undefined : lue.data
+    const lue = await supabase.from('campagne').select('slug, statut, bloquee_le, date_resultats').in('statut', STATUTS_ACTIFS).maybeSingle()
+    // Un brouillon échu ne compte plus : le lien mène à la création, comme sur /boss.
+    campagne.value = lue.error ? undefined : lue.data && !brouillonEchu(lue.data) ? lue.data : null
   }
   chargement.value = false
 }

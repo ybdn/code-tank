@@ -66,6 +66,8 @@ describe('campagne du Boss', () => {
     expect((await envoyer('POST', '/api/boss', boss.cookie, reglages(), 'text/plain')).statut).toBe(415)
     expect((await envoyer('POST', '/api/boss', undefined, reglages())).statut).toBe(401)
     expect((await lire('/api/boss')).statut).toBe(401)
+    // Slug hors forme (caractère nul, UTF-8 invalide) : 404, jamais 500.
+    for (const chemin of ['/api/boss/%00', '/api/boss/%ED%A0%80']) expect((await lire(chemin, boss.cookie)).statut).toBe(404)
     const slug = await creer(boss)
     expect(slug).toMatch(/^minuteur-de-pause-[0-9a-f]{6}$/)
     expect(await lire(`/api/boss/${slug}`, boss.cookie)).toMatchObject({ statut: 200, json: { slug, statut: 'brouillon', max_participants: 5, compte_actif: true } })

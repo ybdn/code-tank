@@ -16,6 +16,9 @@ export const STATUT_BOSS: Record<string, string> = {
   brouillon: 'Brouillon', ouverte: 'Ouverte', deliberation: 'Délibération', prete: 'Prête', publiee: 'Publiée', archivee: 'Archivée', expiree: 'Expirée',
 }
 export const STATUTS_ACTIFS = ['brouillon', 'ouverte', 'deliberation', 'prete']
+// Brouillon échu et non bloqué : il ne compte plus comme campagne active, creer_campagne le fait passer en expiree.
+export const brouillonEchu = (c: { statut: string; bloquee_le: string | null; date_resultats: string }, maintenant = Date.now()) =>
+  c.statut === 'brouillon' && !c.bloquee_le && Date.parse(c.date_resultats) < maintenant
 
 // Les dates se saisissent à l'heure de Paris, quel que soit le fuseau du navigateur.
 const champLocal = new Intl.DateTimeFormat('sv-SE', {

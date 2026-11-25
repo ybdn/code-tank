@@ -80,6 +80,7 @@ async function supprimer() {
         <FormulaireCampagne v-if="reglable" :initial="data" :occupe="occupe" @envoyer="enregistrer" />
         <p v-else-if="!data.compte_actif">Ton compte n'est pas actif.</p>
         <p v-else>Les réglages ne se modifient plus&nbsp;: {{ data.bloquee_le ? 'la campagne est bloquée.' : echue ? 'la date des résultats est passée.' : 'les règles sont figées à cette étape.' }}</p>
+        <p v-if="data.compte_actif && brouillonEchu(data)" class="btns"><NuxtLink class="btn btn--primary" to="/boss">Créer une nouvelle campagne</NuxtLink></p>
         <template v-if="data.statut === 'brouillon' && actif">
           <h2>Supprimer le brouillon</h2>
           <p>Tu changes d'avis&nbsp;? Le brouillon disparaît pour de bon.</p>

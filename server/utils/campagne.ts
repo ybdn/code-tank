@@ -17,10 +17,14 @@ export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visib
 
 // La campagne de l'adresse, si l'appelant en est le Boss. Sans session, ou pour tout autre compte : 404 (ressource hors droits).
 export async function campagneDuBoss(event: H3Event) {
+  // Un slug hors de la forme imposée par la table (caractère nul, UTF-8 invalide…) ne peut désigner aucune campagne : 404
+  // tout de suite, plutôt qu'une erreur de la base en 500.
+  const slug = getRouterParam(event, 'slug', { decode: true }) ?? ''
+  if (slug.length > 60 || !/^[a-z0-9]+(-[a-z0-9]+)*$/.test(slug)) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
   const client = await serverSupabaseClient(event)
   const { data: { user } } = await client.auth.getUser()
   if (!user) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
-  const { data, error } = await client.from('campagne').select(COLONNES_CAMPAGNE).eq('slug', getRouterParam(event, 'slug') ?? '').maybeSingle()
+  const { data, error } = await client.from('campagne').select(COLONNES_CAMPAGNE).eq('slug', slug).maybeSingle()
   if (error) erreurCampagne(error, 'Lecture d\'une campagne :', 'La campagne ne peut pas être lue pour le moment.')
   if (!data) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
   return { client, campagne: data }
@@ -35,7 +39,7 @@ export async function reglagesDuCorps(event: H3Event) {
   const texte = (v: unknown) => (typeof v === 'string' ? v.replaceAll('\u0000', '').toWellFormed() : '')
   // Hors bornes raisonnables, la base lèverait une erreur de type (22003, 22007), donc un 500 : la valeur devient vide et la
   // fonction répond 409 avec son message.
-  // shortcut: années bornées à 2000-2100 ici seulement (la base ne les contrôle pas), à élargir avant 2100.
+  // shortcut: années bornées à 2000-2100, comme verifier_reglages ; à élargir des deux côtés avant 2100.
   const date = (v: unknown) => {
     const t = typeof v === 'string' ? Date.parse(v) : NaN
     const annee = new Date(t).getUTCFullYear()

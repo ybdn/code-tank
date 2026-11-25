@@ -231,7 +231,9 @@ begin
   if p_max_participants is null or p_max_participants not between 1 and 10 then
     raise exception 'Le nombre de places va de 1 à 10.';
   end if;
-  if p_ouverture is null or p_cloture is null or p_resultats is null then
+  if p_ouverture is null or p_cloture is null or p_resultats is null
+    or exists (select 1 from unnest(array[p_ouverture, p_cloture, p_resultats]) d
+      where extract(year from d at time zone 'Europe/Paris') not between 2000 and 2100) then
     raise exception 'Les trois dates sont obligatoires, entre 2000 et 2100.';
   end if;
   if not (p_ouverture < p_cloture and p_cloture < p_resultats) then
