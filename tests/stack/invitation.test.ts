@@ -92,8 +92,11 @@ describe('invitation', () => {
     expect((await envoyer('POST', chemin, a.cookie, { connaissance: true, jeton: '0'.repeat(64) })).statut).toBe(404)
     expect((await envoyer('POST', chemin, a.cookie, { connaissance: false, jeton })).statut).toBe(409)
     expect((await envoyer('POST', chemin, a.cookie, { connaissance: true, jeton })).statut).toBe(200)
-    // Le jeton d'une campagne ne vaut pas pour une autre adresse.
-    expect((await envoyer('POST', `/api/campagnes/${pub.slug}/inscription`, a.cookie, { connaissance: true, jeton })).statut).toBe(404)
+    // Le jeton d'une campagne n'ouvre pas une autre campagne sur invitation ; une publique l'ignore.
+    const autre = await boss('invitation')
+    expect((await envoyer('POST', `/api/campagnes/${autre.slug}/inscription`, a.cookie, { connaissance: true, jeton })).statut).toBe(404)
+    expect((await envoyer('POST', `/api/campagnes/${pub.slug}/inscription`, a.cookie, { connaissance: true, jeton })).statut).toBe(200)
+    expect((await envoyer('DELETE', `/api/campagnes/${pub.slug}/inscription`, a.cookie)).statut).toBe(200)
 
     // Inscrit : la campagne par son adresse, sans le lien.
     const publique = await lire(`/api/campagnes/${inv.slug}`, a.cookie)
@@ -134,6 +137,20 @@ describe('invitation', () => {
     expect((await lire(`/campagnes/${inv.slug}`, inv.cookie)).texte).toContain('S&#39;inscrire</button>')
     expect((await envoyer('POST', `/api/campagnes/${inv.slug}/inscription`, inv.cookie, { connaissance: true })).statut).toBe(200)
     expect((await envoyer('DELETE', `/api/campagnes/${inv.slug}/inscription`, inv.cookie)).statut).toBe(200)
+  })
+
+  it('lien ouvert puis campagne repassée en publique : l\'inscription avec le jeton passe', async () => {
+    const b = await boss('invitation')
+    const jeton = await jetonDe(b)
+    const a = await membre()
+    expect((await lire(`/api/invitation/${jeton}`, a.cookie)).statut).toBe(200)
+    const c = (await lire(`/api/boss/${b.slug}`, b.cookie)).json
+    expect((await envoyer('PATCH', `/api/boss/${b.slug}`, b.cookie, {
+      titre: c.titre, theme: c.theme, brief: c.brief, langages: c.langages, visibilite: 'publique', role_boss: c.role_boss,
+      max_participants: c.max_participants, ouverture_inscriptions: c.ouverture_inscriptions, cloture_depot: c.cloture_depot, date_resultats: c.date_resultats,
+    })).statut).toBe(200)
+    expect(await jetonDe(b)).toBeNull()
+    expect((await envoyer('POST', `/api/campagnes/${b.slug}/inscription`, a.cookie, { connaissance: true, jeton })).statut).toBe(200)
   })
 
   it('refus : 401 sans session, 404 hors forme, 409 sur une publique, 415, 404 hors du Boss', async () => {

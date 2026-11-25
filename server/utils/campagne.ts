@@ -75,15 +75,15 @@ export async function reglagesDuCorps(event: H3Event) {
 }
 
 // Inscription et désinscription (story 2.3) : JSON exigé (415), session exigée (401), slug dans la forme de la table et
-// campagne visible de l'appelant dans campagne_phase (404 sinon). Avec un jeton d'invitation (story 2.4), la campagne est
-// celle du lien (lire_invitation), qui doit porter ce slug. La RPC revérifie tout.
+// campagne visible de l'appelant dans campagne_phase (404 sinon). Avec un jeton d'invitation (story 2.4), seulement si la vue
+// ne la montre pas, la campagne du lien (lire_invitation), qui doit porter ce slug : une campagne repassée en publique entre
+// l'ouverture du lien et l'inscription reste joignable. La RPC revérifie tout.
 export async function campagneDeLInscrit(event: H3Event, jeton?: string) {
   exigerJson(event)
   const slug = slugDeLaRoute(event)
   const { client } = await utilisateurVerifie(event)
-  const { data, error } = jeton
-    ? await client.rpc('lire_invitation', { p_jeton: jeton }).maybeSingle()
-    : await client.from('campagne_phase').select('id, slug').eq('slug', slug).maybeSingle()
+  let { data, error } = await client.from('campagne_phase').select('id, slug').eq('slug', slug).maybeSingle()
+  if (!error && !data && jeton) ({ data, error } = await client.rpc('lire_invitation', { p_jeton: jeton }).maybeSingle())
   if (error) erreurCampagne(error, 'Lecture d\'une campagne publique :', 'La campagne ne peut pas être lue pour le moment.')
   if (!data?.id || data.slug !== slug) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
   return { client, id: data.id }

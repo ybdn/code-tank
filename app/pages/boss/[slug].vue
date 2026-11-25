@@ -79,6 +79,9 @@ const annonceLien = ref('')
 const titreLien = useTemplateRef<HTMLElement>('titreLien')
 
 async function copier() {
+  // Vidée puis remplie : un second clic redit l'annonce.
+  annonceLien.value = ''
+  await nextTick()
   try {
     await navigator.clipboard.writeText(lien.value)
     annonceLien.value = 'Lien copié.'
@@ -92,6 +95,7 @@ async function regenerer() {
   occupe.value = true
   annonceLien.value = ''
   alerte.value = ''
+  await nextTick()
   try {
     const r = await $fetch<{ jeton_invitation: string }>(`/api/boss/${encodeURIComponent(slug)}/invitation`, { method: 'POST', body: {} })
     // Le nouveau jeton vient de la réponse : pas de relecture qui pourrait échouer après une régénération réussie.
