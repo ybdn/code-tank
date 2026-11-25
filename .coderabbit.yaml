@@ -1,0 +1,103 @@
+# yaml-language-server: $schema=https://coderabbit.ai/integrations/schema.v2.json
+# Réglages CodeRabbit versionnés : ils priment sur l'interface app.coderabbit.ai.
+# Le dépôt a moins de 10 étoiles : la revue ne part pas seule, cocher « Trigger review »
+# dans le commentaire de CodeRabbit sur la PR.
+# Consignes tirées de SPECS.md, ARCHITECTURE-SPINE.md (AD-1 à AD-13) et des epics 1 à 8.
+language: fr-FR
+tone_instructions: "Français, direct et concis. Signale chaque constat une seule fois, avec le correctif."
+
+reviews:
+  profile: assertive
+  request_changes_workflow: false
+  high_level_summary: true
+  poem: false
+  review_status: true
+  collapse_walkthrough: true
+  auto_review:
+    enabled: true
+    drafts: false
+  path_filters:
+    - "!pnpm-lock.yaml"
+    - "!graphify-out/**"
+    - "!app/types/database.types.ts"
+  path_instructions:
+    - path: "supabase/migrations/**/*.sql"
+      instructions: |
+        Schéma neuf en trois fichiers (…_tables.sql, …_fonctions.sql, …_droits.sql) modifiés en place
+        jusqu'à la mise en ligne (epic 8) : ne pas réclamer de nouvelle migration pour une modification.
+        Vérifier :
+        - RLS active sur toute table ; `anon` et `authenticated` n'ont aucun droit d'écriture direct ;
+          `revoke all` par défaut ; aucun droit superflu (`references`, `trigger`, séquences), même au
+          rôle de service.
+        - Toute écriture passe par une fonction `security definer` avec `set search_path` fixé, qui
+          revérifie l'appelant (`auth.uid()`, `est_admin()`), l'état du compte (`actif`) et le statut
+          source de la campagne, avec verrou de ligne `for update`.
+        - Transitions de `campagne.statut` (brouillon, ouverte, deliberation, prete, publiee, archivee,
+          expiree) gardées par le déclencheur ; garde `campagne_vivante` ; campagne bloquée gelée.
+        - `raise exception` avec un message fixe, jamais une valeur reçue.
+        - Vault : `lire_cle_boss` et `effacer_cle_boss` réservées au service avec `revoke` explicite ;
+          la clé du Boss n'est jamais stockée ailleurs que dans le secret `cle_boss_<campagne_id>`.
+        - Aucun score stocké : la vue `classement` calcule ; `critere` est la seule source des critères ;
+          tarifs et coût calculés en SQL seulement.
+        - Vues `security_invoker = false` filtrées selon ce que chaque Boss peut lire (AD-9) : le Boss
+          joueur ne voit ni notes ni verdicts ; aucun Boss ne lit un rapport.
+        - Conventions : tables au singulier, `id uuid`, dates `timestamptz` suffixées `_le`, fonctions à
+          l'infinitif, gardes `est_*`, identifiants français sans accent.
+        - Chaque fonction ou règle de droits ajoutée a son test pgTAP dans `supabase/tests/`.
+    - path: "supabase/tests/**"
+      instructions: |
+        Tests pgTAP par rôle : visiteur, en attente, suspendu, candidat, Boss juge, Boss joueur, admin,
+        service. Chaque `grant`, `revoke`, politique RLS et fonction a un test qui prouve l'accès permis
+        ET le refus. Signaler toute fonction de `supabase/migrations/` sans test de refus.
+    - path: "server/**/*.ts"
+      instructions: |
+        - Autorisation côté serveur seulement ; les écritures passent par une RPC, jamais par une
+          écriture directe en table ni par le client de service pour contourner la RLS.
+        - Erreurs : 404 pour toute ressource hors droits (ne pas révéler son existence), 409 pour une
+          règle métier, corps `{ message }` en français ; jamais une valeur reçue, une erreur SQL brute
+          ou un secret dans une réponse ou un log.
+        - Clé Anthropic du Boss : préfixe `sk-ant-` seul accepté (jeton d'abonnement refusé), testée par
+          `count_tokens`, rangée dans Vault ; elle n'apparaît dans aucun log, message d'erreur ni réponse
+          (hors 4 derniers caractères) ; erreurs du SDK réduites au statut HTTP et à un code fixe.
+        - Limite de débit (`consommer_debit`) sur création de compte (IP en HMAC), inscription, dépôt
+          et signalement.
+        - URL signées courtes pour le bucket `depots` ; téléchargement d'archive journalisé avant l'URL.
+        - Routes du Boss sous `server/api/boss/[slug]/`, routes admin sous `server/api/admin/`.
+        - Aucun code déposé n'est exécuté ni interprété.
+    - path: "server/api/cron/**"
+      instructions: |
+        Route protégée par le secret du cron Vercel (comparaison à temps constant). Traitements
+        idempotents et rejouables : expiration, archivage à J+30, rappel J-3, inactivité 24 mois puis
+        suppression à J+30, purges (débit 24 h, journaux 1 an, envois non confirmés 24 h). Un e-mail
+        n'est envoyé qu'après `reserver_envoi` (jamais de doublon).
+    - path: "server/utils/courriel.ts"
+      instructions: |
+        Envoi par Brevo depuis le site seul, après réservation de la marque `*_prevenu*_le`. Aucun pixel
+        ni lien de pistage. Français, tutoiement. Aucune donnée d'un autre compte dans le message.
+    - path: "app/**/*.vue"
+      instructions: |
+        - Accessibilité : contrastes AA, navigation clavier complète (focus visible, ordre logique,
+          libellés), `prefers-reduced-motion` respecté.
+        - Français, tutoiement. Aucun outil de mesure d'audience ni pistage.
+        - Ni logo ni nom Claude ou Anthropic dans l'image de marque ; jamais de nom de l'émission
+          d'inspiration.
+        - Aucun `v-html` sur un contenu saisi (brief, présentation, commentaire, motif).
+        - L'interface masque ce qu'un rôle ne peut pas faire, mais l'autorisation reste au serveur.
+    - path: ".github/workflows/**"
+      instructions: |
+        Dépôt public : aucun secret, jamais de `pull_request_target`, runners hébergés par GitHub
+        seulement, actions épinglées par SHA, `permissions` minimales. Jobs requis : `verifier`,
+        `base`, `pile`.
+    - path: "content/**"
+      instructions: |
+        Textes légaux (charte, CGU, confidentialité, mentions légales) : cohérence avec les durées de
+        conservation et l'envoi des dépôts à Anthropic décrits dans le code ; aucune adresse ou mention
+        inventée.
+  tools:
+    gitleaks:
+      enabled: true
+    actionlint:
+      enabled: true
+
+chat:
+  auto_reply: true
