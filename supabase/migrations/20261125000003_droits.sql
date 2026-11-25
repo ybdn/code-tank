@@ -83,3 +83,14 @@ grant execute on function
 -- elle-même (brouillon, expirée, bloquée, invitation hors Boss) : elle lit campagne et compte avec les droits de postgres.
 revoke all on public.campagne_phase from service_role;
 grant select on public.campagne_phase to anon, authenticated;
+
+-- participation (story 2.3) : chaque compte lit ses lignes et rien d'autre (les places restantes se lisent dans
+-- campagne_phase) ; aucune écriture directe, pas même du rôle de service, qui n'a aucun droit : sinscrire et se_desinscrire
+-- seules, exécutables par authenticated seul. Leurs règles vivent dans les fonctions (verrou de la campagne, compte_actif(),
+-- phase, places, limite de débit par compte) : un appel direct par /rest/v1/rpc ne contourne rien.
+alter table public.participation enable row level security;
+revoke all on public.participation from service_role;
+grant select on public.participation to authenticated;
+create policy participation_lecture on public.participation for select to authenticated using (compte_id = (select auth.uid()));
+revoke all on function public.sinscrire(uuid, boolean), public.se_desinscrire(uuid) from service_role;
+grant execute on function public.sinscrire(uuid, boolean), public.se_desinscrire(uuid) to authenticated;

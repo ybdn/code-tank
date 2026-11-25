@@ -323,6 +323,14 @@ begin
   end if;
   perform public.verifier_reglages(p_titre, p_theme, p_brief, p_langages, p_visibilite, p_role_boss, p_max_participants,
     p_ouverture_inscriptions, p_cloture_depot, p_date_resultats);
+  -- Inscrits (story 2.3) : jamais plus d'inscrits que de places, jamais de Boss juge inscrit à sa campagne.
+  if p_max_participants < (select count(*) from public.participation where campagne_id = p_campagne and etat = 'inscrit') then
+    raise exception 'Il y a déjà plus d''inscrits que ce nombre de places.';
+  end if;
+  if p_role_boss = 'juge' and exists (select 1 from public.participation
+    where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit') then
+    raise exception 'Tu es inscrit à ta campagne : désinscris-toi avant d''en devenir le juge.';
+  end if;
   update public.campagne set titre = btrim(p_titre, E' \t\r\n\u00a0'), theme = btrim(p_theme, E' \t\r\n\u00a0'), brief = btrim(p_brief, E' \t\r\n\u00a0'),
     langages = array(select btrim(l, E' \t\r\n\u00a0') from unnest(p_langages) l), visibilite = p_visibilite, role_boss = p_role_boss,
     max_participants = p_max_participants, ouverture_inscriptions = p_ouverture_inscriptions,
@@ -398,6 +406,9 @@ $$;
 create view public.campagne_phase with (security_invoker = false) as
 select c.id, c.slug, c.titre, c.theme, c.brief, c.langages, c.visibilite, c.role_boss, c.max_participants,
   c.ouverture_inscriptions, c.cloture_depot, c.date_resultats, c.statut,
+  -- Calculé, jamais stocké (story 2.3) : la vue lit participation avec les droits de son propriétaire.
+  c.max_participants - (select count(*) from public.participation p where p.campagne_id = c.id and p.etat = 'inscrit')::integer
+    as places_restantes,
   case
     when c.statut <> 'ouverte' then c.statut
     when now() < c.ouverture_inscriptions then 'a_venir'
@@ -409,3 +420,87 @@ from public.campagne c
 join public.compte b on b.id = c.boss_id
 where c.bloquee_le is null and c.statut not in ('brouillon', 'expiree')
   and (c.visibilite = 'publique' or c.boss_id = (select auth.uid()));
+
+
+-- Inscription et désinscription (story 2.3) ---------------------------------------------------------------
+
+-- Inscrit l'appelant à une campagne publique en phase d'inscription (AD-1, AD-2, SPECS § 3 et § 9) : premier arrivé, premier
+-- servi, sous le verrou de la ligne campagne, si bien que deux inscriptions simultanées ne dépassent jamais les places. Cette
+-- voie ne voit que ce que montre campagne_phase à un compte quelconque : une campagne sur invitation, un brouillon, une
+-- campagne expirée ou bloquée répondent « introuvable » (la story 2.4 ajoutera la voie de l'invitation, avec son jeton).
+-- Un Boss juge ne s'inscrit pas à sa campagne ; un Boss joueur y occupe une place. Exécutable par authenticated (PostgREST
+-- l'expose) : toutes les règles vivent ici, limite de débit par compte comprise.
+create function public.sinscrire(p_campagne uuid, p_connaissance boolean)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+begin
+  select * into v_c from public.campagne where id = p_campagne for update;
+  if not found or v_c.visibilite <> 'publique' or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est échue : on ne s''y inscrit plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_c.statut <> 'ouverte' or now() < v_c.ouverture_inscriptions or now() >= v_c.cloture_depot then
+    raise exception 'Les inscriptions ne sont pas ouvertes.';
+  end if;
+  if v_c.boss_id = auth.uid() and v_c.role_boss = 'juge' then
+    raise exception 'Tu juges cette campagne : tu ne t''y inscris pas.';
+  end if;
+  if p_connaissance is not true then
+    raise exception 'Coche la case : ton code sera envoyé à Anthropic.';
+  end if;
+  if exists (select 1 from public.participation where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit') then
+    raise exception 'Tu es déjà inscrit.';
+  end if;
+  if (select count(*) from public.participation where campagne_id = p_campagne and etat = 'inscrit') >= v_c.max_participants then
+    raise exception 'La campagne est complète.';
+  end if;
+  -- Limite par compte (AD-1) : 20 inscriptions réussies par 24 h, sous l'empreinte SHA-256 de l'id (debit.empreinte exige
+  -- 64 caractères hexadécimaux). Elle borne les allers-retours inscription et désinscription.
+  if public.consommer_debit(encode(sha256(convert_to(auth.uid()::text || ':compte', 'UTF8')), 'hex'), 'inscription', 20, 86400) > 0 then
+    raise exception 'Trop d''inscriptions depuis ton compte. Réessaie plus tard.' using errcode = 'CT429';
+  end if;
+  insert into public.participation (campagne_id, compte_id, connaissance_envoi_le)
+  values (p_campagne, auth.uid(), now())
+  on conflict (campagne_id, compte_id) do update
+    set etat = 'inscrit', connaissance_envoi_le = now(), inscrit_le = now(), retire_le = null;
+end
+$$;
+
+-- Désinscrit l'appelant tant que la délibération n'a pas commencé (statut ouverte) : sa ligne passe à retire et sa place se
+-- libère. Mêmes gardes, dans le même ordre, que sinscrire ; pas de limite de débit (sinscrire borne déjà les allers-retours).
+-- shortcut: invitation en 404 comme dans sinscrire ; la story 2.4 ouvrira cette voie aux invités.
+create function public.se_desinscrire(p_campagne uuid)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+begin
+  select * into v_c from public.campagne where id = p_campagne for update;
+  if not found or v_c.visibilite <> 'publique' or v_c.statut in ('brouillon', 'expiree') or v_c.bloquee_le is not null then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est échue : on ne s''en désinscrit plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_c.statut <> 'ouverte' then
+    raise exception 'La délibération a commencé : tu ne peux plus te désinscrire.';
+  end if;
+  update public.participation set etat = 'retire', retire_le = now()
+  where campagne_id = p_campagne and compte_id = auth.uid() and etat = 'inscrit';
+  if not found then
+    raise exception 'Tu n''es pas inscrit à cette campagne.';
+  end if;
+end
+$$;

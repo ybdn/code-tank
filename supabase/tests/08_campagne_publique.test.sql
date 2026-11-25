@@ -58,7 +58,7 @@ select set_config('t.' || replace(slug, '-', '_'), id::text, true) from public.c
 
 -- Privilèges et schéma ---------------------------------------------------------------------------
 select columns_are('public', 'campagne_phase', array['id', 'slug', 'titre', 'theme', 'brief', 'langages', 'visibilite', 'role_boss',
-  'max_participants', 'ouverture_inscriptions', 'cloture_depot', 'date_resultats', 'statut', 'phase', 'boss_pseudo'],
+  'max_participants', 'places_restantes', 'ouverture_inscriptions', 'cloture_depot', 'date_resultats', 'statut', 'phase', 'boss_pseudo'],
   'campagne_phase : colonnes d''affichage, ni boss_id ni motif_blocage ni bloquee_le');
 select is((select reloptions from pg_class where oid = 'public.campagne_phase'::regclass), array['security_invoker=false'],
   'campagne_phase : security_invoker = false (droits du propriétaire, filtre dans la vue)');

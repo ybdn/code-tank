@@ -96,3 +96,17 @@ create table public.campagne (
 -- Une seule campagne active par Boss (AD-2), même entre deux créations simultanées.
 create unique index campagne_active_unique on public.campagne (boss_id)
   where statut in ('brouillon', 'ouverte', 'deliberation', 'prete');
+
+-- Participation (SPECS § 13, story 2.3) : écrite par sinscrire et se_desinscrire seulement. Une réinscription après retrait
+-- remet la même ligne à inscrit. compte_id devient nul à la suppression du compte (AD-11 tranchera le reste).
+create table public.participation (
+  id uuid primary key default gen_random_uuid(),
+  campagne_id uuid not null references public.campagne on delete cascade,
+  compte_id uuid references public.compte on delete set null,
+  etat text not null default 'inscrit' check (etat in ('inscrit', 'retire')),
+  connaissance_envoi_le timestamptz not null,
+  inscrit_le timestamptz not null default now(),
+  retire_le timestamptz,
+  constraint participation_unique unique (campagne_id, compte_id),
+  constraint participation_retrait check ((etat = 'retire') = (retire_le is not null))
+);
