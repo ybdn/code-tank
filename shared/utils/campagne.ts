@@ -1,7 +1,16 @@
-// Ce que le public voit du cycle : « prête » reste la délibération, « archivée » garde ses résultats.
-export const ETAPES_PUBLIQUES = ['inscriptions', 'depot', 'deliberation', 'publiee'] as const
-export const LIBELLE_ETAPE_PUBLIQUE: Record<string, string> = { inscriptions: 'Inscriptions', depot: 'Dépôt', deliberation: 'Délibération', publiee: 'Résultats' }
-export const etapePublique = (statut: string) => ({ prete: 'deliberation', archivee: 'publiee' } as Record<string, string>)[statut] ?? statut
+// Phase publique, calculée par la vue campagne_phase (story 2.2) : inscription et dépôt sont ouverts ensemble ; « prête »
+// reste la délibération pour le public, « archivée » garde ses résultats.
+export const LIBELLE_PHASE: Record<string, string> = {
+  a_venir: 'Inscriptions à venir', inscriptions: 'Inscriptions et dépôts ouverts', depots_clos: 'Dépôts clos',
+  deliberation: 'Délibération', prete: 'Délibération', publiee: 'Résultats publiés', archivee: 'Résultats publiés',
+}
+// Une ligne de la vue campagne_phase, et un critère du jury lu dans critere (AD-8).
+export type CampagnePublique = {
+  slug: string; titre: string; theme: string; brief: string; langages: string[]
+  visibilite: 'publique' | 'invitation'; role_boss: 'juge' | 'joueur'; max_participants: number
+  ouverture_inscriptions: string; cloture_depot: string; date_resultats: string; statut: string; phase: string; boss_pseudo: string
+}
+export type Critere = { cle: string; libelle: string; jure: string; poids: number; calcule: boolean }
 
 // Campagne du Boss (story 2.1) : la forme renvoyée par /api/boss/[slug] et les libellés de ses actes (AD-2).
 export type CampagneBoss = {
@@ -24,6 +33,9 @@ export const brouillonEchu = (c: { statut: string; bloquee_le: string | null; da
 const champLocal = new Intl.DateTimeFormat('sv-SE', {
   timeZone: 'Europe/Paris', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hourCycle: 'h23',
 })
+// « 1 décembre 2026 à 09:30 », heure de Paris : la même au rendu serveur et dans le navigateur.
+const dateLongue = new Intl.DateTimeFormat('fr-FR', { timeZone: 'Europe/Paris', dateStyle: 'long', timeStyle: 'short' })
+export const dateParis = (iso: string) => dateLongue.format(new Date(iso))
 // « 2026-12-01T09:30 » : la valeur d'un champ datetime-local.
 export const versChampLocal = (iso: string) => champLocal.format(new Date(iso)).replace(' ', 'T')
 // Inverse de versChampLocal. Le décalage est recalculé à l'instant trouvé pour tomber juste autour du changement d'heure.

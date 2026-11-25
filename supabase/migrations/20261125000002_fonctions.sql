@@ -356,3 +356,56 @@ begin
   delete from public.campagne where id = p_campagne;
 end
 $$;
+
+-- Ouverture et lecture publique (story 2.2) ----------------------------------------------------------
+
+-- Ouvre un brouillon de l'appelant (AD-2) : il devient visible selon sa visibilité. « Brouillon complet » = ce que tiennent
+-- déjà verifier_reglages et les contraintes de la table : rien d'autre à revérifier, sauf la clôture des dépôts, qui doit
+-- être à venir. Mêmes gardes, dans le même ordre, que modifier_campagne.
+create function public.ouvrir_campagne(p_campagne uuid)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_statut text;
+  v_cloture timestamptz;
+begin
+  select statut, cloture_depot into v_statut, v_cloture from public.campagne where id = p_campagne for update;
+  if not found or not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not public.campagne_vivante(p_campagne) then
+    raise exception 'Cette campagne est bloquée ou échue : elle ne s''ouvre plus.';
+  end if;
+  if not public.compte_actif() then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_statut <> 'brouillon' then
+    raise exception 'Seul un brouillon s''ouvre.';
+  end if;
+  if v_cloture <= now() then
+    raise exception 'La clôture des dépôts est déjà passée.';
+  end if;
+  update public.campagne set statut = 'ouverte' where id = p_campagne;
+end
+$$;
+
+-- Campagne vue du public (AD-1, AD-2, AD-10, AD-13) : vue du calculé, avec les droits de son propriétaire (security_invoker
+-- = false), si bien que la visibilité se tient ici et nulle part ailleurs. Visible : ni bloquée, ni brouillon, ni expirée,
+-- et publique ou dont l'appelant est le Boss (la story 2.4 ajoutera « ou inscrit »). Ni boss_id ni motif_blocage ; le Boss
+-- est dit par son pseudo, seule donnée publique d'un compte.
+-- Phase d'une campagne ouverte : pas de fin d'inscription distincte, inscription et dépôt sont ouverts ensemble (SPECS § 3).
+create view public.campagne_phase with (security_invoker = false) as
+select c.id, c.slug, c.titre, c.theme, c.brief, c.langages, c.visibilite, c.role_boss, c.max_participants,
+  c.ouverture_inscriptions, c.cloture_depot, c.date_resultats, c.statut,
+  case
+    when c.statut <> 'ouverte' then c.statut
+    when now() < c.ouverture_inscriptions then 'a_venir'
+    when now() < c.cloture_depot then 'inscriptions'
+    else 'depots_clos'
+  end as phase,
+  b.pseudo as boss_pseudo
+from public.campagne c
+join public.compte b on b.id = c.boss_id
+where c.bloquee_le is null and c.statut not in ('brouillon', 'expiree')
+  and (c.visibilite = 'publique' or c.boss_id = (select auth.uid()));

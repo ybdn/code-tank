@@ -304,12 +304,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .plateau-mini .mascotte { width: 100%; max-width: 56px; height: auto; }
 .tdb__jury .note-claire { margin-top: 12px; }
 
-.frise { display: grid; gap: 8px; }
-.frise ol { list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; margin: 0; padding: 0; max-width: 18rem; }
-.frise li { height: 10px; background: var(--line); }
-.frise li[data-etat="fait"] { background: var(--muted); }
-.frise li[data-etat="courant"] { background: var(--accent); }
-.frise p { margin: 0; font: 700 .85rem var(--font-display); color: var(--accent); }
 .jauges { display: grid; gap: 12px; margin: 0; }
 .jauges div { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
 .jauges dt { color: var(--muted); font-size: .9rem; }
@@ -339,7 +333,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
   .console__onglets a { flex: none; }
 }
 
-/* Le site entier parle la langue du plateau : cases, invite de terminal, frises et jauges. */
+/* Le site entier parle la langue du plateau : cases, invite de terminal et jauges. */
 .carte, .etapes li, .podium li, .jure, .audit, .vide, .terminal, .place, .taches__vide { clip-path: var(--pixel); border-radius: 0; }
 .vide { border: 0; background: var(--trame), var(--surface); font-family: var(--font-display); font-size: .95rem; }
 @media (prefers-reduced-motion: no-preference) {
@@ -362,7 +356,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .carte h3 { margin: 0; }
 .carte h3 a { text-decoration: none; }
 .carte h3 a::after { content: ''; position: absolute; inset: 0; }
-.carte .frise { margin-top: 6px; }
 .carte__rebours { position: absolute; top: 18px; right: 18px; margin: 0 !important; padding: 2px 10px; background: var(--accent); color: var(--accent-ink); font: 700 .85rem var(--font-display); clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px)); }
 .carte:has(.carte__rebours) h3 { padding-right: 5rem; }
 .etapes li { background: var(--trame), var(--surface); }
@@ -376,13 +369,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .jures__nom { grid-area: nom; align-self: end; font: 700 1.05rem var(--font-display); }
 .jures__val { grid-area: val; color: var(--clair-muted); font: .85rem var(--font-display); }
 .jures p { grid-area: role; margin: 12px 0 0; color: var(--clair-muted); font-size: .95rem; }
-
-/* Frise publique : quatre étapes nommées sous leurs cases. */
-.frise[data-publique] ol { max-width: 30rem; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.frise[data-publique] li { height: auto; padding-top: 10px; background: none; border-top: 8px solid var(--line); font: .75rem var(--font-display); color: var(--muted); }
-.frise[data-publique] li[data-etat="fait"] { border-top-color: var(--muted); }
-.frise[data-publique] li[data-etat="courant"] { border-top-color: var(--accent); color: var(--ink); font-weight: 700; }
-.section--clair .frise[data-publique] li { color: var(--clair-muted); }
 
 /* Invite et fenêtre de terminal (hors administration aussi). */
 .terminal { background: #111214; border: 0; }
@@ -438,9 +424,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .podium .jauge { margin-top: 8px; }
 .criteres--notes li { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; }
 @media (max-width: 60rem) { .place { order: -1; position: static; } }
-@media (max-width: 30rem) { .frise[data-publique] li { font-size: .68rem; } }
-/* Sous 25rem, « Inscriptions » et « Délibération » ne tiennent plus dans leur case (ou s'y touchent) : seule l'étape en cours garde son nom. */
-@media (max-width: 25rem) { .frise[data-publique] li span { white-space: nowrap; } .frise[data-publique] li:not([data-etat="courant"]) span { visibility: hidden; } }
 h1 + .parcours { margin-top: 2rem; }
 
 /* Détails relevés en parcourant le site de bout en bout. */

@@ -38,7 +38,12 @@ pnpm build
   `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne (avec `compte_actif`, qui dit à la page si elle propose les actions), son réglage (`modifier_campagne`, brouillon ou ouverte, règles
   non figées) et la suppression du brouillon (`supprimer_brouillon`), toutes avec le JWT de l'appelant. Tout autre compte
   que le Boss, visiteur compris : **404** ; corps non JSON (`POST`, `PATCH`, `DELETE`) : **415** ; règle métier : **409**.
+  `POST /api/boss/[slug]/ouverture` : ouvre le brouillon par `ouvrir_campagne` (mêmes **404**, **415** et **409**).
   Correspondance des erreurs (`CT404` → 404, `P0001` → 409) : `server/utils/campagne.ts`. Pages : `/boss`, `/boss/[slug]`.
+- `GET /api/campagnes` : campagnes publiques ouvertes de la vue `campagne_phase`, lues en anonyme (accueil). `GET
+  /api/campagnes/[slug]` : une campagne de la vue, lue avec la session si elle existe (le Boss voit sa campagne sur
+  invitation), sinon en anonyme, avec les critères et poids de `critere` ; hors de la vue (brouillon, invitation d'un
+  autre, bloquée, expirée) ou slug hors forme : **404**. Pages : `/`, `/campagnes/[slug]`.
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -110,15 +115,20 @@ Trois migrations datées du même jour (AD-13) :
   `regler_mode_acces` (garde `est_admin()`, trois modes) ; `changer_pseudo` (compte de l'appelant, `en_attente` seulement) ;
   gardes `est_boss(campagne)` et `campagne_vivante(campagne)` (non bloquée, échéance non passée) ; déclencheur
   `garder_transition` (graphe d'AD-2, quel que soit l'écrivain) ; `creer_campagne` (slug tiré du titre),
-  `modifier_campagne` et `supprimer_brouillon`, qui prennent d'abord la ligne `for update`, puis la garde `campagne_vivante`.
+  `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` (brouillon dont la clôture des dépôts est à venir), qui
+  prennent d'abord la ligne `for update`, puis la garde `campagne_vivante` ; vue `campagne_phase` (`security_invoker =
+  false`) : ce que le public voit d'une campagne, phase déduite de `now()` et des dates (`a_venir`, `inscriptions` où
+  inscription et dépôt sont ouverts ensemble, `depots_clos` ; hors `ouverte`, le statut), ni brouillon, ni expirée, ni
+  bloquée, et publique ou dont l'appelant est le Boss.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
   `est_admin()`), sans droit du rôle de service ; `critere` en lecture seule pour tous,
   rôle de service compris,
   remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, sans droit du rôle de service ;
-  `creer_campagne`, `modifier_campagne` et `supprimer_brouillon` exécutables par `authenticated` seul (leurs règles vivent
-  dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun client.
+  `creer_campagne`, `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` exécutables par `authenticated` seul
+  (leurs règles vivent dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun
+  client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service.
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux
