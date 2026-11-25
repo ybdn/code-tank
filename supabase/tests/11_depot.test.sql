@@ -5,15 +5,15 @@
 -- Les objets du bucket et les lignes depot (écrites par prive, story 3.4) sont posés en superutilisateur.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(85);
+select plan(100);
 
 insert into auth.users (id, email)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
-from unnest(array['a1', 'a2', 'a3', 'e1', 'c5', 'ad', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
+from unnest(array['a1', 'a2', 'a3', 'e1', 'c5', 'ad', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'ba']) h;
 insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, '91' || h, 'depot_' || h, now(), '2026-11-25', now(),
   case h when 'e1' then 'en_attente' when 'c5' then 'suspendu' else 'actif' end
-from unnest(array['a1', 'a2', 'a3', 'e1', 'c5', 'ad', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
+from unnest(array['a1', 'a2', 'a3', 'e1', 'c5', 'ad', 'b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8', 'b9', 'ba']) h;
 update public.compte set role = 'admin' where id = '91000000-0000-4000-8000-0000000000ad';
 
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
@@ -28,6 +28,22 @@ from (values
 update public.campagne set statut = 'ouverte' where slug like 'dd%';
 update public.campagne set statut = 'deliberation' where slug = 'dddelib';
 select set_config('t.d_' || substr(slug, 3), id::text, true) from public.campagne where slug like 'dd%';
+-- Hors droits ou échues (CA6, AD-1) : sur invitation (A1 n'en est ni le Boss ni un inscrit), bloquée, brouillon, expirée ;
+-- échue (date_resultats passée, now() pour le « passé » seulement), les autres à dates fixes en 2090.
+insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
+  ouverture_inscriptions, cloture_depot, date_resultats, jeton_invitation)
+select s, ('91000000-0000-4000-8000-0000000000' || b)::uuid, 'Titre ' || s, 'Thème', 'Brief', array['Go'], v, 'juge', 5, o, c, d,
+  case v when 'invitation' then encode(extensions.gen_random_bytes(32), 'hex') end
+from (values
+  ('xxinv', 'b6', 'invitation', timestamptz '2090-06-01 09:00 Europe/Paris', timestamptz '2090-06-10 09:00 Europe/Paris', timestamptz '2090-06-20 09:00 Europe/Paris'),
+  ('xxbloq', 'b7', 'publique', timestamptz '2090-06-01 09:00 Europe/Paris', timestamptz '2090-06-10 09:00 Europe/Paris', timestamptz '2090-06-20 09:00 Europe/Paris'),
+  ('xxbrou', 'b8', 'publique', timestamptz '2090-06-01 09:00 Europe/Paris', timestamptz '2090-06-10 09:00 Europe/Paris', timestamptz '2090-06-20 09:00 Europe/Paris'),
+  ('xxexp', 'b9', 'publique', timestamptz '2090-06-01 09:00 Europe/Paris', timestamptz '2090-06-10 09:00 Europe/Paris', timestamptz '2090-06-20 09:00 Europe/Paris'),
+  ('xxechue', 'ba', 'publique', now() - interval '3 days', now() - interval '2 days', now() - interval '1 day')) x(s, b, v, o, c, d);
+update public.campagne set statut = 'ouverte' where slug in ('xxinv', 'xxbloq', 'xxechue');
+update public.campagne set bloquee_le = now(), motif_blocage = 'Essai' where slug = 'xxbloq';
+update public.campagne set statut = 'expiree' where slug = 'xxexp';
+select set_config('t.x_' || substr(slug, 3), id::text, true) from public.campagne where slug like 'xx%';
 
 -- Participations : A1 et A2 à d-pub, A1 aux autres campagnes, le Boss joueur à la sienne.
 insert into public.participation (id, campagne_id, compte_id, connaissance_envoi_le) values
@@ -137,6 +153,15 @@ select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000b1","role":"authenticated"}';
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Tu juges cette campagne : tu n''y déposes pas.', 'Boss juge : refus');
 select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Tu juges cette campagne : tu n''y déposes pas.', 'peut_deposer : mêmes gardes');
+-- Les trois RPC sur les campagnes hors droits (404) et échue (409), code et message exacts.
+set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000a1","role":"authenticated"}';
+select throws_ok(format('select public.%s(%L::uuid%s)', f, current_setting('t.x_' || c), a), 'CT404', 'Campagne introuvable.', f || ' : campagne ' || c || ', introuvable')
+from unnest(array['inv', 'bloq', 'brou', 'exp']) c,
+  (values ('peut_deposer', ''), ('deposer', ', ''x'', ''x'', null, true'), ('retirer_depot', '')) r(f, a);
+select throws_ok(format('select public.%s(%L::uuid%s)', f, current_setting('t.x_echue'), a), 'P0001', m, f || ' : campagne échue, refus')
+from (values ('peut_deposer', '', 'Cette campagne est échue : on n''y dépose plus.'),
+  ('deposer', ', ''x'', ''x'', null, true', 'Cette campagne est échue : on n''y dépose plus.'),
+  ('retirer_depot', '', 'Cette campagne est échue : on n''y retire plus de dépôt.')) r(f, a, m);
 reset role;
 select results_eq($$select (select count(*) from public.reception), (select count(*) from public.depot), (select regles_figees_le from public.campagne where slug = 'ddpub')$$,
   $$values (0::bigint, 0::bigint, null::timestamptz)$$, 'aucun refus n''a écrit de réception ni de dépôt, ni figé les règles');

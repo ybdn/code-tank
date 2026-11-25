@@ -127,10 +127,10 @@ describe('dépôt', () => {
     expect(campagneId).toBe(ligne(`select id from public.campagne where slug = '${juge.slug}'`))
     expect(participationId).toBe(ligne(`select p.id from public.participation p where p.compte_id = '${a.u.id}'`))
     expect(fichier).toMatch(/^[0-9a-f-]{36}\.zip$/)
-    // Le bucket refuse un autre type qu'un zip, et un second envoi au même chemin.
-    expect(await televerser(url.json.chemin!, url.json.jeton!, Buffer.from('bonjour'), 'text/plain')).toBeGreaterThanOrEqual(400)
+    // Le bucket refuse un autre type qu'un zip, et un second envoi au même chemin (400 tous deux ; le corps du doublon dit 409, KeyAlreadyExists).
+    expect(await televerser(url.json.chemin!, url.json.jeton!, Buffer.from('bonjour'), 'text/plain')).toBe(400)
     expect(await televerser(url.json.chemin!, url.json.jeton!)).toBe(200)
-    expect(await televerser(url.json.chemin!, url.json.jeton!)).toBeGreaterThanOrEqual(400)
+    expect(await televerser(url.json.chemin!, url.json.jeton!)).toBe(400)
 
     const avant = appelsJury.length
     const corps = { chemin: url.json.chemin, presentation: '  Un minuteur en Go.  ', demande: 'Je vise 8/10', droit: true }

@@ -62,7 +62,7 @@ pnpm build
   est refusée (**409**) tant qu'il y a un dépôt ou une réception en attente.
 - Dépôt (story 3.3), avec le JWT de l'appelant, corps JSON (**415** sinon), session (**401**), slug dans `campagne_phase`
   (**404**) : `POST /api/campagnes/[slug]/depot/url` vérifie par `peut_deposer` qu'il peut déposer (mêmes gardes que
-  `deposer`, **409**), passe la limite de 20 envois par compte et par 24 h (**429**), construit le chemin
+  `deposer`, sauf la limite de dépôts, contrôlée par `deposer` ; **409**), passe la limite de 20 envois par compte et par 24 h (**429**), construit le chemin
   `<campagne_id>/<participation_id>/<uuid>.zip` et le signe avec la clé de service (`{ chemin, jeton }`) : le zip part
   directement au bucket privé `depots`. `POST /api/campagnes/[slug]/depot` (corps `{ chemin, presentation, demande, droit }`) :
   `deposer` crée la réception `en_attente`, puis `appelerJury` sans attendre ; règle métier : **409**, limite de 10 dépôts

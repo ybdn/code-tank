@@ -2,8 +2,9 @@ import { createHash, randomUUID } from 'node:crypto'
 import { serverSupabaseServiceRole } from '#supabase/server'
 
 // URL d'envoi signée (story 3.3) : le zip va directement au bucket privé depots, il ne passe pas par le site (l'hébergeur
-// plafonne le corps d'une requête vers 4,5 Mo). peut_deposer, avec le JWT de l'appelant, tient les mêmes gardes que deposer et
-// rend sa participation ; le chemin est construit ici, jamais reçu. Le jeton vaut pour ce seul chemin, 2 heures (Supabase).
+// plafonne le corps d'une requête vers 4,5 Mo). peut_deposer, avec le JWT de l'appelant, tient les mêmes gardes que deposer,
+// sauf la limite de dépôts (contrôlée par deposer), et rend sa participation ; le chemin est construit ici, jamais reçu. Le
+// jeton vaut pour ce seul chemin, 2 heures (Supabase).
 export default defineEventHandler(async (event) => {
   const { client, user, id } = await campagneDeLInscrit(event)
   const { data: participation, error } = await client.rpc('peut_deposer', { p_campagne: id })

@@ -656,8 +656,8 @@ language plpgsql security definer set search_path = ''
 as $$
 declare
   v_participation uuid;
-  v_presentation text := btrim(p_presentation, E' \t\r\n ');
-  v_demande text := nullif(btrim(p_demande, E' \t\r\n '), '');
+  v_presentation text := btrim(p_presentation, E' \t\r\n\u00a0');
+  v_demande text := nullif(btrim(p_demande, E' \t\r\n\u00a0'), '');
 begin
   perform 1 from public.campagne where id = p_campagne for update;
   v_participation := public.peut_deposer(p_campagne);
