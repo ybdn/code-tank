@@ -7,7 +7,7 @@ export const LIBELLE_PHASE: Record<string, string> = {
 // Une ligne de la vue campagne_phase, et un critère du jury lu dans critere (AD-8).
 export type CampagnePublique = {
   slug: string; titre: string; theme: string; brief: string; langages: string[]
-  visibilite: 'publique' | 'invitation'; role_boss: 'juge' | 'joueur'; max_participants: number
+  visibilite: 'publique' | 'invitation'; role_boss: 'juge' | 'joueur'; max_participants: number; places_restantes: number
   ouverture_inscriptions: string; cloture_depot: string; date_resultats: string; statut: string; phase: string; boss_pseudo: string
 }
 export type Critere = { cle: string; libelle: string; jure: string; poids: number; calcule: boolean }

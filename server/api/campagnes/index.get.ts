@@ -2,5 +2,5 @@
 // brouillons, invitations, bloquées et expirées. Clôture des dépôts la plus proche d'abord.
 // shortcut: pas de pagination, 50 campagnes au plus ; à revoir quand l'accueil en compte davantage.
 export default defineEventHandler((event) =>
-  lirePublic<{ slug: string; titre: string; theme: string; phase: string; max_participants: number }[]>(event,
-    'campagne_phase?select=slug,titre,theme,phase,max_participants&visibilite=eq.publique&statut=eq.ouverte&phase=neq.depots_clos&order=cloture_depot.asc&limit=50'))
+  lirePublic<{ slug: string; titre: string; theme: string; phase: string; max_participants: number; places_restantes: number }[]>(event,
+    'campagne_phase?select=slug,titre,theme,phase,max_participants,places_restantes&visibilite=eq.publique&statut=eq.ouverte&phase=neq.depots_clos&order=cloture_depot.asc&limit=50'))

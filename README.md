@@ -43,7 +43,13 @@ pnpm build
 - `GET /api/campagnes` : campagnes publiques ouvertes de la vue `campagne_phase`, lues en anonyme (accueil). `GET
   /api/campagnes/[slug]` : une campagne de la vue, lue avec la session si elle existe (le Boss voit sa campagne sur
   invitation), sinon en anonyme, avec les critères et poids de `critere` ; hors de la vue (brouillon, invitation d'un
-  autre, bloquée, expirée) ou slug hors forme : **404**. Pages : `/`, `/campagnes/[slug]`.
+  autre, bloquée, expirée) ou slug hors forme : **404**. Avec une session, la page reçoit aussi `connecte`, `compte_actif`,
+  `est_boss` et `inscrit` (lus sous RLS) ; les deux routes renvoient `places_restantes`. Pages : `/`, `/campagnes/[slug]`.
+- `POST /api/campagnes/[slug]/inscription` (corps `{ connaissance: boolean }`, la case de prise de connaissance de l'envoi à
+  Anthropic) et `DELETE /api/campagnes/[slug]/inscription` : inscription par `sinscrire` et désinscription par
+  `se_desinscrire`, avec le JWT de l'appelant. Corps non JSON : **415** ; sans session : **401** ; slug hors forme ou
+  campagne hors de `campagne_phase` : **404** ; règle métier (complet, hors phase, Boss juge, case non cochée…) : **409** ;
+  limite de débit par compte (20 inscriptions par 24 h, tenue dans `sinscrire`, `CT429`) : **429**.
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -106,7 +112,8 @@ Trois migrations datées du même jour (AD-13) :
   ensuite par `postgres`, et retrait de l'`EXECUTE` implicite de `PUBLIC` ; tables `debit` (limite
   de débit), `verrou` (bail global du jury), `critere` (critères et poids du jury, seule source), `reglage` (ligne unique,
   `mode_acces`), `compte` (né de GitHub, pseudo unique sans tenir compte de la casse, figé une fois le compte actif) et
-  `campagne` (statut = actes d'AD-2, bornes de dates et 10 places par contraintes, une campagne active par Boss par index
+  `participation` (une ligne par compte et par campagne, `inscrit` ou `retire`, prise de connaissance datée ; `compte_id`
+  nul si le compte est supprimé) et `campagne` (statut = actes d'AD-2, bornes de dates et 10 places par contraintes, une campagne active par Boss par index
   unique partiel, `bloquee_le` et `motif_blocage` posés par la seule modération).
 - `…_fonctions.sql` : `consommer_debit` (compte, refuse ou enregistre en une transaction, verrou consultatif par empreinte et
   action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou` ;
@@ -119,7 +126,10 @@ Trois migrations datées du même jour (AD-13) :
   prennent d'abord la ligne `for update`, puis la garde `campagne_vivante` ; vue `campagne_phase` (`security_invoker =
   false`) : ce que le public voit d'une campagne, phase déduite de `now()` et des dates (`a_venir`, `inscriptions` où
   inscription et dépôt sont ouverts ensemble, `depots_clos` ; hors `ouverte`, le statut), ni brouillon, ni expirée, ni
-  bloquée, et publique ou dont l'appelant est le Boss.
+  bloquée, et publique ou dont l'appelant est le Boss, avec `places_restantes` calculées ; `sinscrire` (campagne publique
+  en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
+  `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`) ;
+  `modifier_campagne` refuse moins de places que d'inscrits et un Boss inscrit qui deviendrait juge.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
@@ -128,7 +138,9 @@ Trois migrations datées du même jour (AD-13) :
   remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, sans droit du rôle de service ;
   `creer_campagne`, `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` exécutables par `authenticated` seul
   (leurs règles vivent dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun
-  client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service.
+  client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service ; `participation`
+  lisible par son compte seul (RLS), sans écriture directe ni droit du rôle de service ; `sinscrire` et `se_desinscrire`
+  exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions).
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux

@@ -72,7 +72,7 @@ afterAll(async () => {
 describe('campagne publique', () => {
   it('l\'accueil liste la campagne publique ouverte, ni l\'invitation ni le brouillon', async () => {
     const liste = (await lire('/api/campagnes')).json as { slug: string }[]
-    expect(liste).toContainEqual({ slug: pub.slug, titre: pub.titre, theme: 'Un minuteur', phase: 'a_venir', max_participants: 5 })
+    expect(liste).toContainEqual({ slug: pub.slug, titre: pub.titre, theme: 'Un minuteur', phase: 'a_venir', max_participants: 5, places_restantes: 5 })
     expect(liste.map((c) => c.slug)).not.toContain(inv.slug)
     expect(liste.map((c) => c.slug)).not.toContain(brouillon.slug)
     // On ne liste que les campagnes où l'on peut encore entrer, clôture des dépôts la plus proche d'abord.
