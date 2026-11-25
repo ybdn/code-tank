@@ -5,7 +5,7 @@
 -- Les objets du bucket et les lignes depot (écrites par prive, story 3.4) sont posés en superutilisateur.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(83);
+select plan(84);
 
 insert into auth.users (id, email)
 select ('91000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org'
@@ -132,13 +132,14 @@ select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)
 -- Admin : aucun passe-droit, il n'est pas inscrit.
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000ad","role":"authenticated"}';
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Tu n''es pas inscrit à cette campagne.', 'admin non inscrit : deposer refuse');
+select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Tu n''es pas inscrit à cette campagne.', 'admin non inscrit : peut_deposer refuse');
 select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, 'CT404', 'Tu n''as pas de dépôt dans cette campagne.', 'admin : retirer_depot sans dépôt');
 set local request.jwt.claims = '{"sub":"91000000-0000-4000-8000-0000000000b1","role":"authenticated"}';
 select throws_ok($$select public.deposer(current_setting('t.d_pub')::uuid, current_setting('t.c1'), 'x', null, true)$$, 'P0001', 'Tu juges cette campagne : tu n''y déposes pas.', 'Boss juge : refus');
 select throws_ok($$select public.peut_deposer(current_setting('t.d_pub')::uuid)$$, 'P0001', 'Tu juges cette campagne : tu n''y déposes pas.', 'peut_deposer : mêmes gardes');
 reset role;
-select results_eq($$select (select count(*) from public.reception), (select regles_figees_le from public.campagne where slug = 'ddpub')$$,
-  $$values (0::bigint, null::timestamptz)$$, 'aucun refus n''a écrit de réception ni figé les règles');
+select results_eq($$select (select count(*) from public.reception), (select count(*) from public.depot), (select regles_figees_le from public.campagne where slug = 'ddpub')$$,
+  $$values (0::bigint, 0::bigint, null::timestamptz)$$, 'aucun refus n''a écrit de réception ni de dépôt, ni figé les règles');
 
 -- Dépôt ----------------------------------------------------------------------------------------------------------------
 set local role authenticated;

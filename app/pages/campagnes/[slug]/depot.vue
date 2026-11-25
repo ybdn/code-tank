@@ -55,6 +55,16 @@ async function actualiser() {
   }
 }
 
+// « Actualiser » : annonce seulement si la relecture a réussi (sinon la phrase d'échec et son bouton restent).
+async function relire() {
+  if (occupe.value) return
+  occupe.value = true
+  annonce.value = ''
+  await actualiser()
+  if (!nonActualisee.value) annonce.value = 'État actualisé.'
+  occupe.value = false
+}
+
 // Action terminée : annonce lue par la zone role="status", focus sur le titre de l'état. Refus : alerte et focus dessus ;
 // une règle a pu changer entre-temps (409) : la page se remet à jour sans démonter le formulaire.
 async function agir(action: () => Promise<void>, fait: string) {
@@ -113,7 +123,7 @@ async function demanderRetrait(v: boolean) {
 
         <h2 ref="titreEtat" tabindex="-1">État</h2>
         <p role="status" aria-live="polite">{{ annonce }}</p>
-        <p v-if="nonActualisee">La page n'a pas pu être actualisée. <button class="btn" type="button" :aria-disabled="occupe" @click="agir(async () => {}, '')">Actualiser</button></p>
+        <p v-if="nonActualisee">La page n'a pas pu être actualisée. <button class="btn" type="button" :aria-disabled="occupe" @click="relire">Actualiser</button></p>
         <div ref="zoneAlerte" tabindex="-1">
           <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
         </div>
@@ -122,7 +132,7 @@ async function demanderRetrait(v: boolean) {
           <!-- Le contrôle se termine sans que la page le sache : « Actualiser » relit l'état. -->
           <p v-if="data.reception.statut === 'en_attente'">
             Contrôle en cours de ton archive envoyée le {{ dateParis(data.reception.cree_le) }}.
-            <button class="btn" type="button" :aria-disabled="occupe" @click="agir(async () => {}, 'État actualisé.')">Actualiser</button>
+            <button class="btn" type="button" :aria-disabled="occupe" @click="relire">Actualiser</button>
           </p>
           <template v-else>
             <p>Ton archive envoyée le {{ dateParis(data.reception.cree_le) }} a été refusée. Corrige ce qui suit, puis redépose.</p>
