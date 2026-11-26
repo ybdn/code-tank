@@ -98,7 +98,8 @@ export async function campagneDeLInscrit(event: H3Event, recu?: unknown) {
 // seule source (AD-8). Avec une session, ce qu'il faut à la page pour ne proposer que l'action que la base acceptera
 // (story 2.3) : compte actif, Boss de la campagne (pseudo unique sans tenir compte de la casse), inscrit, et sa réception et
 // son dépôt (story 3.3) ; lus sous RLS (chacun ne lit que son compte, ses participations et leurs dépôts).
-export async function pageCampagne(event: H3Event, client: Awaited<ReturnType<typeof utilisateurVerifie>>['client'], userId: string | undefined, lecture: PromiseLike<(CampagnePublique & { id: string }) | null>) {
+// `exclus` : la liste des fichiers exclus du dépôt (jusqu'à 2 000), lue pour la seule page de dépôt, pas pour la fiche.
+export async function pageCampagne(event: H3Event, client: Awaited<ReturnType<typeof utilisateurVerifie>>['client'], userId: string | undefined, lecture: PromiseLike<(CampagnePublique & { id: string }) | null>, exclus = false) {
   const [campagne, criteres] = await Promise.all([
     lecture,
     lirePublic<Critere[]>(event, 'critere?select=cle,libelle,jure,poids,calcule&order=jure.asc,poids.desc'),
@@ -122,10 +123,10 @@ export async function pageCampagne(event: H3Event, client: Awaited<ReturnType<ty
     if (participation.data) {
       const [reception, depot] = await Promise.all([
         client.from('reception').select('statut, motifs, presentation, demande, cree_le').eq('participation_id', participation.data.id).maybeSingle(),
-        client.from('depot').select('presentation, demande, depose_le, sha256, nb_fichiers, fichiers_exclus, nb_tokens_estime').eq('participation_id', participation.data.id).maybeSingle(),
+        client.from('depot').select(`presentation, demande, depose_le, sha256, nb_fichiers, nb_tokens_estime${exclus ? ', fichiers_exclus' : ''}`).eq('participation_id', participation.data.id).maybeSingle(),
       ])
       if (reception.error || depot.error) erreurCampagne((reception.error ?? depot.error)!, 'Lecture du dépôt :', 'La campagne ne peut pas être lue pour le moment.')
-      return { ...publique, criteres, ...moi, reception: reception.data as ReceptionLue | null, depot: depot.data }
+      return { ...publique, criteres, ...moi, reception: reception.data as ReceptionLue | null, depot: depot.data as DepotLu | null }
     }
   }
   return { ...publique, criteres, ...moi, reception: null as ReceptionLue | null, depot: null as DepotLu | null }

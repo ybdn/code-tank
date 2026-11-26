@@ -4,7 +4,9 @@
 export type ReceptionLue = { statut: 'en_attente' | 'refusee'; motifs: { code: string; message: string }[] | null; presentation: string; demande: string | null; cree_le: string }
 export type DepotLu = {
   presentation: string; demande: string | null; depose_le: string
-  sha256: string; nb_fichiers: number; fichiers_exclus: { chemin: string; raison: string }[]; nb_tokens_estime: number
+  sha256: string; nb_fichiers: number; nb_tokens_estime: number
+  /** Lue seulement par la page de dépôt (`?exclus=1`). */
+  fichiers_exclus?: { chemin: string; raison: string }[]
 }
 
 // Raisons d'exclusion posées par prive (depot-controles, raisonExclusion), en mots pour la page de dépôt.

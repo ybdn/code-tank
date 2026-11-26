@@ -273,8 +273,12 @@ describe('dépôt', () => {
       alerte_manipulation, alertes_integrite, presentation, droit_declare_le)
       values ('${p}', '${zip}', '${sha}', 12, '[{"chemin": "assets/logo.png", "raison": "image"}, {"chemin": "package-lock.json", "raison": "verrouillage"}]',
         1200, '{"secret_des_faits": 1}', 7, true, '[{"type": "alerte-integrite-secrete", "fichier": "a.ts"}]', 'Mon minuteur.', now())`)
-    const json = JSON.stringify((await lire(`/api/campagnes/${juge.slug}`, a.cookie)).json)
-    expect(json).toContain(sha)
+    // La fiche ne transporte pas la liste des exclus ; la page de dépôt la demande (?exclus=1).
+    const fiche = (await lire(`/api/campagnes/${juge.slug}`, a.cookie)).json as { depot: Record<string, unknown> }
+    expect(fiche.depot).toMatchObject({ sha256: sha, nb_fichiers: 12, nb_tokens_estime: 1200 })
+    expect(fiche.depot).not.toHaveProperty('fichiers_exclus')
+    const json = JSON.stringify((await lire(`/api/campagnes/${juge.slug}?exclus=1`, a.cookie)).json)
+    expect(json).toContain('"fichiers_exclus":[{"chemin":"assets/logo.png","raison":"image"}')
     page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
     expect(page).toMatch(/<dt>Fichiers retenus<\/dt>\s*<dd>12<\/dd>/)
     expect(page).toContain('assets/logo.png (image)')

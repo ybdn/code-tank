@@ -3,8 +3,9 @@
 // l'action que deposer ou retirer_depot accepteront, sinon une phrase qui dit pourquoi ; la base revérifie tout.
 const slug = useRoute().params.slug as string
 const url = `/api/campagnes/${encodeURIComponent(slug)}`
-type Page = CampagnePublique & { connecte: boolean; compte_actif: boolean; est_boss: boolean; inscrit: boolean; reception: ReceptionLue | null; depot: DepotLu | null }
-const { data, error } = await useFetch<Page>(url)
+type Page = CampagnePublique & { connecte: boolean; compte_actif: boolean; est_boss: boolean; inscrit: boolean; reception: ReceptionLue | null; depot: (DepotLu & Required<Pick<DepotLu, 'fichiers_exclus'>>) | null }
+const lecture = `${url}?exclus=1` // avec la liste des fichiers exclus du dépôt
+const { data, error } = await useFetch<Page>(lecture)
 if (error.value?.statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Page introuvable', fatal: true })
 useHead({ title: () => `Dépôt · ${data.value?.titre ?? 'Campagne'}` })
 
@@ -49,7 +50,7 @@ const boutonRetrait = useTemplateRef<HTMLButtonElement>('boutonRetrait')
 // Relit la page sans toucher à ce qui est affiché en cas d'échec : une phrase et un bouton « Actualiser » le disent.
 async function actualiser() {
   try {
-    data.value = await $fetch<Page>(url)
+    data.value = await $fetch<Page>(lecture)
     nonActualisee.value = false
   } catch {
     nonActualisee.value = true
