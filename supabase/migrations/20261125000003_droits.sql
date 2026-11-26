@@ -186,3 +186,11 @@ grant execute on function public.cloturer_deliberation(uuid, boolean), public.te
   public.cloturer_cles_expirees() to service_role;
 revoke all on function public.effacer_cle_sortie(), public.audits_termines(uuid), public.abandonner_audits(uuid)
   from public, anon, authenticated, service_role;
+
+-- Suivi et e-mail de fin (story 4.7, AD-12) : progression_deliberation, le Boss de la campagne seul (garde dans la fonction,
+-- authenticated) ; reserver_envoi et fins_a_prevenir, rôle de service seul, jamais authenticated (PostgREST les exposerait :
+-- n'importe quel compte poserait la marque d'une autre campagne et l'e-mail serait perdu).
+revoke all on function public.progression_deliberation(uuid) from public, anon, service_role;
+grant execute on function public.progression_deliberation(uuid) to authenticated;
+revoke all on function public.reserver_envoi(uuid), public.fins_a_prevenir() from public, anon, authenticated;
+grant execute on function public.reserver_envoi(uuid), public.fins_a_prevenir() to service_role;

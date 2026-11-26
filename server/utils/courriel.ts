@@ -26,3 +26,13 @@ export async function envoyerCourriel(config: Config, to: string, sujet: string,
   if (!config.smtp.host) throw new Error('NUXT_SMTP_HOST manquante.')
   await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}\n\nCode Tank by ybdn.io` })
 }
+
+// E-mail « délibération terminée » au Boss (story 4.7, AD-12, SPECS § 11) : objet et texte. Le titre est un texte reçu : sans
+// retour à la ligne (un en-tête Subject n'en porte pas). Lien direct vers l'espace du Boss, sans aucun paramètre de pistage.
+export function courrielFin(siteUrl: string, slug: string, titre: string) {
+  const t = titre.replace(/[\r\n\u0085\u2028\u2029]+/g, ' ').trim()
+  return {
+    sujet: `Code Tank — ${t} : la délibération est terminée`,
+    texte: `Le jury a fini de délibérer sur ta campagne « ${t} ». Relis les répliques, puis publie les résultats :\n${siteUrl}/boss/${slug}`,
+  }
+}

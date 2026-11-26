@@ -15,7 +15,7 @@ export function erreurCampagne(error: { code: string; message: string }, context
   throw createError({ statusCode: 500, message })
 }
 
-export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le, jeton_invitation, plafond_usd, lancements, cle_fin'
+export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le, jeton_invitation, plafond_usd, lancements, cle_fin, fin_prevenue_le'
 
 // Un slug hors de la forme imposée par la table (caractère nul, UTF-8 invalide…) ne peut désigner aucune campagne : 404
 // tout de suite, plutôt qu'une erreur de la base en 500.

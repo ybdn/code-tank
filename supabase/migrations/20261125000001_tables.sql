@@ -93,6 +93,9 @@ create table public.campagne (
   plafond_usd numeric check (plafond_usd > 0 and plafond_usd <= 10000),
   lancements integer not null default 0 check (lancements between 0 and 3),
   cle_fin text check (cle_fin ~ '^.{4}$'),
+  -- E-mail « délibération terminée » au Boss (story 4.7, AD-12) : posé par reserver_envoi seule, avant l'envoi ; null tant que
+  -- le Boss n'est pas prévenu.
+  fin_prevenue_le timestamptz,
   constraint campagne_dates_ordre check (ouverture_inscriptions < cloture_depot and cloture_depot < date_resultats),
   -- Jours comptés à l'heure de Paris, comme le formulaire, quel que soit le fuseau de la session (UTC sous PostgREST) :
   -- 30 jours qui traversent le passage à l'heure d'hiver ne deviennent pas 30 jours et 1 heure.
