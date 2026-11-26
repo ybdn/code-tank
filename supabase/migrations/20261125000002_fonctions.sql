@@ -851,6 +851,7 @@ declare
   c_tokens_sortie constant numeric := 15000;      -- par juré, réflexion comprise
   c_facteur_lots constant numeric := 0.5;         -- Batches : moitié prix
 begin
+  -- current_user vaut le propriétaire sous security definer : le rôle posé par PostgREST (set local role) se lit dans 'role'.
   if current_setting('role') <> 'service_role' and not public.est_boss(p_campagne) then
     raise exception 'Campagne introuvable.' using errcode = '42501';
   end if;

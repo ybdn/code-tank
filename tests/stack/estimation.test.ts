@@ -86,6 +86,52 @@ describe('GET /api/boss/[slug]/estimation', () => {
     expect(await lire(`/api/boss/${slug}/estimation`, boss.cookie)).toEqual({ statut: 200, json: { disponible: true, pire_cas_usd: 2.2 } })
   })
 
+  it('pas encore : aucun dépôt à auditer (tous trop gros)', async () => {
+    sql(`update public.depot set trop_gros = true where participation_id = '${participation}'`)
+    try {
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: false, raison: 'Aucun dépôt à auditer.' })
+    } finally {
+      sql(`update public.depot set trop_gros = false where participation_id = '${participation}'`)
+    }
+  })
+
+  it('pas encore : campagne bloquée', async () => {
+    sql(`update public.campagne set bloquee_le = now(), motif_blocage = 'Essai' where id = '${campagneId}'`)
+    try {
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: false, raison: 'La campagne est bloquée.' })
+    } finally {
+      sql(`update public.campagne set bloquee_le = null, motif_blocage = null where id = '${campagneId}'`)
+    }
+  })
+
+  it('pas encore : date des résultats passée', async () => {
+    sql(`update public.campagne set ouverture_inscriptions = now() - interval '3 days', cloture_depot = now() - interval '2 days',
+      date_resultats = now() - interval '1 day' where id = '${campagneId}'`)
+    try {
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: false, raison: 'La date des résultats est passée.' })
+    } finally {
+      sql(`update public.campagne set cloture_depot = now() - interval '1 minute', date_resultats = now() + interval '5 days' where id = '${campagneId}'`)
+    }
+    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2 })
+  })
+
+  it('pas encore : campagne en brouillon', async () => {
+    const r = await envoyer('POST', '/api/boss', autre.cookie, {
+      titre: 'Brouillon ' + randomBytes(3).toString('hex'), theme: 'Un minuteur', brief: 'Écris un minuteur.', langages: ['Go'],
+      visibilite: 'publique', role_boss: 'juge', max_participants: 5,
+      ouverture_inscriptions: new Date(Date.now() + jour).toISOString(),
+      cloture_depot: new Date(Date.now() + 10 * jour).toISOString(),
+      date_resultats: new Date(Date.now() + 20 * jour).toISOString(),
+    })
+    expect(r.statut).toBe(200)
+    try {
+      expect((await lire(`/api/boss/${r.json.slug as string}/estimation`, autre.cookie)).json)
+        .toEqual({ disponible: false, raison: 'La délibération se lance quand la campagne est ouverte et ses dépôts clos.' })
+    } finally {
+      sql(`delete from public.campagne where slug = '${r.json.slug as string}'`)
+    }
+  })
+
   it('par /rest/v1/rpc, un autre compte est refusé en 42501', async () => {
     const r = await fetch(`${API}/rest/v1/rpc/estimer_pire_cas`, {
       method: 'POST',

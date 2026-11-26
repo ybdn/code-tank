@@ -165,6 +165,7 @@ create table public.depot (
 -- écrite par les fonctions de prive (story 4.4) ; aucune écriture directe. statut : a_envoyer, en_cours (lot envoyé, batch_id),
 -- termine (resultat, usage, cout_usd) ou echec (renvoyé au relancement, compté par estimer_pire_cas). replique_masquee : la
 -- réplique du juré n'est pas montrée (SPECS § 5). Lecture du Boss : stories 4.7 et epic 5.
+-- shortcut: la liste des jurés de jure est recopiée de critere.jure ; elle change avec elle (AD-8), dans la même PR.
 create table public.audit (
   id uuid primary key default gen_random_uuid(),
   depot_id uuid not null references public.depot on delete cascade,

@@ -19,5 +19,6 @@ export default defineEventHandler(async (event) => {
   if (count) return pasEncore('Un dépôt est encore en cours de contrôle.')
   const { data, error } = await client.rpc('estimer_pire_cas', { p_campagne: campagne.id })
   if (error) erreurCampagne(error, 'Estimation du pire cas :', 'L\'estimation ne peut pas être calculée pour le moment.')
+  if (!Number(data)) return pasEncore('Aucun dépôt à auditer.')
   return { disponible: true as const, pire_cas_usd: Number(data) }
 })
