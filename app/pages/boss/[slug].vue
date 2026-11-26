@@ -241,9 +241,9 @@ async function supprimer() {
             </form>
           </template>
         </template>
-        <template v-if="data.statut === 'deliberation' && !data.cle_fin && actif">
+        <template v-if="data.statut === 'deliberation' && !data.cle_fin && data.compte_actif && !data.bloquee_le">
           <h2>Terminer la délibération</h2>
-          <p>La clé est effacée{{ data.lancements < 3 ? ` : tu peux relancer avec une nouvelle clé (lancements restants\u00a0: ${3 - data.lancements}), seuls les audits manquants ou en échec repartent` : ' et les trois lancements sont consommés' }}. Sinon, termine&nbsp;: un dépôt dont un audit a échoué n'aura pas de score, il ne sera ni classé ni noté zéro.</p>
+          <p>La clé est effacée{{ estimation?.disponible && data.lancements < 3 ? ` : tu peux relancer avec une nouvelle clé (lancements restants\u00a0: ${3 - data.lancements}), seuls les audits manquants ou en échec repartent` : '' }}. Termine&nbsp;: un dépôt dont un audit a échoué n'aura pas de score, il ne sera ni classé ni noté zéro.</p>
           <p class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="terminer">Terminer la délibération</button></p>
         </template>
         <template v-if="data.statut === 'brouillon' && actif">

@@ -4,7 +4,7 @@
 -- Clés factices seulement. Boss B1 à B8 (une campagne chacun : X, Y, W, V, U, T, S, R), candidats sans compte.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(63);
+select plan(65);
 
 insert into auth.users (id, email)
 select ('96000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2', 'b3', 'b4', 'b5', 'b6', 'b7', 'b8']) h;
@@ -150,7 +150,7 @@ update public.campagne set bloquee_le = now(), motif_blocage = 'Test' where id =
 set local role service_role;
 select is(public.cloturer_deliberation(current_setting('t.w')::uuid), 'deliberation', 'campagne bloquée : pas prete');
 select throws_ok($$select public.terminer_deliberation('96000000-0000-4000-8000-0000000000b3', current_setting('t.w')::uuid)$$,
-  'P0001', 'Cette campagne est bloquée ou échue : la délibération ne se termine plus.', 'campagne bloquée : terminer refuse');
+  'P0001', 'Cette campagne est bloquée : la délibération ne se termine plus.', 'campagne bloquée : terminer refuse');
 reset role;
 select is((select count(*) from vault.secrets where name = 'cle_boss_' || current_setting('t.w')), 0::bigint, 'W : la clé est effacée quand même');
 
@@ -183,17 +183,27 @@ update public.audit set statut = 'en_cours', batch_id = 'lot' where depot_id = '
 update public.audit set statut = 'termine' where depot_id = '96000000-0000-4000-8000-0000000000d6' and jure <> 'sudo';
 set local role service_role;
 select throws_ok($$select public.cloturer_deliberation(current_setting('t.t')::uuid)$$, 'CT409', null, 'T : sans force, le lot en cours bloque');
-select is(public.cloturer_cles_expirees(), 1, 'le cron clôture la clé d''une campagne ouverte, pas celle de S (clé fraîche, délibération en cours)');
-select is(public.cloturer_cles_expirees(), 0, 'le cron rejoué : rien à faire');
-select is(public.cloturer_deliberation(current_setting('t.t')::uuid, true), 'deliberation', 'T forcée : un audit abandonné, la campagne attend le Boss');
+select is(public.cloturer_cles_expirees(), '{"cles_cloturees": 1, "echecs": 0}'::jsonb, 'le cron clôture la clé d''une campagne ouverte, pas celle de S (clé fraîche, délibération en cours)');
+select is(public.cloturer_cles_expirees(), '{"cles_cloturees": 0, "echecs": 0}'::jsonb, 'le cron rejoué : rien à faire');
+select is(public.cloturer_deliberation(current_setting('t.t')::uuid, true), 'deliberation', 'T forcée avec une clé de moins de 48 h : sans effet');
 reset role;
 select is(has_function_privilege('authenticated', 'public.cloturer_cles_expirees()', 'execute'), false, 'le cron n''est pas ouvert à authenticated');
-select is((select string_agg(name, ',' order by name) from vault.secrets),
-  'autre_secret,cle_boss_' || current_setting('t.s') || ',cle_boss_pas-un-identifiant', 'restent : la clé de S et les secrets étrangers');
+select is((select count(*) from vault.secrets where name in ('autre_secret', 'cle_boss_pas-un-identifiant', 'cle_boss_' || current_setting('t.s'))),
+  3::bigint, 'restent : la clé de S et les secrets étrangers');
 select is((select count(*) filter (where a.statut = 'echec') || ':' || count(*) filter (where a.statut = 'termine')
   from public.depot d join public.audit a on a.depot_id = d.id where d.id = '96000000-0000-4000-8000-0000000000d6'),
-  '1:3', 'T : le lot en cours est abandonné en echec, les audits terminés restent');
-select is((select cle_fin from public.campagne where id = current_setting('t.t')::uuid), null, 'T : sans cle_fin');
+  '0:3', 'T : forcée ou non, le lot en cours reste en cours tant que la clé a moins de 48 h');
+select is((select count(*) from vault.secrets where name = 'cle_boss_' || current_setting('t.t')), 1::bigint, 'T : la clé est intacte');
+-- Échue (résultats passés), T se termine quand même : la clé est effacée par la clôture non forcée après le relevé du lot.
+update public.audit set statut = 'echec' where depot_id = '96000000-0000-4000-8000-0000000000d6' and statut = 'en_cours';
+set local role service_role;
+select is(public.cloturer_deliberation(current_setting('t.t')::uuid), 'deliberation', 'T : lot relevé, clôture non forcée, clé effacée');
+reset role;
+update public.campagne set ouverture_inscriptions = now() - interval '9 days', cloture_depot = now() - interval '8 days',
+  date_resultats = now() - interval '1 day' where id = current_setting('t.t')::uuid;
+set local role service_role;
+select is(public.terminer_deliberation('96000000-0000-4000-8000-0000000000b6', current_setting('t.t')::uuid), 'prete', 'campagne échue : terminer passe');
+reset role;
 
 select * from finish();
 rollback;

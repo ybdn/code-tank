@@ -1246,7 +1246,7 @@ $$;
 -- Clôture de la délibération (rôle de service seul : prive à la fin des audits, le cron au bout de 48 h). Verrouille la
 -- campagne (for update). Efface toujours la clé, même hors deliberation (le cron nettoie ainsi une campagne passée à expiree).
 -- En deliberation : refuse (CT409) tant qu'un audit est en_cours, les lots se relevant d'abord, sauf p_forcer (cron, clé de
--- plus de 48 h) qui les abandonne ; passe en echec les audits a_envoyer ; efface la clé ; pose prete si tous les audits des
+-- plus de 48 h, revérifiée sous le verrou, sinon sans effet) qui les abandonne ; passe en echec les audits a_envoyer ; efface la clé ; pose prete si tous les audits des
 -- dépôts non trop_gros sont termine et la campagne non bloquée. Sinon elle reste en deliberation sans clé : le Boss relance
 -- ou termine. Rend l'état final de la campagne (null si elle n'existe plus : son secret est effacé quand même).
 -- shortcut: p_forcer abandonne un lot encore en_cours sans le relever : ses tokens éventuels ne sont pas comptés dans cout_usd ;
@@ -1270,6 +1270,11 @@ begin
   if not p_forcer and exists (select 1 from public.audit a join public.depot d on d.id = a.depot_id
     join public.participation p on p.id = d.participation_id where p.campagne_id = p_campagne and a.statut = 'en_cours') then
     raise exception 'Des lots sont encore en cours : relève-les d''abord.' using errcode = 'CT409';
+  end if;
+  -- Forcée, elle ne force rien si la clé a moins de 48 h : le verrou est pris, l'âge se revérifie ici.
+  if p_forcer and not exists (select 1 from vault.secrets where name = 'cle_boss_' || p_campagne
+    and created_at < now() - interval '48 hours') then
+    return v_c.statut;
   end if;
   perform public.abandonner_audits(p_campagne);
   perform public.effacer_cle_boss(p_campagne);
@@ -1300,8 +1305,9 @@ begin
   if not exists (select 1 from public.compte where id = p_compte and etat = 'actif') then
     raise exception 'Ton compte n''est pas actif.';
   end if;
-  if v_c.bloquee_le is not null or now() > v_c.date_resultats then
-    raise exception 'Cette campagne est bloquée ou échue : la délibération ne se termine plus.';
+  -- Échue, elle se termine quand même (sinon aucune issue) ; bloquée, jamais.
+  if v_c.bloquee_le is not null then
+    raise exception 'Cette campagne est bloquée : la délibération ne se termine plus.';
   end if;
   if v_c.statut <> 'deliberation' then
     raise exception 'La campagne n''est pas en délibération.';
@@ -1317,25 +1323,34 @@ end
 $$;
 
 -- Cron (rôle de service seul) : clôture, de force, toute clé rangée depuis plus de 48 h ou dont la campagne n'est plus en
--- deliberation. Rend le nombre de clés traitées, rien d'autre.
+-- deliberation. Une campagne en erreur ne bloque pas les suivantes. Rend {cles_cloturees, echecs}, rien d'autre.
 -- shortcut: le cron est quotidien (vercel.json) : une clé vit au plus 48 h + 24 h ; à resserrer si la fenêtre doit l'être.
 create function public.cloturer_cles_expirees()
-returns integer
+returns jsonb
 language plpgsql security definer set search_path = ''
 as $$
 declare
   v_id uuid;
   v_n integer := 0;
+  v_e integer := 0;
 begin
+  -- La CTE materialized filtre les noms avant tout cast en uuid.
   for v_id in
-    select substr(s.name, 10)::uuid from vault.secrets s
-    where s.name ~ '^cle_boss_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
-      and (s.created_at < now() - interval '48 hours'
-        or not exists (select 1 from public.campagne c where c.id = substr(s.name, 10)::uuid and c.statut = 'deliberation'))
+    with noms as materialized (
+      select s.name, s.created_at from vault.secrets s
+      where s.name ~ '^cle_boss_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+    )
+    select substr(n.name, 10)::uuid from noms n
+    where n.created_at < now() - interval '48 hours'
+      or not exists (select 1 from public.campagne c where c.id = substr(n.name, 10)::uuid and c.statut = 'deliberation')
   loop
-    perform public.cloturer_deliberation(v_id, true);
-    v_n := v_n + 1;
+    begin
+      perform public.cloturer_deliberation(v_id, true);
+      v_n := v_n + 1;
+    exception when others then
+      v_e := v_e + 1;
+    end;
   end loop;
-  return v_n;
+  return jsonb_build_object('cles_cloturees', v_n, 'echecs', v_e);
 end
 $$;

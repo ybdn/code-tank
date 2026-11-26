@@ -12,5 +12,5 @@ export default defineEventHandler(async (event) => {
     console.error('Clôture des clés expirées :', error.code)
     throw createError({ statusCode: 500, message: 'Les clés expirées n\'ont pas pu être clôturées.' })
   }
-  return { cles_cloturees: data as number }
+  return data as { cles_cloturees: number; echecs: number }
 })

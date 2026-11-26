@@ -275,7 +275,7 @@ isOneToOne: false
 { Args: { "p_pseudo": string }; Returns: undefined
                            },
 "cloturer_cles_expirees":
-{ Args: Record<PropertyKey, never>; Returns: number
+{ Args: Record<PropertyKey, never>; Returns: Json
                            },
 "cloturer_deliberation":
 { Args: { "p_campagne": string,"p_forcer"?: boolean }; Returns: string

@@ -87,7 +87,7 @@ pnpm build
 - `POST /api/boss/[slug]/fin` (story 4.6, AD-5) : Boss (**404**), JSON (**415**), puis `terminer_deliberation` avec la clé de service et
   l'id vérifié du Boss. Campagne en `deliberation` sans clé : elle passe en `prete`, les audits non terminés en `echec` (un
   dépôt dont un audit est en échec n'a pas de score, ni classé ni noté zéro ; l'affichage vient à l'epic 5). Refus de la base
-  (clé encore rangée : le jury travaille, autre étape, compte non actif, campagne bloquée ou échue) : **409**. Réponse
+  (clé encore rangée : le jury travaille, autre étape, compte non actif, campagne bloquée ; une campagne échue se termine) : **409**. Réponse
   `{ statut: 'prete' }`. Sur `/boss/[slug]`, le bloc « Terminer la délibération » s'affiche en `deliberation` sans clé, à côté du
   formulaire de relance (nouvelle clé, plafond relevable, `lancements < 3`).
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
@@ -100,7 +100,7 @@ pnpm build
   `GET /api/cron/conservation`, appelée chaque jour par le planificateur de Vercel (`vercel.json`) : aucune tâche de
   conservation encore (epic 6) ; elle réveille le jury (`appelerJury`, sans attendre ni échouer avec lui, filet d'AD-7), puis appelle
   `cloturer_cles_expirees` (story 4.6) : toute clé du Boss de plus de 48 h, ou dont la campagne n'est plus en `deliberation`, est
-  clôturée de force. Réponse `{ cles_cloturees }`. Le cron étant quotidien, une clé vit au plus 48 h + 24 h.
+  clôturée de force (sans effet sous 48 h, revérifié sous le verrou), une campagne en erreur ne bloquant pas les suivantes. Réponse `{ cles_cloturees, echecs }`. Le cron étant quotidien, une clé vit au plus 48 h + 24 h.
 - `server/utils/courriel.ts` : `envoyerCourriel`, envoi d'un e-mail texte signé depuis `code-tank@ybdn.io`.
 - `server/utils/secret.ts` : `SECRET_MIN`, longueur minimale des secrets (32 caractères).
 - `server/utils/session.ts`, `server/utils/publique.ts` : session vérifiée par Auth, lecture anonyme de PostgREST à délai court.
@@ -205,7 +205,7 @@ Trois migrations datées du même jour (AD-13) :
   audits `a_envoyer` ; efface la clé ; pose `prete` si tous les audits des dépôts non `trop_gros` sont `termine` et la campagne
   non bloquée, sinon la campagne reste en `deliberation` sans clé ; hors `deliberation`, elle n'efface que la clé ; rend l'état
   final), `terminer_deliberation(compte, campagne)` (Boss, compte actif, `deliberation` sans clé : `echec` pour les audits non
-  terminés, puis `prete`) et `cloturer_cles_expirees()` (cron : clés de plus de 48 h ou hors `deliberation`, rend leur nombre).
+  terminés, puis `prete`) et `cloturer_cles_expirees()` (cron : clés de plus de 48 h ou hors `deliberation`, rend `{ cles_cloturees, echecs }`).
   Le déclencheur `campagne_cle_sortie` efface la clé et `cle_fin` à toute sortie de `deliberation` (`prete`, `expiree`), et
   `campagne_cle_suppression` à la suppression de la campagne (Vault n'a pas de clé étrangère).
   Audits écrits par prive (story 4.4, AD-5, AD-6), toutes `for update` sur la campagne et refusées hors `deliberation` :
