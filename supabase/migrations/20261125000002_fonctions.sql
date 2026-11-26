@@ -828,3 +828,47 @@ begin
   return case when v_ancien.id is null then '{}'::text[] else public.effacer_archives(v_ancien) end;
 end
 $$;
+
+
+-- Délibération (story 4.2) ------------------------------------------------------------------------------------------
+
+-- Pire cas en dollars des audits à envoyer de la campagne (SPECS § 6, AD-6) : chaque couple dépôt × juré sans audit, ou dont
+-- l'audit est en echec ou a_envoyer (créé par lancer_deliberation, que prive revérifie avant l'envoi), hors dépôts trop_gros. Tokens : nb_tokens_exact s'il existe, sinon nb_tokens_estime. Pire cas :
+-- aucune lecture de cache (tout le code part en écriture de cache), 15 000 tokens produits par juré, prix des lots. Contrôle :
+-- 10 dépôts × 4 jurés × 100 000 tokens = 22 $. Lue par le site pour l'affichage, revérifiée par lancer_deliberation (4.3) et
+-- prive (4.5). Exécutable par authenticated (PostgREST l'expose) : le Boss de la campagne seul, sinon 42501, et seulement
+-- après la clôture des dépôts ; et par le rôle de service (prive), à tout moment.
+create function public.estimer_pire_cas(p_campagne uuid)
+returns numeric
+language plpgsql stable security definer set search_path = ''
+as $$
+declare
+  -- Tarifs du modèle du jury (Opus 5.5), en dollars par million de tokens. AD-8 : changer de modèle change ces constantes,
+  -- dans la même PR.
+  c_entree constant numeric := 4;
+  c_facteur_ecriture_cache constant numeric := 2; -- cache écrit pour une heure : 2 × le prix d'entrée
+  c_sortie constant numeric := 20;
+  c_tokens_sortie constant numeric := 15000;      -- par juré, réflexion comprise
+  c_facteur_lots constant numeric := 0.5;         -- Batches : moitié prix
+begin
+  -- current_user vaut le propriétaire sous security definer : le rôle posé par PostgREST (set local role) se lit dans 'role'.
+  if current_setting('role') <> 'service_role' and not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = '42501';
+  end if;
+  -- Avant la clôture, la somme suivie dépôt après dépôt donnerait au Boss la taille du code de chaque concurrent, qu'il ne
+  -- lit pas (RLS de depot) : refus, sauf pour le rôle de service. Après la clôture, les dépôts ne changent plus.
+  if current_setting('role') <> 'service_role'
+    and now() < (select cloture_depot from public.campagne where id = p_campagne) then
+    raise exception 'Les dépôts ne sont pas encore clos.';
+  end if;
+  return (
+    select coalesce(sum((coalesce(d.nb_tokens_exact, d.nb_tokens_estime) * c_entree * c_facteur_ecriture_cache
+      + c_tokens_sortie * c_sortie) / 1000000 * c_facteur_lots), 0)
+    from public.depot d
+    join public.participation p on p.id = d.participation_id
+    cross join (select distinct jure from public.critere) j
+    where p.campagne_id = p_campagne and not d.trop_gros
+      and not exists (select 1 from public.audit a where a.depot_id = d.id and a.jure = j.jure and a.statut in ('en_cours', 'termine'))
+  );
+end
+$$;

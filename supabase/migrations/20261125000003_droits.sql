@@ -136,3 +136,13 @@ grant select (id, campagne_id) on public.participation to service_role;
 grant select (id, statut, bloquee_le, date_resultats) on public.campagne to service_role;
 grant execute on function public.noter_tentative_reception(uuid), public.refuser_reception(uuid, jsonb),
   public.accepter_depot(uuid, text, text, integer, jsonb, integer, jsonb, integer, boolean, jsonb) to service_role;
+
+-- audit (story 4.2) : aucune politique ni aucun droit pour anon et authenticated (la lecture du Boss vient aux stories 4.7
+-- et epic 5) ; le rôle de service lit seulement : il écrit par les fonctions de la story 4.4, pas directement.
+-- estimer_pire_cas : authenticated (le Boss de la campagne seul, garde dans la fonction : un appel direct par /rest/v1/rpc
+-- ne contourne rien) et rôle de service (prive).
+alter table public.audit enable row level security;
+revoke all on public.audit from service_role;
+grant select on public.audit to service_role;
+revoke all on function public.estimer_pire_cas(uuid) from public, anon;
+grant execute on function public.estimer_pire_cas(uuid) to authenticated, service_role;

@@ -70,6 +70,10 @@ pnpm build
   chemins rendus (clé de service ; un échec est journalisé) ; sans dépôt : **404**. `GET /api/campagnes/[slug]` renvoie
   aussi `reception` et `depot` de l'inscrit (lus sous RLS). Page : `/campagnes/[slug]/depot` (motifs d'un refus en phrases ;
   pour un dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte SHA-256 ; jamais les alertes).
+- `GET /api/boss/[slug]/estimation` (story 4.2) : pour le Boss de la campagne (**404** sinon), `{ disponible: false,
+  raison }` tant que la campagne n'est pas ouverte, vivante, non bloquée, à plus de 48 h de ses résultats (borne de
+  `lancer_deliberation`, story 4.3), avec ses dépôts clos, sans réception en attente et avec au moins un audit à envoyer (lue avec la clé de service, que le Boss ne lit pas sous RLS) ; sinon `{ disponible: true, pire_cas_usd }` par
+  `estimer_pire_cas` avec le JWT du Boss. Affiché dans le bloc « Délibération » de `/boss/[slug]`.
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -165,7 +169,11 @@ Trois migrations datées du même jour (AD-13) :
   pour prive (story 3.4), `noter_tentative_reception` (compte un essai, rend le nombre), `refuser_reception` (motifs
   `[{ code, message }]`, rend le zip à effacer) et `accepter_depot` (campagne ouverte et vivante, archive filtrée présente
   à côté du zip ; crée ou remplace le dépôt avec les mesures de prive et la déclaration de la réception, supprime la
-  réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne.
+  réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne ; `estimer_pire_cas`
+  (story 4.2 : pire cas en dollars des audits à envoyer, tarifs du modèle du jury en constantes ; Boss de la campagne ou
+  rôle de service, **42501** sinon ; refusée au Boss avant la clôture des dépôts, pour ne pas trahir la taille des
+  dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, écrit par les
+  fonctions des stories 4.3 et 4.4.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
@@ -185,7 +193,8 @@ Trois migrations datées du même jour (AD-13) :
   faits, note d'outillage et alertes), sans écriture directe ; le rôle de service lit cinq colonnes de `reception`
   (prive) et rien de `depot` ; `peut_deposer`, `deposer` et `retirer_depot` exécutables par `authenticated` seul (leurs
   règles vivent dans les fonctions) ; `effacer_archives`, `noter_tentative_reception`, `refuser_reception` et
-  `accepter_depot` par le rôle de service seul.
+  `accepter_depot` par le rôle de service seul ; `audit` sans politique ni droit client, le rôle de service la lit
+  seulement ; `estimer_pire_cas` exécutable par `authenticated` et le rôle de service (garde du Boss dans la fonction).
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux
