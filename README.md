@@ -204,7 +204,9 @@ Trois migrations datées du même jour (AD-13) :
   `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés dans leurs colonnes) : `criteres`
   couvre exactement les critères non calculés du juré dans `critere` (aucune note sur `outillage_doc`), notes entières de 0
   à 10 avec au moins une preuve `{ fichier, ligne, constat }`, `verdict` `convaincu` ou `pas_convaincu`, `replique` texte.
-  Pour `echec`, `resultat` est ignoré.
+  Pour `echec`, `resultat` est ignoré. `termine` est refusé pour un dépôt `trop_gros`. Pas d'idempotence : chaque appel
+  ajoute son usage ; ne pas rejouer un appel dont la réponse est perdue sans relire `audit.tentatives`. Une preuve porte une
+  `ligne` entière ≥ 1.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur

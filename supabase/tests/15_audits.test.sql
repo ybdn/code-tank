@@ -3,7 +3,7 @@
 -- Clé factice seulement. Rôles : Boss (B1, B2), candidats (A1 à A3), rôle de service.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(92);
+select plan(99);
 
 insert into auth.users (id, email)
 select ('95000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'b1', 'b2']) h;
@@ -210,6 +210,14 @@ select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb
   'P0001', 'Note sans preuve.', 'preuves absentes : refus');
 select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0}', '{"ligne": 3, "constat": "c"}'))$$,
   'P0001', 'Note sans preuve.', 'preuve sans fichier : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,ligne}', '-3'))$$,
+  'P0001', 'Note sans preuve.', 'ligne -3 : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,ligne}', '1.5'))$$,
+  'P0001', 'Note sans preuve.', 'ligne 1,5 : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves}', '"a.go:3"'))$$,
+  'P0001', 'Note sans preuve.', 'preuves en chaîne : refus, pas 22023');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves}', '{"fichier": "a.go", "ligne": 3, "constat": "c"}'))$$,
+  'P0001', 'Note sans preuve.', 'preuves en objet : refus, pas 22023');
 reset role;
 select is((select statut || ':' || coalesce(cout_usd::text, '-') || ':' || tentatives || ':' || coalesce(resultat::text, '-')
   from public.audit where id = current_setting('t.d1_sudo')::uuid), 'en_cours:-:0:-', 'les refus n''ont rien écrit');
@@ -247,12 +255,17 @@ select is(public.enregistrer_audit(current_setting('t.d1_refacto')::uuid, 'echec
   '[{"lot": true, "input_tokens": 1000000}, {"lot": false, "output_tokens": 50000}]'), 1.8::numeric, 'echec : coût compté, reste 1,80 $');
 select is(public.enregistrer_audit(current_setting('t.d1_refacto')::uuid, 'echec', null, null), 1.8::numeric,
   'echec sans appel : rien de plus');
-select is(public.enregistrer_audit(current_setting('t.d2_pitch')::uuid, 'echec', null, null), 1.8::numeric,
+-- Pas d'idempotence (comportement figé) : un echec rejoué ajoute de nouveau son usage, son coût et ses tentatives.
+select is(public.enregistrer_audit(current_setting('t.d1_refacto')::uuid, 'echec', null, '[{"lot": false, "output_tokens": 50000}]'),
+  0.8::numeric, 'echec avec usage : 1 $ de plus');
+select is(public.enregistrer_audit(current_setting('t.d1_refacto')::uuid, 'echec', null, '[{"lot": false, "output_tokens": 50000}]'),
+  -0.2::numeric, 'le même echec rejoué compte une seconde fois');
+select is(public.enregistrer_audit(current_setting('t.d2_pitch')::uuid, 'echec', null, null), -0.2::numeric,
   'un audit a_envoyer passe en echec sans appel (plafond épuisé)');
 reset role;
 select is((select statut || ':' || coalesce(resultat::text, '-') || ':' || coalesce(modele, '-') || ':' || trim_scale(cout_usd) || ':' || tentatives
-  || ':' || jsonb_array_length(usage) from public.audit where id = current_setting('t.d1_refacto')::uuid), 'echec:-:-:3:2:2',
-  'echec : ni résultat ni modèle, coût et tentatives cumulés');
+  || ':' || jsonb_array_length(usage) from public.audit where id = current_setting('t.d1_refacto')::uuid), 'echec:-:-:5:4:4',
+  'echec : ni résultat ni modèle, coût et tentatives cumulés, rejeu compris');
 select is((select statut || ':' || cout_usd || ':' || tentatives from public.audit where id = current_setting('t.d2_pitch')::uuid), 'echec:0:0',
   'echec sans appel : coût nul');
 
@@ -262,12 +275,18 @@ set local role service_role;
 select is(public.enregistrer_audit(current_setting('t.d1_refacto')::uuid, 'termine', current_setting('t.ok')::jsonb
   || '{"criteres": [{"cle": "structure_decoupage", "note": 10, "preuves": [{"fichier": "a", "ligne": 1, "constat": "c"}]},
   {"cle": "lisibilite_nommage", "note": 5, "preuves": [{"fichier": "a", "ligne": 2, "constat": "c"}]}]}',
-  '[{"lot": false, "output_tokens": 50000}]'), 0.8::numeric, 'relance terminée : reste 0,80 $');
+  '[{"lot": false, "output_tokens": 50000}]'), -1.2::numeric, 'relance terminée : reste -1,20 $');
 reset role;
 select is((select statut || ':' || trim_scale(cout_usd) || ':' || tentatives || ':' || jsonb_array_length(usage) from public.audit
-  where id = current_setting('t.d1_refacto')::uuid), 'termine:4:3:3', 'le coût de la relance s''ajoute à celui déjà payé');
+  where id = current_setting('t.d1_refacto')::uuid), 'termine:6:5:5', 'le coût de la relance s''ajoute à celui déjà payé');
 set local role service_role;
-select is(public.depense_audits(current_setting('t.x')::uuid), 9.2::numeric, 'depense_audits voit la somme des coûts');
+select is(public.depense_audits(current_setting('t.x')::uuid), 11.2::numeric, 'depense_audits voit la somme des coûts');
+reset role;
+
+-- termine est refusé pour l'audit d'un dépôt trop_gros, même en_cours.
+set local role service_role;
+select throws_ok($$select public.enregistrer_audit(current_setting('t.d3_sudo')::uuid, 'termine', current_setting('t.ok')::jsonb, null)$$,
+  'CT409', 'Dépôt trop gros : l''audit ne se termine pas.', 'dépôt trop_gros : termine refusé');
 reset role;
 
 -- Une relance de la délibération ne recrée ni ne relance aucun audit d'un dépôt trop_gros.

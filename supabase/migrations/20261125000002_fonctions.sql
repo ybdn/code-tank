@@ -1047,6 +1047,7 @@ $$;
 
 -- Passe en en_cours, avec l'identifiant de leur lot, ceux des audits donnés qui sont a_envoyer dans une campagne en
 -- deliberation ; les autres sont ignorés. Rend le nombre d'audits passés en_cours.
+-- shortcut: la taille de p_audits n'est pas bornée, prive étant un appelant de confiance ; à borner si l'appelant change.
 create function public.marquer_envoye(p_audits uuid[], p_batch_id text)
 returns integer
 language plpgsql security definer set search_path = ''
@@ -1080,6 +1081,12 @@ $$;
 --   { fichier, ligne, constat } ; verdict convaincu ou pas_convaincu ; replique est un texte. Sinon refus, que prive traite
 --   en relançant l'audit une fois en appel direct.
 -- - echec : p_resultat ignoré ; resultat vide, modele et version_consignes inchangés.
+-- - termine est refusé pour l'audit d'un dépôt trop_gros. a_envoyer → termine sans marquer_envoye reste permis (relance
+--   directe).
+-- Pas d'idempotence : chaque appel ajoute son usage, son coût et ses tentatives, même pour un echec rejoué. Ne pas rejouer un
+-- appel dont la réponse est perdue sans relire audit.tentatives.
+-- shortcut: la taille de p_usage et de p_resultat n'est pas bornée, prive étant un appelant de confiance ; à borner si
+-- l'appelant change.
 -- shortcut: un repli serveur (fallbacks) vers un autre modèle est compté au tarif d'Opus 5.5 ; à corriger dès qu'un repli est
 -- observé (usage portera alors le modèle).
 create function public.enregistrer_audit(p_audit uuid, p_statut text, p_resultat jsonb, p_usage jsonb)
@@ -1107,9 +1114,16 @@ begin
   if p_statut is null or p_statut not in ('termine', 'echec') then
     raise exception 'Statut refusé.';
   end if;
+  if p_statut = 'termine' and (select trop_gros from public.depot where id = v_a.depot_id) then
+    raise exception 'Dépôt trop gros : l''audit ne se termine pas.' using errcode = 'CT409';
+  end if;
 
   p_usage := coalesce(p_usage, '[]');
-  if jsonb_typeof(p_usage) <> 'array' or exists (
+  -- Deux tests séparés : jsonb_array_elements lève 22023 sur un non-tableau, et l'ordre d'évaluation d'un or n'est pas garanti.
+  if jsonb_typeof(p_usage) <> 'array' then
+    raise exception 'Usage mal formé.';
+  end if;
+  if exists (
     select 1 from jsonb_array_elements(p_usage) u
     where jsonb_typeof(u) <> 'object' or jsonb_typeof(u -> 'lot') is distinct from 'boolean'
       or exists (select 1 from unnest(array['input_tokens', 'output_tokens', 'cache_creation_input_tokens',
@@ -1147,10 +1161,16 @@ begin
   end if;
   if p_statut = 'termine' and exists (
     select 1 from jsonb_array_elements(p_resultat -> 'criteres') e
-    where jsonb_typeof(e -> 'preuves') is distinct from 'array' or jsonb_array_length(e -> 'preuves') = 0
+    where jsonb_typeof(e -> 'preuves') is distinct from 'array') then
+    raise exception 'Note sans preuve.';
+  end if;
+  -- Ici, chaque preuves est un tableau : jsonb_array_elements ne lève plus 22023.
+  if p_statut = 'termine' and exists (
+    select 1 from jsonb_array_elements(p_resultat -> 'criteres') e
+    where jsonb_array_length(e -> 'preuves') = 0
       or exists (select 1 from jsonb_array_elements(e -> 'preuves') pr
         where jsonb_typeof(pr -> 'fichier') is distinct from 'string' or jsonb_typeof(pr -> 'ligne') is distinct from 'number'
-          or jsonb_typeof(pr -> 'constat') is distinct from 'string')) then
+          or (pr ->> 'ligne') !~ '^[1-9][0-9]{0,8}$' or jsonb_typeof(pr -> 'constat') is distinct from 'string')) then
     raise exception 'Note sans preuve.';
   end if;
 
