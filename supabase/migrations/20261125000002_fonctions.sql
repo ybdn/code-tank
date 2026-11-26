@@ -907,8 +907,8 @@ $$;
 -- lancements) + pire cas ≤ plafond. Crée en a_envoyer les audits manquants, et remet en a_envoyer ceux en echec (cout_usd
 -- et usage gardés : le plafond porte sur le cumul de ce qui a été payé, usage en garde le détail), sauf pour un dépôt trop_gros.
 -- La clé ne figure dans aucun message : aucun raise ne la cite, ni notice. Messages fixes, sauf l'écart du plafond (un montant).
--- shortcut: cout_usd est nul tant qu'un audit est en_cours (enregistrer_audit l'écrit au retour) : il n'entre pas dans le dépensé ; une relance part
--- sans clé, donc après cloturer_deliberation (story 4.6), qui n'existe pas encore.
+-- shortcut: cout_usd est nul tant qu'un audit est en_cours (enregistrer_audit l'écrit au retour) : il n'entre pas dans le dépensé ; la clôture ne
+-- laisse un audit en_cours qu'abandonné en echec (cloturer_deliberation forcée), donc sans coût compté : à revoir si prive lit un lot abandonné.
 create function public.lancer_deliberation(p_compte uuid, p_campagne uuid, p_cle text, p_plafond_usd numeric,
   p_version_engagements text)
 returns jsonb
@@ -993,10 +993,9 @@ as $$
     and exists (select 1 from public.campagne c where c.id = p_campagne and c.statut = 'deliberation')
 $$;
 
--- Efface la clé du Boss et ses 4 caractères visibles (rôle de service seul) : appelée à la fin de la délibération (story 4.6) et
--- à l'expiration de la campagne. Sans effet si aucune clé n'est rangée.
--- shortcut: rien ne l'appelle encore. Le passage deliberation → expiree n'efface pas la clé, et la suppression d'une campagne
--- laisse son secret Vault (aucune clé étrangère vers vault) ; la story 4.6 (cloturer_deliberation, expirer_campagne) les ferme.
+-- Efface la clé du Boss et ses 4 caractères visibles (rôle de service seul) : appelée par cloturer_deliberation et
+-- terminer_deliberation (story 4.6). Les autres sorties (deliberation → prete ou expiree, suppression de la campagne) passent
+-- par le déclencheur campagne_cle_sortie. Sans effet si aucune clé n'est rangée.
 create function public.effacer_cle_boss(p_campagne uuid)
 returns void
 language plpgsql security definer set search_path = ''
@@ -1195,5 +1194,148 @@ begin
   where id = p_audit;
   return v_c.plafond_usd - (select coalesce(sum(a.cout_usd), 0) from public.audit a join public.depot d on d.id = a.depot_id
     join public.participation p on p.id = d.participation_id where p.campagne_id = v_c.id);
+end
+$$;
+
+
+-- Clôture, fin et relance de la délibération (story 4.6, AD-4 (4), AD-5 (3, 4, 5), AD-7) -----------------------------------------
+
+-- La clé ne survit à aucune sortie de deliberation (prete, expiree) ni à la suppression de la campagne (Vault n'a pas de clé
+-- étrangère) : le déclencheur couvre tous les chemins, quel que soit l'écrivain. Il remet cle_fin à null avec le passage.
+create function public.effacer_cle_sortie()
+returns trigger
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  delete from vault.secrets where name = 'cle_boss_' || old.id;
+  if tg_op = 'DELETE' then
+    return old;
+  end if;
+  new.cle_fin := null;
+  return new;
+end
+$$;
+create trigger campagne_cle_sortie before update of statut on public.campagne
+  for each row when (old.statut = 'deliberation' and new.statut is distinct from old.statut)
+  execute function public.effacer_cle_sortie();
+create trigger campagne_cle_suppression before delete on public.campagne
+  for each row execute function public.effacer_cle_sortie();
+
+-- Vrai si tous les couples dépôt × juré de la campagne (hors dépôts trop_gros) ont un audit terminé.
+create function public.audits_termines(p_campagne uuid)
+returns boolean
+language sql stable set search_path = ''
+as $$
+  select not exists (
+    select 1 from public.depot d join public.participation p on p.id = d.participation_id
+    cross join (select distinct jure from public.critere) j
+    where p.campagne_id = p_campagne and not d.trop_gros
+      and not exists (select 1 from public.audit a where a.depot_id = d.id and a.jure = j.jure and a.statut = 'termine')
+  )
+$$;
+
+-- Passe en echec les audits de la campagne qui ne sont ni termine ni déjà echec.
+create function public.abandonner_audits(p_campagne uuid)
+returns void
+language sql set search_path = ''
+as $$
+  update public.audit a set statut = 'echec' from public.depot d join public.participation p on p.id = d.participation_id
+  where a.depot_id = d.id and p.campagne_id = p_campagne and a.statut in ('a_envoyer', 'en_cours')
+$$;
+
+-- Clôture de la délibération (rôle de service seul : prive à la fin des audits, le cron au bout de 48 h). Verrouille la
+-- campagne (for update). Efface toujours la clé, même hors deliberation (le cron nettoie ainsi une campagne passée à expiree).
+-- En deliberation : refuse (CT409) tant qu'un audit est en_cours, les lots se relevant d'abord, sauf p_forcer (cron, clé de
+-- plus de 48 h) qui les abandonne ; passe en echec les audits a_envoyer ; efface la clé ; pose prete si tous les audits des
+-- dépôts non trop_gros sont termine et la campagne non bloquée. Sinon elle reste en deliberation sans clé : le Boss relance
+-- ou termine. Rend l'état final de la campagne (null si elle n'existe plus : son secret est effacé quand même).
+-- shortcut: p_forcer abandonne un lot encore en_cours sans le relever : ses tokens éventuels ne sont pas comptés dans cout_usd ;
+-- à revoir si prive peut relever un lot après la clôture.
+create function public.cloturer_deliberation(p_campagne uuid, p_forcer boolean default false)
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+begin
+  select * into v_c from public.campagne where id = p_campagne for update;
+  if not found then
+    delete from vault.secrets where name = 'cle_boss_' || p_campagne;
+    return null;
+  end if;
+  if v_c.statut <> 'deliberation' then
+    perform public.effacer_cle_boss(p_campagne);
+    return v_c.statut;
+  end if;
+  if not p_forcer and exists (select 1 from public.audit a join public.depot d on d.id = a.depot_id
+    join public.participation p on p.id = d.participation_id where p.campagne_id = p_campagne and a.statut = 'en_cours') then
+    raise exception 'Des lots sont encore en cours : relève-les d''abord.' using errcode = 'CT409';
+  end if;
+  perform public.abandonner_audits(p_campagne);
+  perform public.effacer_cle_boss(p_campagne);
+  if v_c.bloquee_le is null and public.audits_termines(p_campagne) then
+    update public.campagne set statut = 'prete' where id = p_campagne;
+    return 'prete';
+  end if;
+  return 'deliberation';
+end
+$$;
+
+-- Fin voulue par le Boss p_compte (rôle de service seul, avec l'id vérifié par la route : comme lancer_deliberation, jamais
+-- exposée à authenticated). Campagne en deliberation sans clé (sinon le jury travaille encore : refus), vivante, compte actif.
+-- Passe en echec les audits non termine, efface la clé par sécurité, pose prete. Un dépôt dont un audit est en echec n'a pas de
+-- score : jamais noté zéro (AD-5 (5)).
+-- shortcut: « audit en échec » se lit des audits (statut echec), sans colonne ni vue : l'affichage et le classement viennent à l'epic 5.
+create function public.terminer_deliberation(p_compte uuid, p_campagne uuid)
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+begin
+  select * into v_c from public.campagne where id = p_campagne and boss_id = p_compte for update;
+  if not found then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not exists (select 1 from public.compte where id = p_compte and etat = 'actif') then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_c.bloquee_le is not null or now() > v_c.date_resultats then
+    raise exception 'Cette campagne est bloquée ou échue : la délibération ne se termine plus.';
+  end if;
+  if v_c.statut <> 'deliberation' then
+    raise exception 'La campagne n''est pas en délibération.';
+  end if;
+  if exists (select 1 from vault.secrets where name = 'cle_boss_' || p_campagne) then
+    raise exception 'Le jury travaille encore : la délibération ne se termine pas avant la fin de ses audits.';
+  end if;
+  perform public.abandonner_audits(p_campagne);
+  perform public.effacer_cle_boss(p_campagne);
+  update public.campagne set statut = 'prete' where id = p_campagne;
+  return 'prete';
+end
+$$;
+
+-- Cron (rôle de service seul) : clôture, de force, toute clé rangée depuis plus de 48 h ou dont la campagne n'est plus en
+-- deliberation. Rend le nombre de clés traitées, rien d'autre.
+-- shortcut: le cron est quotidien (vercel.json) : une clé vit au plus 48 h + 24 h ; à resserrer si la fenêtre doit l'être.
+create function public.cloturer_cles_expirees()
+returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_id uuid;
+  v_n integer := 0;
+begin
+  for v_id in
+    select substr(s.name, 10)::uuid from vault.secrets s
+    where s.name ~ '^cle_boss_[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$'
+      and (s.created_at < now() - interval '48 hours'
+        or not exists (select 1 from public.campagne c where c.id = substr(s.name, 10)::uuid and c.statut = 'deliberation'))
+  loop
+    perform public.cloturer_deliberation(v_id, true);
+    v_n := v_n + 1;
+  end loop;
+  return v_n;
 end
 $$;
