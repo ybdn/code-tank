@@ -259,8 +259,8 @@ select is(public.lancer_deliberation('94000000-0000-4000-8000-0000000000b1', cur
 reset role;
 select is((select count(*) from public.audit), 8::bigint, 'relance : l''audit manquant est recréé, aucun doublon');
 select is((select statut || ':' || coalesce(batch_id, '-') || ':' || coalesce(resultat::text, '-') || ':' || coalesce(usage::text, '-') || ':' || cout_usd
-  from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'refacto'), 'a_envoyer:-:-:-:0.25',
-  'relance : l''audit en echec repart en a_envoyer, son coût payé reste');
+  from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'refacto'), 'a_envoyer:-:-:{}:0.25',
+  'relance : l''audit en echec repart en a_envoyer, son coût et son usage payés restent');
 select is((select statut from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'sudo'), 'termine', 'relance : un audit terminé ne bouge pas');
 select is((select lancements || ':' || cle_fin || ':' || plafond_usd from public.campagne where id = current_setting('t.x')::uuid), '2:0abc:3.82', 'relance : deux lancements, nouvelle clé, nouveau plafond');
 select is((select count(*) from public.engagement where campagne_id = current_setting('t.x')::uuid), 2::bigint, 'un engagement par lancement');

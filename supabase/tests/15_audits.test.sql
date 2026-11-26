@@ -3,7 +3,7 @@
 -- Clé factice seulement. Rôles : Boss (B1, B2), candidats (A1 à A3), rôle de service.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(99);
+select plan(105);
 
 insert into auth.users (id, email)
 select ('95000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'b1', 'b2']) h;
@@ -100,6 +100,9 @@ select lives_ok($$select public.lancer_deliberation('95000000-0000-4000-8000-000
   'sk-ant-FAUSSE-aaaaaaaaaaaaaaaaaaaa', 10, 'v1')$$, 'lancement de X');
 reset role;
 select set_config('t.' || right(depot_id::text, 2) || '_' || jure, id::text, true) from public.audit;
+set local role service_role;
+select is(public.marquer_envoye(array[current_setting('t.d1_lint')::uuid], 'lot_0'), 0, 'dépôt pas encore recompté : audit ignoré');
+reset role;
 
 -- ecrire_tokens_exacts : refus.
 set local role service_role;
@@ -115,6 +118,7 @@ select throws_ok($$select public.ecrire_tokens_exacts('95000000-0000-4000-8000-0
 -- Écriture, borne de 100 000 et trop_gros. d3 sudo part d'abord dans un lot : seul l'a_envoyer passe en echec.
 select is(public.ecrire_tokens_exacts('95000000-0000-4000-8000-0000000000d1', 50000), false, 'd1, 50 000 : pas trop gros');
 select is(public.ecrire_tokens_exacts('95000000-0000-4000-8000-0000000000d2', 100000), false, 'd2, 100 000 pile : pas trop gros');
+select is(public.ecrire_tokens_exacts('95000000-0000-4000-8000-0000000000d3', 30000), false, 'd3, premier compte : 30 000');
 select is(public.marquer_envoye(array[current_setting('t.d3_sudo')::uuid], 'lot_0'), 1, 'd3 sudo part dans un lot');
 select is(public.ecrire_tokens_exacts('95000000-0000-4000-8000-0000000000d3', 100001), true, 'd3, 100 001 : trop gros');
 reset role;
@@ -289,6 +293,12 @@ select throws_ok($$select public.enregistrer_audit(current_setting('t.d3_sudo'):
   'CT409', 'Dépôt trop gros : l''audit ne se termine pas.', 'dépôt trop_gros : termine refusé');
 reset role;
 
+-- Un echec avec usage (coût nul), pour vérifier que la relance garde l'usage déjà payé.
+set local role service_role;
+select is(public.enregistrer_audit(current_setting('t.d2_sudo')::uuid, 'echec', null, '[{"lot": true, "output_tokens": 0}]'), -1.2::numeric,
+  'd2 sudo en echec avec une tentative');
+reset role;
+
 -- Une relance de la délibération ne recrée ni ne relance aucun audit d'un dépôt trop_gros.
 delete from public.audit where id = current_setting('t.d3_pitch')::uuid;
 set local role service_role;
@@ -299,6 +309,14 @@ reset role;
 select is((select string_agg(jure || ':' || statut, ' ' order by jure) from public.audit where depot_id = '95000000-0000-4000-8000-0000000000d3'),
   'lint:echec refacto:echec sudo:en_cours', 'd3 trop_gros : aucun audit recréé ni relancé');
 select is((select statut from public.audit where id = current_setting('t.d2_pitch')::uuid), 'a_envoyer', 'un autre audit en echec, lui, repart');
+select is((select statut || ':' || jsonb_array_length(usage) from public.audit where id = current_setting('t.d2_sudo')::uuid), 'a_envoyer:1',
+  'la relance garde l''usage déjà payé');
+set local role service_role;
+select lives_ok($$select public.enregistrer_audit(current_setting('t.d2_sudo')::uuid, 'echec', null, '[{"lot": false, "output_tokens": 0}]')$$,
+  'nouvel enregistrement après la relance');
+reset role;
+select is((select jsonb_array_length(usage) || ':' || tentatives || ':' || (usage -> 0 ->> 'lot') from public.audit
+  where id = current_setting('t.d2_sudo')::uuid), '2:2:true', 'l''usage d''avant la relance est conservé, le nouveau s''y ajoute');
 
 delete from vault.secrets where name like 'cle_boss_%';
 select * from finish();

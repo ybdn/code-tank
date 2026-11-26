@@ -190,14 +190,15 @@ Trois migrations datées du même jour (AD-13) :
   `depense_audits` (somme des `cout_usd`, Boss ou rôle de service) ; `lancer_deliberation(compte, campagne, clé, plafond, version)`
   (Boss de la campagne, aucune réception en attente, dépôts
   clos, 48 h au moins avant les résultats, moins de trois lancements, aucune clé rangée, dépensé + pire cas ≤ plafond ; crée
-  ou remet en `a_envoyer` les audits, garde le coût payé d'un audit en `echec`, passe en `deliberation`, et ne range la clé
+  ou remet en `a_envoyer` les audits, garde le coût et l'usage payés d'un audit en `echec`, passe en `deliberation`, et ne range la clé
   dans Vault, secret `cle_boss_<campagne>`, qu'en dernier), `lire_cle_boss` (nulle hors `deliberation`) et `effacer_cle_boss`.
   Audits écrits par prive (story 4.4, AD-5, AD-6), toutes `for update` sur la campagne et refusées hors `deliberation` :
   `cout_tokens(entrée, sortie, écriture de cache, lecture de cache, lot)`, seule source des tarifs (Opus 5.5 : 4 $ / 20 $
   / 8 $ / 0,40 $ le million, lots à moitié prix ; changer de modèle change cette fonction) ;
   `ecrire_tokens_exacts(dépôt, nb)` (écrit `nb_tokens_exact` ; au-delà de 100 000, `trop_gros` pour de bon et ses audits
   `a_envoyer` en `echec`, jamais recréés) ; `marquer_envoye(audits, batch_id)` (passe les `a_envoyer` en `en_cours` avec leur
-  lot, ignore les autres, rend le nombre) ; `enregistrer_audit(audit, statut, resultat, usage)` (`termine` ou `echec`, rend le
+  lot, ignore les autres, dont ceux d'un dépôt sans compte exact ou `trop_gros`, rend le nombre ; prive appelle donc
+  `ecrire_tokens_exacts` sur chaque dépôt avant `marquer_envoye`) ; `enregistrer_audit(audit, statut, resultat, usage)` (`termine` ou `echec`, rend le
   reste du plafond). Contrat avec prive : `usage` est le tableau des tentatives payées, `[{ lot, input_tokens,
   output_tokens, cache_creation_input_tokens, cache_read_input_tokens }]` (entiers ≥ 0, absents = 0), ou `null` ; son coût
   s'ajoute à `cout_usd` (écriture de cache au tarif d'une heure), ses tentatives à `usage` et `tentatives`. Pour `termine`,

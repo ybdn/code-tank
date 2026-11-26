@@ -905,7 +905,7 @@ $$;
 -- `ouverte` (dépôts clos) ou de `deliberation` sans clé (relance) ; trois lancements au plus ; au moins 48 h avant
 -- date_resultats (la borne de la route estimation, sans piège de changement d'heure) ; dépensé (somme des cout_usd de tous les
 -- lancements) + pire cas ≤ plafond. Crée en a_envoyer les audits manquants, et remet en a_envoyer ceux en echec (cout_usd
--- gardé : le plafond porte sur le cumul de ce qui a été payé), sauf pour un dépôt trop_gros.
+-- et usage gardés : le plafond porte sur le cumul de ce qui a été payé, usage en garde le détail), sauf pour un dépôt trop_gros.
 -- La clé ne figure dans aucun message : aucun raise ne la cite, ni notice. Messages fixes, sauf l'écart du plafond (un montant).
 -- shortcut: cout_usd est nul tant qu'un audit est en_cours (enregistrer_audit l'écrit au retour) : il n'entre pas dans le dépensé ; une relance part
 -- sans clé, donc après cloturer_deliberation (story 4.6), qui n'existe pas encore.
@@ -972,7 +972,7 @@ begin
     cross join (select distinct jure from public.critere) j
   where p.campagne_id = p_campagne and not d.trop_gros
   on conflict (depot_id, jure) do update
-    set statut = 'a_envoyer', batch_id = null, resultat = null, usage = null where a.statut = 'echec';
+    set statut = 'a_envoyer', batch_id = null, resultat = null where a.statut = 'echec';
   insert into public.engagement (campagne_id, compte_id, version) values (p_campagne, p_compte, p_version_engagements);
   update public.campagne set lancements = lancements + 1, plafond_usd = p_plafond_usd, statut = 'deliberation'
     where id = p_campagne;
@@ -1046,7 +1046,8 @@ end
 $$;
 
 -- Passe en en_cours, avec l'identifiant de leur lot, ceux des audits donnés qui sont a_envoyer dans une campagne en
--- deliberation ; les autres sont ignorés. Rend le nombre d'audits passés en_cours.
+-- deliberation et dont le dépôt a son compte exact sans être trop_gros ; les autres sont ignorés. Rend le nombre d'audits
+-- passés en_cours. prive appelle donc ecrire_tokens_exacts sur chaque dépôt avant marquer_envoye (AD-6).
 -- shortcut: la taille de p_audits n'est pas bornée, prive étant un appelant de confiance ; à borner si l'appelant change.
 create function public.marquer_envoye(p_audits uuid[], p_batch_id text)
 returns integer
@@ -1063,7 +1064,8 @@ begin
     where a.id = any(p_audits) order by c.id for update of c;
   update public.audit a set statut = 'en_cours', batch_id = p_batch_id
   from public.depot d join public.participation p on p.id = d.participation_id join public.campagne c on c.id = p.campagne_id
-  where a.depot_id = d.id and a.id = any(p_audits) and a.statut = 'a_envoyer' and c.statut = 'deliberation';
+  where a.depot_id = d.id and a.id = any(p_audits) and a.statut = 'a_envoyer' and c.statut = 'deliberation'
+    and d.nb_tokens_exact is not null and not d.trop_gros;
   get diagnostics v_nb = row_count;
   return v_nb;
 end
