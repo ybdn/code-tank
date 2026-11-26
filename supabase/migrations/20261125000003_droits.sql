@@ -55,7 +55,7 @@ insert into public.critere (cle, libelle, jure, poids, calcule) values
   ('originalite_finition', 'Originalité et finition', 'pitch', 10, false);
 
 -- campagne (story 2.1) : le Boss lit ses campagnes et rien d'autre, jeton d'invitation compris (le public lit la vue
--- campagne_phase, plus bas, qui ne le porte pas) ; le rôle de service lit quatre colonnes (prive, en fin de fichier) ;
+-- campagne_phase, plus bas, qui ne le porte pas) ; le rôle de service lit six colonnes (prive, en fin de fichier) ;
 -- aucune écriture directe, pas même du rôle de service : creer_campagne, modifier_campagne, supprimer_brouillon et
 -- ouvrir_campagne seules. Ces quatre RPC sont exécutables par authenticated seul et tiennent toutes leurs règles (compte_actif(), est_boss, verrou
 -- de la ligne, campagne_vivante) : un appel direct par /rest/v1/rpc ne contourne rien. Les gardes est_boss et
@@ -129,7 +129,8 @@ grant execute on function public.peut_deposer(uuid), public.deposer(uuid, text, 
 grant execute on function public.effacer_archives(public.depot) to service_role;
 
 -- prive (story 3.4, AD-1) : il lit en direct, avec le rôle de service, les colonnes qui trouvent les réceptions en attente et
--- l'état de leur campagne, et rien d'autre (ni présentation, ni dépôt : accepter_depot recopie et rend ce qu'il faut). Il
+-- l'état de leur campagne, et rien d'autre (ni présentation, ni dépôt : accepter_depot recopie et rend ce qu'il faut ; la
+-- story 4.4 ouvre ensuite quelques colonnes de depot et campagne pour la délibération). Il
 -- écrit seulement par noter_tentative_reception, refuser_reception et accepter_depot, exécutables par le rôle de service seul.
 grant select (id, participation_id, chemin_stockage, statut, cree_le) on public.reception to service_role;
 grant select (id, campagne_id) on public.participation to service_role;
@@ -160,3 +161,18 @@ grant execute on function public.lancer_deliberation(uuid, uuid, text, numeric, 
 -- depense_audits, comme estimer_pire_cas : le Boss de la campagne seul (garde dans la fonction) et le rôle de service.
 revoke all on function public.depense_audits(uuid) from public, anon;
 grant execute on function public.depense_audits(uuid) to authenticated, service_role;
+
+-- Audits écrits par prive (story 4.4, AD-5) : ecrire_tokens_exacts, marquer_envoye et enregistrer_audit, rôle de service seul,
+-- jamais authenticated (PostgREST les exposerait) ; cout_tokens, seule source des tarifs, n'est exécutable par aucun rôle :
+-- estimer_pire_cas et enregistrer_audit l'appellent avec les droits de postgres. Aucune écriture directe sur audit ni depot.
+revoke all on function public.cout_tokens(numeric, numeric, numeric, numeric, boolean)
+  from public, anon, authenticated, service_role;
+revoke all on function public.ecrire_tokens_exacts(uuid, integer), public.marquer_envoye(uuid[], text),
+  public.enregistrer_audit(uuid, text, jsonb, jsonb) from public, anon, authenticated;
+grant execute on function public.ecrire_tokens_exacts(uuid, integer), public.marquer_envoye(uuid[], text),
+  public.enregistrer_audit(uuid, text, jsonb, jsonb) to service_role;
+-- Lectures directes de prive pour la délibération (story 4.5), en plus de celles de la story 3.4 et de critere et audit :
+-- dépôt (archive filtrée à envoyer, faits du scan pour le juré, compte exact et trop_gros), brief de la campagne (consigne
+-- du juré) et plafond (reste à dépenser). Rien d'autre : ni chemin du zip, ni présentation, ni alertes.
+grant select (id, participation_id, chemin_filtre, faits, nb_tokens_exact, trop_gros) on public.depot to service_role;
+grant select (brief, plafond_usd) on public.campagne to service_role;

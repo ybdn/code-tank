@@ -76,10 +76,10 @@ select is_empty($$
   where has_table_privilege('authenticated', t, d)
 $$, 'authenticated : aucun droit de table sur reception ni depot (lecture par colonnes)');
 select is_empty($$
-  select r, t from (values ('anon', 'public.reception'), ('anon', 'public.depot'), ('service_role', 'public.depot')) v(r, t)
+  select r, t from (values ('anon', 'public.reception'), ('anon', 'public.depot')) v(r, t)
   where has_table_privilege(r, t, 'select,insert,update,delete,truncate,references,trigger')
     or has_any_column_privilege(r, t, 'select,insert,update,references')
-$$, 'aucun droit sur reception ni depot pour anon, ni sur depot pour le rôle de service (sa lecture de reception : 12_controle)');
+$$, 'aucun droit sur reception ni depot pour anon (lectures du rôle de service : 12_controle et 15_audits)');
 select is_empty($$
   select t, c from (values ('public.reception', 'chemin_stockage'), ('public.reception', 'tentatives'), ('public.depot', 'chemin_stockage'),
     ('public.depot', 'chemin_filtre'), ('public.depot', 'faits'), ('public.depot', 'note_outillage'),
@@ -115,7 +115,7 @@ select throws_ok($$insert into storage.objects (bucket_id, name) values ('depots
 reset role;
 set local role service_role;
 select throws_ok($$select public.retirer_depot(current_setting('t.d_pub')::uuid)$$, '42501', null, 'le rôle de service ne retire pas de dépôt');
-select throws_ok($$select 1 from public.depot$$, '42501', null, 'le rôle de service ne lit pas depot');
+select throws_ok($$select chemin_stockage from public.depot$$, '42501', null, 'le rôle de service ne lit pas le chemin du zip déposé');
 reset role;
 
 -- Refus de deposer, dans l'ordre des gardes ----------------------------------------------------------------------------

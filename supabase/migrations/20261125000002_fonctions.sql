@@ -832,9 +832,23 @@ $$;
 
 -- Délibération (story 4.2) ------------------------------------------------------------------------------------------
 
+-- Coût en dollars d'un appel au modèle du jury (Opus 5.5, SPECS § 6), seule source des tarifs (AD-5, AD-8) : changer de modèle
+-- change cette fonction, dans la même PR. Par million de tokens : entrée 4 $, sortie 20 $, écriture de cache 8 $ (cache d'une
+-- heure : 2 × l'entrée), lecture de cache 0,40 $ (0,1 × l'entrée) ; lots (Batches) à moitié prix. Interne : aucun rôle ne
+-- l'exécute (…_droits.sql), seules estimer_pire_cas et enregistrer_audit l'appellent, avec les droits de postgres.
+create function public.cout_tokens(p_entree numeric, p_sortie numeric, p_ecriture_cache numeric, p_lecture_cache numeric,
+  p_lot boolean)
+returns numeric
+language sql immutable set search_path = ''
+as $$
+  select (p_entree * 4 + p_sortie * 20 + p_ecriture_cache * 8 + p_lecture_cache * 0.4) / 1000000
+    * case when p_lot then 0.5 else 1 end
+$$;
+
 -- Pire cas en dollars des audits à envoyer de la campagne (SPECS § 6, AD-6) : chaque couple dépôt × juré sans audit, ou dont
 -- l'audit est en echec ou a_envoyer (créé par lancer_deliberation, que prive revérifie avant l'envoi), hors dépôts trop_gros. Tokens : nb_tokens_exact s'il existe, sinon nb_tokens_estime. Pire cas :
--- aucune lecture de cache (tout le code part en écriture de cache), 15 000 tokens produits par juré, prix des lots. Contrôle :
+-- aucune lecture de cache (tout le code part en écriture de cache), 15 000 tokens produits par juré, prix des lots (tarifs :
+-- cout_tokens). Contrôle :
 -- 10 dépôts × 4 jurés × 100 000 tokens = 22 $. Lue par le site pour l'affichage, revérifiée par lancer_deliberation (4.3) et
 -- prive (4.5). Exécutable par authenticated (PostgREST l'expose) : le Boss de la campagne seul, sinon 42501, et seulement
 -- après la clôture des dépôts ; et par le rôle de service (prive), à tout moment.
@@ -843,13 +857,7 @@ returns numeric
 language plpgsql stable security definer set search_path = ''
 as $$
 declare
-  -- Tarifs du modèle du jury (Opus 5.5), en dollars par million de tokens. AD-8 : changer de modèle change ces constantes,
-  -- dans la même PR.
-  c_entree constant numeric := 4;
-  c_facteur_ecriture_cache constant numeric := 2; -- cache écrit pour une heure : 2 × le prix d'entrée
-  c_sortie constant numeric := 20;
-  c_tokens_sortie constant numeric := 15000;      -- par juré, réflexion comprise
-  c_facteur_lots constant numeric := 0.5;         -- Batches : moitié prix
+  c_tokens_sortie constant numeric := 15000; -- par juré, réflexion comprise
 begin
   -- current_user vaut le propriétaire sous security definer : le rôle posé par PostgREST (set local role) se lit dans 'role'.
   if current_setting('role') <> 'service_role' and not public.est_boss(p_campagne) then
@@ -862,8 +870,7 @@ begin
     raise exception 'Les dépôts ne sont pas encore clos.';
   end if;
   return (
-    select coalesce(sum((coalesce(d.nb_tokens_exact, d.nb_tokens_estime) * c_entree * c_facteur_ecriture_cache
-      + c_tokens_sortie * c_sortie) / 1000000 * c_facteur_lots), 0)
+    select coalesce(sum(public.cout_tokens(0, c_tokens_sortie, coalesce(d.nb_tokens_exact, d.nb_tokens_estime), 0, true)), 0)
     from public.depot d
     join public.participation p on p.id = d.participation_id
     cross join (select distinct jure from public.critere) j
@@ -900,7 +907,7 @@ $$;
 -- lancements) + pire cas ≤ plafond. Crée en a_envoyer les audits manquants, et remet en a_envoyer ceux en echec (cout_usd
 -- gardé : le plafond porte sur le cumul de ce qui a été payé), sauf pour un dépôt trop_gros.
 -- La clé ne figure dans aucun message : aucun raise ne la cite, ni notice. Messages fixes, sauf l'écart du plafond (un montant).
--- shortcut: cout_usd est nul tant qu'un audit est en_cours (story 4.4) : il n'entre pas dans le dépensé ; une relance part
+-- shortcut: cout_usd est nul tant qu'un audit est en_cours (enregistrer_audit l'écrit au retour) : il n'entre pas dans le dépensé ; une relance part
 -- sans clé, donc après cloturer_deliberation (story 4.6), qui n'existe pas encore.
 create function public.lancer_deliberation(p_compte uuid, p_campagne uuid, p_cle text, p_plafond_usd numeric,
   p_version_engagements text)
@@ -999,5 +1006,164 @@ begin
   perform 1 from public.campagne where id = p_campagne for update;
   delete from vault.secrets where name = 'cle_boss_' || p_campagne;
   update public.campagne set cle_fin = null where id = p_campagne and cle_fin is not null;
+end
+$$;
+
+
+-- Audits écrits par prive (story 4.4, AD-5, AD-6) -----------------------------------------------------------------------
+-- Rôle de service seul (…_droits.sql) ; chacune verrouille d'abord la ligne campagne (for update), comme lancer_deliberation,
+-- et refuse hors deliberation : un audit ne change pas sous une relance, une clôture ou une expiration.
+
+-- Écrit le compte exact du dépôt (count_tokens au lancement, AD-6) et rend trop_gros. Au-delà de 100 000 tokens, le dépôt
+-- devient trop_gros pour de bon (un recompte plus petit ne l'efface pas) et ses audits a_envoyer passent en echec ;
+-- lancer_deliberation ne recrée ni ne relance jamais l'audit d'un dépôt trop_gros. Rien n'est tronqué.
+create function public.ecrire_tokens_exacts(p_depot uuid, p_nb integer)
+returns boolean
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_statut text;
+  v_trop_gros boolean;
+begin
+  select c.statut into v_statut from public.campagne c join public.participation p on p.campagne_id = c.id
+    join public.depot d on d.participation_id = p.id where d.id = p_depot for update of c;
+  if not found then
+    raise exception 'Dépôt introuvable.' using errcode = 'CT404';
+  end if;
+  if v_statut <> 'deliberation' then
+    raise exception 'La campagne n''est pas en délibération.' using errcode = 'CT409';
+  end if;
+  if p_nb is null or p_nb < 0 then
+    raise exception 'Nombre de tokens refusé.';
+  end if;
+  update public.depot set nb_tokens_exact = p_nb, trop_gros = trop_gros or p_nb > 100000 where id = p_depot
+  returning trop_gros into v_trop_gros;
+  if v_trop_gros then
+    update public.audit set statut = 'echec' where depot_id = p_depot and statut = 'a_envoyer';
+  end if;
+  return v_trop_gros;
+end
+$$;
+
+-- Passe en en_cours, avec l'identifiant de leur lot, ceux des audits donnés qui sont a_envoyer dans une campagne en
+-- deliberation ; les autres sont ignorés. Rend le nombre d'audits passés en_cours.
+create function public.marquer_envoye(p_audits uuid[], p_batch_id text)
+returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_nb integer;
+begin
+  if p_batch_id is null or char_length(p_batch_id) not between 1 and 200 then
+    raise exception 'Identifiant de lot refusé.';
+  end if;
+  perform 1 from public.campagne c join public.participation p on p.campagne_id = c.id
+    join public.depot d on d.participation_id = p.id join public.audit a on a.depot_id = d.id
+    where a.id = any(p_audits) order by c.id for update of c;
+  update public.audit a set statut = 'en_cours', batch_id = p_batch_id
+  from public.depot d join public.participation p on p.id = d.participation_id join public.campagne c on c.id = p.campagne_id
+  where a.depot_id = d.id and a.id = any(p_audits) and a.statut = 'a_envoyer' and c.statut = 'deliberation';
+  get diagnostics v_nb = row_count;
+  return v_nb;
+end
+$$;
+
+-- Enregistre l'issue d'un audit (AD-5 (2)) : p_statut termine ou echec. Rend le reste du plafond (plafond_usd moins la somme
+-- des cout_usd de la campagne, tous lancements compris), après écriture. Contrats avec prive (story 4.5) :
+-- - p_usage : tableau des tentatives payées, [{ "lot": true|false, "input_tokens", "output_tokens",
+--   "cache_creation_input_tokens", "cache_read_input_tokens" }] (entiers ≥ 0, absents = 0, autres clés ignorées), ou null ou []
+--   (echec sans appel). Le coût (cout_tokens, moitié prix si lot, écriture de cache au tarif d'une heure) s'ajoute à cout_usd ;
+--   les tentatives s'ajoutent à usage et à tentatives. Un audit en echec relancé garde ainsi ce qu'il a déjà coûté.
+-- - termine : p_resultat est la sortie du juré (SPECS § 6) plus "modele" et "version_consignes" (textes de 1 à 80 caractères),
+--   rangés dans leurs colonnes. criteres couvre exactement les critères non calculés du juré dans critere (AD-8 : la note d'un
+--   critère calcule vient du scan, depot.note_outillage), chaque note est un entier de 0 à 10 avec au moins une preuve
+--   { fichier, ligne, constat } ; verdict convaincu ou pas_convaincu ; replique est un texte. Sinon refus, que prive traite
+--   en relançant l'audit une fois en appel direct.
+-- - echec : p_resultat ignoré ; resultat vide, modele et version_consignes inchangés.
+-- shortcut: un repli serveur (fallbacks) vers un autre modèle est compté au tarif d'Opus 5.5 ; à corriger dès qu'un repli est
+-- observé (usage portera alors le modèle).
+create function public.enregistrer_audit(p_audit uuid, p_statut text, p_resultat jsonb, p_usage jsonb)
+returns numeric
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+  v_a public.audit%rowtype;
+  v_cout numeric;
+begin
+  select c.* into v_c from public.campagne c join public.participation p on p.campagne_id = c.id
+    join public.depot d on d.participation_id = p.id join public.audit a on a.depot_id = d.id
+    where a.id = p_audit for update of c;
+  if not found then
+    raise exception 'Audit introuvable.' using errcode = 'CT404';
+  end if;
+  if v_c.statut <> 'deliberation' then
+    raise exception 'La campagne n''est pas en délibération.' using errcode = 'CT409';
+  end if;
+  select * into v_a from public.audit where id = p_audit;
+  if v_a.statut = 'termine' then
+    raise exception 'Audit déjà terminé.' using errcode = 'CT409';
+  end if;
+  if p_statut is null or p_statut not in ('termine', 'echec') then
+    raise exception 'Statut refusé.';
+  end if;
+
+  p_usage := coalesce(p_usage, '[]');
+  if jsonb_typeof(p_usage) <> 'array' or exists (
+    select 1 from jsonb_array_elements(p_usage) u
+    where jsonb_typeof(u) <> 'object' or jsonb_typeof(u -> 'lot') is distinct from 'boolean'
+      or exists (select 1 from unnest(array['input_tokens', 'output_tokens', 'cache_creation_input_tokens',
+        'cache_read_input_tokens']) k where u ? k and (jsonb_typeof(u -> k) <> 'number' or (u ->> k) !~ '^[0-9]{1,12}$'))) then
+    raise exception 'Usage mal formé.';
+  end if;
+  select coalesce(sum(public.cout_tokens(coalesce((u ->> 'input_tokens')::numeric, 0), coalesce((u ->> 'output_tokens')::numeric, 0),
+    coalesce((u ->> 'cache_creation_input_tokens')::numeric, 0), coalesce((u ->> 'cache_read_input_tokens')::numeric, 0),
+    (u ->> 'lot')::boolean)), 0) into v_cout
+  from jsonb_array_elements(p_usage) u;
+
+  if p_statut = 'termine' and (
+    jsonb_typeof(p_resultat) is distinct from 'object'
+    or jsonb_typeof(p_resultat -> 'modele') is distinct from 'string' or char_length(p_resultat ->> 'modele') not between 1 and 80
+    or jsonb_typeof(p_resultat -> 'version_consignes') is distinct from 'string'
+    or char_length(p_resultat ->> 'version_consignes') not between 1 and 80
+    or (p_resultat ->> 'verdict') is distinct from 'convaincu' and (p_resultat ->> 'verdict') is distinct from 'pas_convaincu'
+    or jsonb_typeof(p_resultat -> 'verdict') is distinct from 'string'
+    or jsonb_typeof(p_resultat -> 'replique') is distinct from 'string'
+    or jsonb_typeof(p_resultat -> 'criteres') is distinct from 'array') then
+    raise exception 'Résultat mal formé.';
+  end if;
+  if p_statut = 'termine' and (
+    -- Les clés rendues, sans doublon, sont exactement les critères non calculés du juré.
+    (select array_agg(e ->> 'cle' order by e ->> 'cle') from jsonb_array_elements(p_resultat -> 'criteres') e)
+      is distinct from (select array_agg(cle order by cle) from public.critere where jure = v_a.jure and not calcule)
+    or exists (select 1 from jsonb_array_elements(p_resultat -> 'criteres') e
+      where jsonb_typeof(e -> 'cle') is distinct from 'string')) then
+    raise exception 'Critères du juré refusés.';
+  end if;
+  if p_statut = 'termine' and exists (
+    select 1 from jsonb_array_elements(p_resultat -> 'criteres') e
+    where jsonb_typeof(e -> 'note') is distinct from 'number' or (e ->> 'note') !~ '^([0-9]|10)$') then
+    raise exception 'Note refusée : un entier de 0 à 10.';
+  end if;
+  if p_statut = 'termine' and exists (
+    select 1 from jsonb_array_elements(p_resultat -> 'criteres') e
+    where jsonb_typeof(e -> 'preuves') is distinct from 'array' or jsonb_array_length(e -> 'preuves') = 0
+      or exists (select 1 from jsonb_array_elements(e -> 'preuves') pr
+        where jsonb_typeof(pr -> 'fichier') is distinct from 'string' or jsonb_typeof(pr -> 'ligne') is distinct from 'number'
+          or jsonb_typeof(pr -> 'constat') is distinct from 'string')) then
+    raise exception 'Note sans preuve.';
+  end if;
+
+  update public.audit set
+    statut = p_statut,
+    resultat = case when p_statut = 'termine' then p_resultat - 'modele' - 'version_consignes' end,
+    modele = case when p_statut = 'termine' then p_resultat ->> 'modele' else modele end,
+    version_consignes = case when p_statut = 'termine' then p_resultat ->> 'version_consignes' else version_consignes end,
+    cout_usd = coalesce(cout_usd, 0) + v_cout,
+    usage = case when jsonb_array_length(p_usage) = 0 then usage else coalesce(usage, '[]') || p_usage end,
+    tentatives = tentatives + jsonb_array_length(p_usage)
+  where id = p_audit;
+  return v_c.plafond_usd - (select coalesce(sum(a.cout_usd), 0) from public.audit a join public.depot d on d.id = a.depot_id
+    join public.participation p on p.id = d.participation_id where p.campagne_id = v_c.id);
 end
 $$;

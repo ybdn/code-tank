@@ -59,10 +59,12 @@ select results_eq($$select r, f, has_function_privilege(r, f, 'execute') from un
 select is((select string_agg(table_name || '.' || column_name || ':' || privilege_type, ' ' order by table_name, column_name, privilege_type)
   from information_schema.column_privileges
   where grantee = 'service_role' and table_schema = 'public' and table_name in ('reception', 'depot', 'participation', 'campagne')),
-  'campagne.bloquee_le:SELECT campagne.date_resultats:SELECT campagne.id:SELECT campagne.statut:SELECT participation.campagne_id:SELECT '
+  'campagne.bloquee_le:SELECT campagne.brief:SELECT campagne.date_resultats:SELECT campagne.id:SELECT campagne.plafond_usd:SELECT '
+  || 'campagne.statut:SELECT depot.chemin_filtre:SELECT depot.faits:SELECT depot.id:SELECT depot.nb_tokens_exact:SELECT '
+  || 'depot.participation_id:SELECT depot.trop_gros:SELECT participation.campagne_id:SELECT '
   || 'participation.id:SELECT reception.chemin_stockage:SELECT reception.cree_le:SELECT reception.id:SELECT '
   || 'reception.participation_id:SELECT reception.statut:SELECT',
-  'rôle de service : lecture des seules colonnes de prive, aucune écriture, rien sur depot');
+  'rôle de service : lecture des seules colonnes de prive (stories 3.4 et 4.4), aucune écriture');
 select is_empty($$select t from unnest(array['public.reception', 'public.depot', 'public.participation', 'public.campagne']) t
   where has_table_privilege('service_role', t, 'select,insert,update,delete,truncate,references,trigger')$$,
   'rôle de service : aucun droit de table sur reception, depot, participation ni campagne');
@@ -89,7 +91,7 @@ select results_eq($$select r.id, r.statut, c.statut from public.reception r join
   $$values ('92000000-0000-4000-8000-0000000000e4'::uuid, 'en_attente', 'deliberation')$$, 'prive lit la réception et l''état de sa campagne');
 select throws_ok($$select presentation from public.reception$$, '42501', null, 'prive ne lit pas la présentation');
 select throws_ok($$select tentatives from public.reception$$, '42501', null, 'prive ne lit pas les tentatives (noter_tentative_reception les rend)');
-select throws_ok($$select 1 from public.depot$$, '42501', null, 'prive ne lit pas depot');
+select throws_ok($$select presentation from public.depot$$, '42501', null, 'prive ne lit pas la présentation du dépôt');
 select throws_ok($$select compte_id from public.participation$$, '42501', null, 'prive ne lit pas le compte d''une participation');
 select throws_ok($$update public.reception set statut = 'refusee'$$, '42501', null, 'prive n''écrit pas reception directement');
 select throws_ok($$insert into public.depot (participation_id, chemin_stockage, sha256, nb_fichiers, nb_tokens_estime, presentation, droit_declare_le)
