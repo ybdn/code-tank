@@ -3,7 +3,7 @@
 -- Clé factice seulement. Rôles : Boss (B1, B2), candidats (A1 à A3), rôle de service.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(109);
+select plan(116);
 
 insert into auth.users (id, email)
 select ('95000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'b1', 'b2']) h;
@@ -179,6 +179,8 @@ select throws_ok($$select public.enregistrer_audit(current_setting('t.d1_sudo'):
   'P0001', 'Statut refusé.', 'statut absent : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb, '{"lot": true}')$$, 'P0001', 'Usage mal formé.', 'usage objet : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb, '[{"input_tokens": 5}]')$$, 'P0001', 'Usage mal formé.', 'usage sans lot : refus');
+select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb, '[{"lot": "true", "input_tokens": 5}]')$$, 'P0001', 'Usage mal formé.',
+  'lot non booléen : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb, '[{"lot": true, "input_tokens": -1}]')$$, 'P0001', 'Usage mal formé.',
   'tokens négatifs : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb, '[{"lot": true, "output_tokens": 1.5}]')$$, 'P0001', 'Usage mal formé.',
@@ -195,6 +197,8 @@ select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || '{"ver
   'P0001', 'Résultat mal formé.', 'version des consignes faite de blancs seuls : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || '{"verdict": "peut_etre"}')$$, 'P0001', 'Résultat mal formé.',
   'verdict hors liste : refus');
+select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || '{"verdict": 1}')$$, 'P0001', 'Résultat mal formé.',
+  'verdict non texte : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb - 'replique')$$, 'P0001', 'Résultat mal formé.', 'sans réplique : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || '{"criteres": {}}')$$, 'P0001', 'Résultat mal formé.',
   'criteres hors tableau : refus');
@@ -223,6 +227,14 @@ select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb
   'P0001', 'Note sans preuve.', 'preuves absentes : refus');
 select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0}', '{"ligne": 3, "constat": "c"}'))$$,
   'P0001', 'Note sans preuve.', 'preuve sans fichier : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,fichier}', '3'))$$,
+  'P0001', 'Note sans preuve.', 'fichier non texte : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,fichier}', '" \t "'))$$,
+  'P0001', 'Note sans preuve.', 'fichier fait de blancs : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0}', '{"fichier": "a.go", "ligne": 3}'))$$,
+  'P0001', 'Note sans preuve.', 'preuve sans constat : refus');
+select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,constat}', '""'))$$,
+  'P0001', 'Note sans preuve.', 'constat vide : refus');
 select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,ligne}', '-3'))$$,
   'P0001', 'Note sans preuve.', 'ligne -3 : refus');
 select throws_ok($$select pg_temp.essai(jsonb_set(current_setting('t.ok')::jsonb, '{criteres,0,preuves,0,ligne}', '1.5'))$$,
@@ -255,9 +267,12 @@ select throws_ok($$select public.enregistrer_audit(current_setting('t.d1_lint'):
   {"cle": "outillage_doc", "note": 9, "preuves": [{"fichier": "README.md", "ligne": 1, "constat": "c"}]}]}', null)$$,
   'P0001', 'Critères du juré refusés.', 'note sur un critère calcule : refus');
 select is(public.enregistrer_audit(current_setting('t.d1_lint')::uuid, 'termine', current_setting('t.ok')::jsonb
-  || '{"criteres": [{"cle": "tests", "note": 4, "preuves": [{"fichier": "t.go", "ligne": 1, "constat": "c"}]}]}', '[]'), 4.8::numeric,
-  'lint sans outillage_doc : accepté, sans coût');
+  || '{"criteres": [{"cle": "tests", "note": 4, "preuves": [{"fichier": "t.go", "ligne": 1, "constat": "c"}]}]}'
+  || jsonb_build_object('modele', ' ' || repeat('m', 80) || E'\n', 'version_consignes', E'\t2026-11-26 '), '[]'), 4.8::numeric,
+  'lint sans outillage_doc : accepté, sans coût (modèle de 80 caractères entouré de blancs)');
 reset role;
+select is((select modele || ':' || version_consignes from public.audit where id = current_setting('t.d1_lint')::uuid),
+  repeat('m', 80) || ':2026-11-26', 'modèle et version des consignes rangés rognés');
 select is((select note_outillage from public.depot where id = '95000000-0000-4000-8000-0000000000d1'), 6, 'la note d''outillage reste celle du scan');
 select is((select cout_usd || ':' || tentatives || ':' || coalesce(usage::text, '-') from public.audit where id = current_setting('t.d1_lint')::uuid),
   '0:0:-', 'usage vide : coût nul, aucune tentative');

@@ -1079,10 +1079,10 @@ $$;
 --   (echec sans appel). Le coût (cout_tokens, moitié prix si lot, écriture de cache au tarif d'une heure) s'ajoute à cout_usd ;
 --   les tentatives s'ajoutent à usage et à tentatives. Un audit en echec relancé garde ainsi ce qu'il a déjà coûté.
 -- - termine : p_resultat est la sortie du juré (SPECS § 6) plus "modele" et "version_consignes" (textes de 1 à 80 caractères),
---   rangés dans leurs colonnes (ni vides ni faits de blancs seuls). prive retire \u0000 des textes du juré (jsonb le refuse).
+--   rangés rognés dans leurs colonnes (ni vides ni faits de blancs seuls). prive retire \u0000 des textes du juré (jsonb le refuse).
 --   criteres couvre exactement les critères non calculés du juré dans critere (AD-8 : la note d'un
 --   critère calcule vient du scan, depot.note_outillage), chaque note est un entier de 0 à 10 avec au moins une preuve
---   { fichier, ligne, constat } ; verdict convaincu ou pas_convaincu ; replique est un texte. Sinon refus, que prive traite
+--   { fichier, ligne, constat } (fichier et constat non vides, ligne entière ≥ 1) ; verdict convaincu ou pas_convaincu ; replique est un texte. Sinon refus, que prive traite
 --   en relançant l'audit une fois en appel direct.
 -- - echec : p_resultat ignoré ; resultat vide, modele et version_consignes inchangés.
 -- - termine est refusé pour l'audit d'un dépôt trop_gros. a_envoyer → termine sans marquer_envoye reste permis (relance
@@ -1178,15 +1178,17 @@ begin
     where jsonb_array_length(e -> 'preuves') = 0
       or exists (select 1 from jsonb_array_elements(e -> 'preuves') pr
         where jsonb_typeof(pr -> 'fichier') is distinct from 'string' or jsonb_typeof(pr -> 'ligne') is distinct from 'number'
-          or (pr ->> 'ligne') !~ '^[1-9][0-9]{0,8}$' or jsonb_typeof(pr -> 'constat') is distinct from 'string')) then
+          or (pr ->> 'ligne') !~ '^[1-9][0-9]{0,8}$' or jsonb_typeof(pr -> 'constat') is distinct from 'string'
+          or char_length(btrim(pr ->> 'fichier', E' \t\r\n\u00a0')) = 0 or char_length(btrim(pr ->> 'constat', E' \t\r\n\u00a0')) = 0)) then
     raise exception 'Note sans preuve.';
   end if;
 
   update public.audit set
     statut = p_statut,
     resultat = case when p_statut = 'termine' then p_resultat - 'modele' - 'version_consignes' end,
-    modele = case when p_statut = 'termine' then p_resultat ->> 'modele' else modele end,
-    version_consignes = case when p_statut = 'termine' then p_resultat ->> 'version_consignes' else version_consignes end,
+    modele = case when p_statut = 'termine' then btrim(p_resultat ->> 'modele', E' \t\r\n\u00a0') else modele end,
+    version_consignes = case when p_statut = 'termine' then btrim(p_resultat ->> 'version_consignes', E' \t\r\n\u00a0')
+      else version_consignes end,
     cout_usd = coalesce(cout_usd, 0) + v_cout,
     usage = case when jsonb_array_length(p_usage) = 0 then usage else coalesce(usage, '[]') || p_usage end,
     tentatives = tentatives + jsonb_array_length(p_usage)

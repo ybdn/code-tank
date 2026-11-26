@@ -202,7 +202,7 @@ Trois migrations datées du même jour (AD-13) :
   reste du plafond). Contrat avec prive : `usage` est le tableau des tentatives payées, `[{ lot, input_tokens,
   output_tokens, cache_creation_input_tokens, cache_read_input_tokens }]` (entiers ≥ 0, absents ou `null` = 0), ou `null` ; son coût
   s'ajoute à `cout_usd` (écriture de cache au tarif d'une heure), ses tentatives à `usage` et `tentatives`. Pour `termine`,
-  `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés dans leurs colonnes, 1 à 80 caractères hors blancs ; prive retire
+  `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés rognés dans leurs colonnes, 1 à 80 caractères hors blancs ; prive retire
   `\u0000` des textes du juré) : `criteres`
   couvre exactement les critères non calculés du juré dans `critere` (aucune note sur `outillage_doc`), notes entières de 0
   à 10 avec au moins une preuve `{ fichier, ligne, constat }`, `verdict` `convaincu` ou `pas_convaincu`, `replique` texte.
