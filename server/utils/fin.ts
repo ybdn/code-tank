@@ -3,7 +3,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 
 // Constat d'une campagne prete (écran du Boss ou cron) : reserver_envoi pose la marque, et seul l'appelant qui l'obtient
 // envoie ; deux constats simultanés n'envoient qu'un e-mail. Jamais bloquant : tout échec est journalisé par un code fixe, sans
-// l'adresse ni le message SMTP (qui peut la citer). L'adresse est lue avec le rôle de service et ne sort pas d'ici.
+// l'adresse ni le message SMTP (qui peut la citer). L'adresse, rendue par reserver_envoi au seul rôle de service, ne sort pas d'ici.
 // shortcut: la marque est posée avant l'envoi (AD-12 : un e-mail perdu plutôt qu'un doublon) ; un envoi en échec n'est pas
 // rejoué. À revoir si une file d'envoi avec reprise arrive.
 export async function prevenirFin(event: H3Event, campagneId: string): Promise<boolean> {
@@ -14,16 +14,11 @@ export async function prevenirFin(event: H3Event, campagneId: string): Promise<b
     return false
   }
   if (!data) return false
-  const { slug, titre, boss_id } = data as { slug: string; titre: string; boss_id: string }
-  const { data: lu, error: erreurAdresse } = await admin.auth.admin.getUserById(boss_id)
-  if (erreurAdresse || !lu.user?.email) {
-    console.error('E-mail de fin de délibération : adresse du Boss illisible, e-mail perdu.')
-    return false
-  }
+  const { slug, titre, email } = data as { slug: string; titre: string; email: string }
   const config = useRuntimeConfig(event)
   const { sujet, texte } = courrielFin(config.siteUrl, slug, titre)
   try {
-    await envoyerCourriel(config, lu.user.email, sujet, texte)
+    await envoyerCourriel(config, email, sujet, texte)
     return true
   } catch (e) {
     // Le code de nodemailer (EAUTH, ECONNECTION…) seulement : le message peut citer l'adresse.

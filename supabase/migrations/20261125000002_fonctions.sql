@@ -1379,23 +1379,26 @@ begin
 end
 $$;
 
--- Réservation de l'e-mail « délibération terminée » (AD-12) : pose fin_prevenue_le si la campagne est prete et pas encore
--- prévenue, et rend ce qu'il faut à l'envoi (slug, titre, boss_id) ; null pour tout autre appelant. L'UPDATE ... WHERE ... IS NULL
--- est atomique : de deux constats simultanés, un seul obtient la ligne. Le site n'envoie qu'ensuite (un e-mail perdu plutôt
--- qu'un doublon).
+-- Réservation de l'e-mail « délibération terminée » (AD-12) : pose fin_prevenue_le si la campagne est prete, non bloquée, pas
+-- encore prévenue et si son Boss a une adresse, et rend ce qu'il faut à l'envoi (slug, titre, adresse du Boss, lue ici dans
+-- auth.users : aucune lecture séparée qui pourrait échouer après la marque) ; null pour tout autre appelant. L'UPDATE ... WHERE
+-- ... IS NULL est atomique : de deux constats simultanés, un seul obtient la ligne. Le site n'envoie qu'ensuite (un e-mail perdu
+-- plutôt qu'un doublon). Bloquée : rien n'est réservé.
+-- shortcut: une campagne débloquée après coup redevient réservable (fins_a_prevenir la relistera) ; à trancher avec la story 7.4.
 create function public.reserver_envoi(p_campagne uuid)
 returns jsonb
 language sql security definer set search_path = ''
 as $$
   update public.campagne set fin_prevenue_le = now()
-  where id = p_campagne and statut = 'prete' and fin_prevenue_le is null
-  returning jsonb_build_object('slug', slug, 'titre', titre, 'boss_id', boss_id)
+  where id = p_campagne and statut = 'prete' and fin_prevenue_le is null and bloquee_le is null
+    and exists (select 1 from auth.users u where u.id = boss_id and u.email is not null)
+  returning jsonb_build_object('slug', slug, 'titre', titre, 'email', (select u.email from auth.users u where u.id = boss_id))
 $$;
 
--- Cron : les campagnes prete dont le Boss n'est pas prévenu (ids seulement), que le site réserve une à une.
+-- Cron : les campagnes prete non bloquées dont le Boss n'est pas prévenu (ids seulement), que le site réserve une à une.
 create function public.fins_a_prevenir()
 returns setof uuid
 language sql stable security definer set search_path = ''
 as $$
-  select id from public.campagne where statut = 'prete' and fin_prevenue_le is null
+  select id from public.campagne where statut = 'prete' and fin_prevenue_le is null and bloquee_le is null
 $$;

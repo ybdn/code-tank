@@ -158,8 +158,9 @@ async function actualiser(silencieux = false) {
   // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
   if (actualisation.value) return
   actualisation.value = true
-  // Vidée puis remplie : un second clic redit l'annonce.
+  // Vidée puis remplie : un second clic redit l'annonce. Une erreur d'un essai précédent disparaît.
   annonceSuivi.value = ''
+  alerte.value = ''
   try {
     const r = await $fetch<{ etat: string; progression: Progression }>(`/api/boss/${encodeURIComponent(slug)}/actualisation`, { method: 'POST', body: {} })
     progression.value = r.progression
@@ -168,8 +169,9 @@ async function actualiser(silencieux = false) {
     await refresh()
     if (!finAnnoncee()) annonceSuivi.value = ANNONCES_JURY[r.etat] ?? 'Progression à jour. Le jury n\'a pas pu être relancé : réessaie dans une minute.'
   } catch (e) {
-    await echec(e)
-    finAnnoncee()
+    // 409 : la campagne a pu passer à prete ; relue d'abord, la fin s'annonce sans erreur.
+    if ((e as { statusCode?: number }).statusCode === 409) await refresh()
+    if (!finAnnoncee()) await echec(e)
   } finally {
     actualisation.value = false
   }

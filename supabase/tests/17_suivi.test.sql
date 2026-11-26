@@ -2,7 +2,7 @@
 -- reserver_envoi (prete seulement, une seule réservation même rejouée), fins_a_prevenir. Boss B1 (campagne P), B2 (campagne Q).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(19);
+select plan(21);
 
 insert into auth.users (id, email)
 select ('97000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2']) h;
@@ -70,12 +70,18 @@ set local role service_role;
 select set_eq($$select * from public.fins_a_prevenir()$$,
   format('values (%L::uuid), (%L::uuid)', current_setting('t.p'), current_setting('t.q')), 'prete non prévenues : listées');
 select is(public.reserver_envoi(current_setting('t.p')::uuid),
-  jsonb_build_object('slug', 'suivip', 'titre', 'Titre suivip', 'boss_id', '97000000-0000-4000-8000-0000000000b1'),
-  'prete : la réservation rend slug, titre et Boss');
+  jsonb_build_object('slug', 'suivip', 'titre', 'Titre suivip', 'email', 'b1@example.org'),
+  'prete : la réservation rend slug, titre et adresse du Boss');
 select is(public.reserver_envoi(current_setting('t.p')::uuid), null, 'second constat : rien, la marque est posée');
 select set_eq($$select * from public.fins_a_prevenir()$$, format('values (%L::uuid)', current_setting('t.q')), 'P n''est plus à prévenir');
 reset role;
 select isnt((select fin_prevenue_le from public.campagne where slug = 'suivip'), null, 'fin_prevenue_le posée');
+-- Q bloquée : ni listée ni réservée, la marque reste nulle.
+update public.campagne set bloquee_le = now(), motif_blocage = 'Motif' where slug = 'suiviq';
+set local role service_role;
+select is_empty($$select * from public.fins_a_prevenir()$$, 'campagne bloquée : pas listée');
+select is(public.reserver_envoi(current_setting('t.q')::uuid), null, 'campagne bloquée : rien à réserver');
+reset role;
 select is((select fin_prevenue_le from public.campagne where slug = 'suiviq'), null, 'Q pas encore prévenue');
 
 select * from finish();
