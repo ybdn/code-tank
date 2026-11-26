@@ -538,8 +538,8 @@ begin
   if not found then
     raise exception 'Tu n''es pas inscrit à cette campagne.';
   end if;
-  -- Une réception refusée ne survit pas au départ : sa présentation reviendrait à la réinscription.
-  -- shortcut: seule la ligne part ; son zip est effacé par prive au refus (story 3.4).
+  -- Une réception refusée ne survit pas au départ : sa présentation reviendrait à la réinscription. Son zip a été effacé
+  -- par prive au refus (story 3.4).
   delete from public.reception r using public.participation p
   where p.id = r.participation_id and p.campagne_id = p_campagne and p.compte_id = auth.uid();
 end
@@ -649,7 +649,8 @@ $$;
 -- porté par une réception ou un dépôt est refusé. Textes rognés de leurs blancs de bord ; demande vide : aucune. Le premier
 -- dépôt de la campagne fige ses règles et le rôle du Boss. Exécutable par authenticated (PostgREST l'expose) : toutes les
 -- règles vivent ici, limite de débit par compte comprise.
--- shortcut: l'archive d'une réception refusée remplacée reste dans le bucket ; objets_abandonnes (AD-11, epic 6) l'effacera.
+-- shortcut: l'archive d'une réception refusée est effacée par prive au refus ; si cet effacement a échoué, elle reste dans le
+-- bucket une fois la réception remplacée, jusqu'à objets_abandonnes (AD-11, epic 6).
 create function public.deposer(p_campagne uuid, p_chemin text, p_presentation text, p_demande text, p_droit_declare boolean)
 returns void
 language plpgsql security definer set search_path = ''
@@ -737,5 +738,91 @@ begin
     raise exception 'Tu n''as pas de dépôt dans cette campagne.' using errcode = 'CT404';
   end if;
   return public.effacer_archives(v_depot);
+end
+$$;
+
+
+-- Contrôle des réceptions par prive (story 3.4) -------------------------------------------------------------------------
+-- Réservées au rôle de service (AD-1) ; chacune verrouille d'abord la ligne campagne (AD-2), comme deposer et retirer_depot.
+-- Une réception en_attente ne change pas sous prive : deposer, retirer_depot et se_desinscrire la refusent tant qu'elle attend.
+
+-- Compte un essai de contrôle avant qu'il commence ; rend le nouveau nombre, ou null si la réception n'attend plus.
+create function public.noter_tentative_reception(p_reception uuid)
+returns integer
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_tentatives integer;
+begin
+  perform 1 from public.campagne c join public.participation p on p.campagne_id = c.id
+    join public.reception r on r.participation_id = p.id where r.id = p_reception for update of c;
+  update public.reception set tentatives = tentatives + 1 where id = p_reception and statut = 'en_attente'
+  returning tentatives into v_tentatives;
+  return v_tentatives;
+end
+$$;
+
+-- Refuse une réception en attente avec ses motifs ([{ code, message }], message lu par le candidat) et rend son chemin, que
+-- prive efface (SPECS § 4 : on ne garde pas le fichier) ; null si elle n'attendait plus : rien à faire.
+create function public.refuser_reception(p_reception uuid, p_motifs jsonb)
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_chemin text;
+begin
+  if jsonb_typeof(p_motifs) is distinct from 'array' or jsonb_array_length(p_motifs) = 0 then
+    raise exception 'Motifs de refus mal formés.';
+  end if;
+  if exists (select 1 from jsonb_array_elements(p_motifs) m
+    where jsonb_typeof(m -> 'code') is distinct from 'string' or jsonb_typeof(m -> 'message') is distinct from 'string') then
+    raise exception 'Motifs de refus mal formés.';
+  end if;
+  perform 1 from public.campagne c join public.participation p on p.campagne_id = c.id
+    join public.reception r on r.participation_id = p.id where r.id = p_reception for update of c;
+  update public.reception set statut = 'refusee', motifs = p_motifs where id = p_reception and statut = 'en_attente'
+  returning chemin_stockage into v_chemin;
+  return v_chemin;
+end
+$$;
+
+-- Accepte une réception en attente (SPECS § 4, AD-6, AD-11) : crée le dépôt de la participation, ou remplace l'ancien, avec
+-- ce que prive a mesuré et ce que le candidat a déclaré (recopié de la réception), puis supprime la réception. Rend les
+-- chemins de l'ancien dépôt (effacer_archives), que prive efface ; vide sans ancien dépôt. Le zip déposé reste
+-- (chemin_stockage, sha256 est son empreinte) avec l'archive filtrée, déjà écrite par prive à côté de lui.
+-- Refusée si la campagne n'est plus ouverte, vivante et non bloquée : rien ne change sous une délibération ou une modération.
+create function public.accepter_depot(p_reception uuid, p_chemin_filtre text, p_sha256 text, p_nb_fichiers integer,
+  p_fichiers_exclus jsonb, p_nb_tokens_estime integer, p_faits jsonb, p_note_outillage integer, p_alerte_manipulation boolean,
+  p_alertes_integrite jsonb)
+returns text[]
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+  v_r public.reception%rowtype;
+  v_ancien public.depot%rowtype;
+begin
+  select c.* into v_c from public.campagne c join public.participation p on p.campagne_id = c.id
+    join public.reception r on r.participation_id = p.id where r.id = p_reception for update of c;
+  select * into v_r from public.reception where id = p_reception and statut = 'en_attente';
+  if not found then
+    raise exception 'Réception introuvable ou déjà traitée.' using errcode = 'CT404';
+  end if;
+  if v_c.statut <> 'ouverte' or not public.campagne_vivante(v_c.id) then
+    raise exception 'La campagne n''accepte plus de dépôt.' using errcode = 'CT409';
+  end if;
+  -- L'archive filtrée est celle de ce zip (même nom, suffixe .filtre.zip) et doit être arrivée dans le bucket.
+  if p_chemin_filtre is distinct from regexp_replace(v_r.chemin_stockage, '\.zip$', '.filtre.zip')
+    or not exists (select 1 from storage.objects where bucket_id = 'depots' and name = p_chemin_filtre) then
+    raise exception 'Archive filtrée absente.';
+  end if;
+  delete from public.depot where participation_id = v_r.participation_id returning * into v_ancien;
+  insert into public.depot (participation_id, chemin_stockage, chemin_filtre, sha256, nb_fichiers, fichiers_exclus,
+    nb_tokens_estime, faits, note_outillage, alerte_manipulation, alertes_integrite, presentation, demande, droit_declare_le)
+  values (v_r.participation_id, v_r.chemin_stockage, p_chemin_filtre, p_sha256, p_nb_fichiers, p_fichiers_exclus,
+    p_nb_tokens_estime, p_faits, p_note_outillage, p_alerte_manipulation, p_alertes_integrite, v_r.presentation, v_r.demande,
+    v_r.droit_declare_le);
+  delete from public.reception where id = p_reception;
+  return case when v_ancien.id is null then '{}'::text[] else public.effacer_archives(v_ancien) end;
 end
 $$;

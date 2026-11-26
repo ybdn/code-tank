@@ -48,7 +48,7 @@ $$, 'authenticated : aucune écriture sur participation');
 select is_empty($$
   select r from unnest(array['anon', 'service_role']) r
   where has_table_privilege(r, 'public.participation', 'select,insert,update,delete,truncate,references,trigger')
-$$, 'aucun droit sur participation pour anon ni pour le rôle de service');
+$$, 'aucun droit de table sur participation pour anon ni pour le rôle de service (colonnes de prive : 12_controle)');
 select is_empty($$
   select f from unnest(array['public.sinscrire(uuid, boolean, text)', 'public.se_desinscrire(uuid)']) f
   where not has_function_privilege('authenticated', f, 'execute')
@@ -71,7 +71,7 @@ reset role;
 set local role service_role;
 select throws_ok($$select public.sinscrire(current_setting('t.pub')::uuid, true)$$, '42501', null, 'le rôle de service n''inscrit pas');
 select throws_ok($$select public.se_desinscrire(current_setting('t.pub')::uuid)$$, '42501', null, 'le rôle de service ne désinscrit pas');
-select throws_ok($$select 1 from public.participation$$, '42501', null, 'le rôle de service ne lit pas participation');
+select throws_ok($$select compte_id from public.participation$$, '42501', null, 'le rôle de service ne lit pas compte_id (deux colonnes pour prive, story 3.4)');
 reset role;
 
 -- Refus de sinscrire, dans l'ordre des gardes ---------------------------------------------------------------
