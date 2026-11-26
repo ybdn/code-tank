@@ -274,6 +274,9 @@ isOneToOne: false
 "consommer_debit":
 { Args: { "p_action": string,"p_empreinte": string,"p_fenetre_s": number,"p_maximum": number }; Returns: number
                            },
+"cout_tokens":
+{ Args: { "p_ecriture_cache": number,"p_entree": number,"p_lecture_cache": number,"p_lot": boolean,"p_sortie": number }; Returns: number
+                           },
 "creer_campagne":
 { Args: { "p_brief": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: string
                            },
@@ -286,11 +289,17 @@ isOneToOne: false
 "deposer":
 { Args: { "p_campagne": string,"p_chemin": string,"p_demande": string,"p_droit_declare": boolean,"p_presentation": string }; Returns: undefined
                            },
+"ecrire_tokens_exacts":
+{ Args: { "p_depot": string,"p_nb": number }; Returns: boolean
+                           },
 "effacer_archives":
 { Args: { "d": Omit<Database["public"]['Tables']["depot"]['Row'], Database["public"]['Tables']["depot"]['ComputedFields']> }; Returns: (string)[]
                            },
 "effacer_cle_boss":
 { Args: { "p_campagne": string }; Returns: undefined
+                           },
+"enregistrer_audit":
+{ Args: { "p_audit": string,"p_resultat": Json,"p_statut": string,"p_usage": Json }; Returns: number
                            },
 "est_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -332,6 +341,9 @@ isOneToOne: false
         isOneToOne: false
         isSetofReturn: true
       } },
+"marquer_envoye":
+{ Args: { "p_audits": (string)[],"p_batch_id": string }; Returns: number
+                           },
 "modifier_campagne":
 { Args: { "p_brief": string,"p_campagne": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined
                            },

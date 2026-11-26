@@ -182,7 +182,7 @@ Trois migrations datées du même jour (AD-13) :
   `[{ code, message }]`, rend le zip à effacer) et `accepter_depot` (campagne ouverte et vivante, archive filtrée présente
   à côté du zip ; crée ou remplace le dépôt avec les mesures de prive et la déclaration de la réception, supprime la
   réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne ; `estimer_pire_cas`
-  (story 4.2 : pire cas en dollars des audits à envoyer, tarifs du modèle du jury en constantes ; Boss de la campagne ou
+  (story 4.2 : pire cas en dollars des audits à envoyer, tarifs par `cout_tokens` ; Boss de la campagne ou
   rôle de service, **42501** sinon ; refusée au Boss avant la clôture des dépôts, pour ne pas trahir la taille des
   dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, créé par `lancer_deliberation` et écrit par les
   fonctions de la story 4.4. Délibération (story 4.3) : colonnes `plafond_usd`, `lancements` (3 au plus) et `cle_fin` (4
@@ -190,15 +190,33 @@ Trois migrations datées du même jour (AD-13) :
   `depense_audits` (somme des `cout_usd`, Boss ou rôle de service) ; `lancer_deliberation(compte, campagne, clé, plafond, version)`
   (Boss de la campagne, aucune réception en attente, dépôts
   clos, 48 h au moins avant les résultats, moins de trois lancements, aucune clé rangée, dépensé + pire cas ≤ plafond ; crée
-  ou remet en `a_envoyer` les audits, garde le coût payé d'un audit en `echec`, passe en `deliberation`, et ne range la clé
+  ou remet en `a_envoyer` les audits, garde le coût et l'usage payés d'un audit en `echec`, passe en `deliberation`, et ne range la clé
   dans Vault, secret `cle_boss_<campagne>`, qu'en dernier), `lire_cle_boss` (nulle hors `deliberation`) et `effacer_cle_boss`.
+  Audits écrits par prive (story 4.4, AD-5, AD-6), toutes `for update` sur la campagne et refusées hors `deliberation` :
+  `cout_tokens(entrée, sortie, écriture de cache, lecture de cache, lot)`, seule source des tarifs (Opus 5.5 : 4 $ / 20 $
+  / 8 $ / 0,40 $ le million, lots à moitié prix ; changer de modèle change cette fonction) ;
+  `ecrire_tokens_exacts(dépôt, nb)` (écrit `nb_tokens_exact` ; au-delà de 100 000, `trop_gros` pour de bon et ses audits
+  `a_envoyer` en `echec`, jamais recréés) ; `marquer_envoye(audits, batch_id)` (passe les `a_envoyer` en `en_cours` avec leur
+  lot, ignore les autres, dont ceux d'un dépôt sans compte exact ou `trop_gros`, rend le nombre ; prive appelle donc
+  `ecrire_tokens_exacts` sur chaque dépôt avant `marquer_envoye`) ; `enregistrer_audit(audit, statut, resultat, usage)` (`termine` ou `echec`, rend le
+  reste du plafond). Contrat avec prive : `usage` est le tableau des tentatives payées, `[{ lot, input_tokens,
+  output_tokens, cache_creation_input_tokens, cache_read_input_tokens }]` (entiers ≥ 0, absents ou `null` = 0), ou `null` ; son coût
+  s'ajoute à `cout_usd` (écriture de cache au tarif d'une heure), ses tentatives à `usage` et `tentatives`. Pour `termine`,
+  `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés rognés dans leurs colonnes, 1 à 80 caractères hors blancs ; prive retire
+  `\u0000` des textes du juré) : `criteres`
+  couvre exactement les critères non calculés du juré dans `critere` (aucune note sur `outillage_doc`), notes entières de 0
+  à 10 avec au moins une preuve `{ fichier, ligne, constat }`, `verdict` `convaincu` ou `pas_convaincu`, `replique` texte.
+  Pour `echec`, `resultat` est ignoré. `termine` est refusé pour un dépôt `trop_gros`. Un refus n'écrit rien, pas même le coût payé : l'appel suivant pour le même audit
+  porte toutes les tentatives payées depuis la dernière écriture réussie. Pas d'idempotence : chaque appel
+  ajoute son usage ; ne pas rejouer un appel dont la réponse est perdue sans relire `audit.tentatives`. Une preuve porte une
+  `ligne` entière ≥ 1.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
   `est_admin()`), sans droit du rôle de service ; `critere` en lecture seule pour tous,
   rôle de service compris,
-  remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, le rôle de service n'en lit que quatre
-  colonnes (prive) ;
+  remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, le rôle de service n'en lit que six
+  colonnes (prive, dont `brief` et `plafond_usd` pour la délibération) ;
   `creer_campagne`, `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` exécutables par `authenticated` seul
   (leurs règles vivent dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun
   client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service ; `campagne_calculee`
@@ -209,13 +227,15 @@ Trois migrations datées du même jour (AD-13) :
   exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions) ; `reception`
   et `depot` lisibles par le compte de leur participation seul (RLS, colonnes choisies : ni chemins, ni tentatives, ni
   faits, note d'outillage et alertes), sans écriture directe ; le rôle de service lit cinq colonnes de `reception`
-  (prive) et rien de `depot` ; `peut_deposer`, `deposer` et `retirer_depot` exécutables par `authenticated` seul (leurs
+  (prive) et six de `depot` (`id`, `participation_id`, `chemin_filtre`, `faits`, `nb_tokens_exact`, `trop_gros` : ce que
+  prive envoie au jury) ; `peut_deposer`, `deposer` et `retirer_depot` exécutables par `authenticated` seul (leurs
   règles vivent dans les fonctions) ; `effacer_archives`, `noter_tentative_reception`, `refuser_reception` et
   `accepter_depot` par le rôle de service seul ; `audit` sans politique ni droit client, le rôle de service la lit
   seulement ; `estimer_pire_cas` et `depense_audits` exécutables par `authenticated` et le rôle de service (garde du Boss dans la fonction) ; `engagement`
   sans politique ni droit client ni droit direct du rôle de service ; `lancer_deliberation`, `lire_cle_boss` et
   `effacer_cle_boss` par le rôle de service seul (jamais `authenticated` : la règle `count_tokens` est tenue par la route) ;
-  le schéma `vault` est fermé à `anon` et `authenticated`.
+  `ecrire_tokens_exacts`, `marquer_envoye` et `enregistrer_audit` par le rôle de service seul, `cout_tokens` par aucun
+  rôle ; le schéma `vault` est fermé à `anon` et `authenticated`.
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux
