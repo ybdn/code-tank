@@ -3,7 +3,7 @@
 -- Rôles : visiteur, Boss (B1), autre Boss (B2), candidat (A1), rôle de service.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(29);
+select plan(31);
 
 insert into auth.users (id, email)
 select ('93000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'b1', 'b2', 'b3']) h;
@@ -104,6 +104,18 @@ update public.depot set nb_tokens_exact = null where id = '93000000-0000-4000-80
 set local role service_role;
 select is(public.estimer_pire_cas(current_setting('t.x')::uuid), 1.39::numeric, 'd1 sans compte exact : 2 × 0,35 $ + 3 × 0,23 $');
 reset role;
+
+-- Avant la clôture des dépôts : refus pour le Boss (la somme trahirait la taille des dépôts concurrents), pas pour prive.
+update public.campagne set cloture_depot = now() + interval '1 day' where id = current_setting('t.x')::uuid;
+set local role authenticated;
+set local request.jwt.claims = '{"sub":"93000000-0000-4000-8000-0000000000b1","role":"authenticated"}';
+select throws_ok($$select public.estimer_pire_cas(current_setting('t.x')::uuid)$$, 'P0001', 'Les dépôts ne sont pas encore clos.',
+  'le Boss n''estime pas avant la clôture des dépôts');
+reset role;
+set local role service_role;
+select is(public.estimer_pire_cas(current_setting('t.x')::uuid), 1.39::numeric, 'le rôle de service estime avant la clôture');
+reset role;
+update public.campagne set cloture_depot = now() - interval '1 day' where id = current_setting('t.x')::uuid;
 
 -- Le Boss de la campagne seul, par /rest/v1/rpc comme par la route.
 set local role authenticated;

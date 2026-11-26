@@ -836,8 +836,8 @@ $$;
 -- l'audit est en echec ou a_envoyer (créé par lancer_deliberation, que prive revérifie avant l'envoi), hors dépôts trop_gros. Tokens : nb_tokens_exact s'il existe, sinon nb_tokens_estime. Pire cas :
 -- aucune lecture de cache (tout le code part en écriture de cache), 15 000 tokens produits par juré, prix des lots. Contrôle :
 -- 10 dépôts × 4 jurés × 100 000 tokens = 22 $. Lue par le site pour l'affichage, revérifiée par lancer_deliberation (4.3) et
--- prive (4.5). Exécutable par authenticated (PostgREST l'expose) : le Boss de la campagne seul, sinon 42501 ; et par le
--- rôle de service (prive).
+-- prive (4.5). Exécutable par authenticated (PostgREST l'expose) : le Boss de la campagne seul, sinon 42501, et seulement
+-- après la clôture des dépôts ; et par le rôle de service (prive), à tout moment.
 create function public.estimer_pire_cas(p_campagne uuid)
 returns numeric
 language plpgsql stable security definer set search_path = ''
@@ -854,6 +854,12 @@ begin
   -- current_user vaut le propriétaire sous security definer : le rôle posé par PostgREST (set local role) se lit dans 'role'.
   if current_setting('role') <> 'service_role' and not public.est_boss(p_campagne) then
     raise exception 'Campagne introuvable.' using errcode = '42501';
+  end if;
+  -- Avant la clôture, la somme suivie dépôt après dépôt donnerait au Boss la taille du code de chaque concurrent, qu'il ne
+  -- lit pas (RLS de depot) : refus, sauf pour le rôle de service. Après la clôture, les dépôts ne changent plus.
+  if current_setting('role') <> 'service_role'
+    and now() < (select cloture_depot from public.campagne where id = p_campagne) then
+    raise exception 'Les dépôts ne sont pas encore clos.';
   end if;
   return (
     select coalesce(sum((coalesce(d.nb_tokens_exact, d.nb_tokens_estime) * c_entree * c_facteur_ecriture_cache

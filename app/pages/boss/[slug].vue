@@ -22,7 +22,7 @@ const publiee = computed(() => !!data.value && !['brouillon', 'expiree'].include
 // le lancement (story 4.3, qui revérifie de toute façon en SQL).
 const { data: estimation, status: etatEstimation } = useFetch<{ disponible: true; pire_cas_usd: number } | { disponible: false; raison: string }>(
   `/api/boss/${encodeURIComponent(slug)}/estimation`, { lazy: true, watch: [() => data.value?.statut] })
-const dollars = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
+const dollars = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(n)
 const occupe = ref(false)
 const annonce = ref(route.query.cree ? 'Brouillon créé.' : '')
 const alerte = ref('')

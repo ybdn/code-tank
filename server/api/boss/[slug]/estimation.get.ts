@@ -1,8 +1,8 @@
 import { serverSupabaseServiceRole } from '#supabase/server'
 
 // Pire cas de la délibération (story 4.2, SPECS § 6, AD-6), pour le Boss de la campagne seul (404 sinon). Tant que la
-// délibération ne peut pas se lancer (campagne non ouverte, bloquée, échue, dépôts pas clos, réception en attente de
-// contrôle), un état « pas encore » avec sa raison, pas une erreur. Sinon estimer_pire_cas, avec le JWT du Boss : les tarifs
+// délibération ne peut pas se lancer (campagne non ouverte, bloquée, échue, à moins de 48 h des résultats, dépôts pas clos,
+// réception en attente de contrôle, aucun dépôt à auditer), un état « pas encore » avec sa raison, pas une erreur. Sinon estimer_pire_cas, avec le JWT du Boss : les tarifs
 // n'existent qu'en SQL (AD-5).
 export default defineEventHandler(async (event) => {
   const { client, campagne } = await campagneDuBoss(event)

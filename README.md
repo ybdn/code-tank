@@ -171,7 +171,8 @@ Trois migrations datées du même jour (AD-13) :
   à côté du zip ; crée ou remplace le dépôt avec les mesures de prive et la déclaration de la réception, supprime la
   réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne ; `estimer_pire_cas`
   (story 4.2 : pire cas en dollars des audits à envoyer, tarifs du modèle du jury en constantes ; Boss de la campagne ou
-  rôle de service, **42501** sinon). Table `audit` (story 4.2) : un audit par couple dépôt × juré, écrit par les
+  rôle de service, **42501** sinon ; refusée au Boss avant la clôture des dépôts, pour ne pas trahir la taille des
+  dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, écrit par les
   fonctions des stories 4.3 et 4.4.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
