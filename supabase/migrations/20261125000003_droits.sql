@@ -176,3 +176,13 @@ grant execute on function public.ecrire_tokens_exacts(uuid, integer), public.mar
 -- du juré) et plafond (reste à dépenser). Rien d'autre : ni chemin du zip, ni présentation, ni alertes.
 grant select (id, participation_id, chemin_filtre, faits, nb_tokens_exact, trop_gros) on public.depot to service_role;
 grant select (brief, plafond_usd) on public.campagne to service_role;
+
+-- Clôture et fin (story 4.6, AD-4 (4)) : cloturer_deliberation, terminer_deliberation et cloturer_cles_expirees, rôle de service
+-- seul, jamais authenticated (PostgREST les exposerait : terminer_deliberation tient sa règle de la route, qui passe l'id
+-- vérifié du Boss). Les fonctions internes (déclencheur, audits_termines, abandonner_audits) ne sont exécutables par aucun rôle.
+revoke all on function public.cloturer_deliberation(uuid, boolean), public.terminer_deliberation(uuid, uuid),
+  public.cloturer_cles_expirees() from public, anon, authenticated;
+grant execute on function public.cloturer_deliberation(uuid, boolean), public.terminer_deliberation(uuid, uuid),
+  public.cloturer_cles_expirees() to service_role;
+revoke all on function public.effacer_cle_sortie(), public.audits_termines(uuid), public.abandonner_audits(uuid)
+  from public, anon, authenticated, service_role;

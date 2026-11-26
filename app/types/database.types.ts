@@ -259,14 +259,26 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "accepter_depot":
+            "abandonner_audits":
+{ Args: { "p_campagne": string }; Returns: undefined
+                           },
+"accepter_depot":
 { Args: { "p_alerte_manipulation": boolean,"p_alertes_integrite": Json,"p_chemin_filtre": string,"p_faits": Json,"p_fichiers_exclus": Json,"p_nb_fichiers": number,"p_nb_tokens_estime": number,"p_note_outillage": number,"p_reception": string,"p_sha256": string }; Returns: (string)[]
+                           },
+"audits_termines":
+{ Args: { "p_campagne": string }; Returns: boolean
                            },
 "campagne_vivante":
 { Args: { "p_campagne": string }; Returns: boolean
                            },
 "changer_pseudo":
 { Args: { "p_pseudo": string }; Returns: undefined
+                           },
+"cloturer_cles_expirees":
+{ Args: Record<PropertyKey, never>; Returns: Json
+                           },
+"cloturer_deliberation":
+{ Args: { "p_campagne": string,"p_forcer"?: boolean }; Returns: string
                            },
 "compte_actif":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -382,6 +394,9 @@ isOneToOne: false
                            },
 "supprimer_brouillon":
 { Args: { "p_campagne": string }; Returns: undefined
+                           },
+"terminer_deliberation":
+{ Args: { "p_campagne": string,"p_compte": string }; Returns: string
                            },
 "verifier_reglages":
 { Args: { "p_brief": string,"p_cloture": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture": string,"p_resultats": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined

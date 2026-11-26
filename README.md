@@ -84,6 +84,12 @@ pnpm build
   lancement), puis `lancer_deliberation` avec la clé de service et l'id vérifié du Boss (refus de la base : **409**, plafond
   insuffisant avec l'écart), puis `appelerJury(…, 'lancement')`. Réponse `{ cle_fin, lancements }`. La clé n'est ni journalisée
   ni renvoyée ni citée par une erreur ; le journal ne porte que le statut de `count_tokens`.
+- `POST /api/boss/[slug]/fin` (story 4.6, AD-5) : Boss (**404**), JSON (**415**), puis `terminer_deliberation` avec la clé de service et
+  l'id vérifié du Boss. Campagne en `deliberation` sans clé : elle passe en `prete`, les audits non terminés en `echec` (un
+  dépôt dont un audit est en échec n'a pas de score, ni classé ni noté zéro ; l'affichage vient à l'epic 5). Refus de la base
+  (clé encore rangée : le jury travaille, autre étape, compte non actif, campagne bloquée ; une campagne échue se termine) : **409**. Réponse
+  `{ statut: 'prete' }`. Sur `/boss/[slug]`, le bloc « Terminer la délibération » s'affiche en `deliberation` sans clé, à côté du
+  formulaire de relance (nouvelle clé, plafond relevable, `lancements < 3`).
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -92,7 +98,9 @@ pnpm build
 - `server/utils/jury.ts` : `appelerJury`, réveil du jury (dépôt privé) par `POST <NUXT_JURY_URL>`, jamais bloquant.
 - `server/utils/conservation.ts` : `verifierCron`, contrôle de `CRON_SECRET` en temps constant (**404** sinon).
   `GET /api/cron/conservation`, appelée chaque jour par le planificateur de Vercel (`vercel.json`) : aucune tâche de
-  conservation encore (epic 6) ; elle réveille le jury (`appelerJury`, sans attendre ni échouer avec lui, filet d'AD-7).
+  conservation encore (epic 6) ; elle réveille le jury (`appelerJury`, sans attendre ni échouer avec lui, filet d'AD-7), puis appelle
+  `cloturer_cles_expirees` (story 4.6) : toute clé du Boss de plus de 48 h, ou dont la campagne n'est plus en `deliberation`, est
+  clôturée de force (sans effet sous 48 h, revérifié sous le verrou), une campagne en erreur ne bloquant pas les suivantes. Réponse `{ cles_cloturees, echecs }`. Le cron étant quotidien, une clé vit au plus 48 h + 24 h.
 - `server/utils/courriel.ts` : `envoyerCourriel`, envoi d'un e-mail texte signé depuis `code-tank@ybdn.io`.
 - `server/utils/secret.ts` : `SECRET_MIN`, longueur minimale des secrets (32 caractères).
 - `server/utils/session.ts`, `server/utils/publique.ts` : session vérifiée par Auth, lecture anonyme de PostgREST à délai court.
@@ -192,6 +200,14 @@ Trois migrations datées du même jour (AD-13) :
   clos, 48 h au moins avant les résultats, moins de trois lancements, aucune clé rangée, dépensé + pire cas ≤ plafond ; crée
   ou remet en `a_envoyer` les audits, garde le coût et l'usage payés d'un audit en `echec`, passe en `deliberation`, et ne range la clé
   dans Vault, secret `cle_boss_<campagne>`, qu'en dernier), `lire_cle_boss` (nulle hors `deliberation`) et `effacer_cle_boss`.
+  Clôture (story 4.6, AD-4 (4), AD-5 (3 à 5)), rôle de service seul : `cloturer_deliberation(campagne, forcer)` (verrou de la
+  campagne ; refuse en `CT409` tant qu'un audit est `en_cours`, sauf `forcer`, le cron, qui l'abandonne ; passe en `echec` les
+  audits `a_envoyer` ; efface la clé ; pose `prete` si tous les audits des dépôts non `trop_gros` sont `termine` et la campagne
+  non bloquée, sinon la campagne reste en `deliberation` sans clé ; hors `deliberation`, elle n'efface que la clé ; rend l'état
+  final), `terminer_deliberation(compte, campagne)` (Boss, compte actif, `deliberation` sans clé : `echec` pour les audits non
+  terminés, puis `prete`) et `cloturer_cles_expirees()` (cron : clés de plus de 48 h ou hors `deliberation`, rend `{ cles_cloturees, echecs }`).
+  Le déclencheur `campagne_cle_sortie` efface la clé et `cle_fin` à toute sortie de `deliberation` (`prete`, `expiree`), et
+  `campagne_cle_suppression` à la suppression de la campagne (Vault n'a pas de clé étrangère).
   Audits écrits par prive (story 4.4, AD-5, AD-6), toutes `for update` sur la campagne et refusées hors `deliberation` :
   `cout_tokens(entrée, sortie, écriture de cache, lecture de cache, lot)`, seule source des tarifs (Opus 5.5 : 4 $ / 20 $
   / 8 $ / 0,40 $ le million, lots à moitié prix ; changer de modèle change cette fonction) ;
@@ -234,6 +250,8 @@ Trois migrations datées du même jour (AD-13) :
   seulement ; `estimer_pire_cas` et `depense_audits` exécutables par `authenticated` et le rôle de service (garde du Boss dans la fonction) ; `engagement`
   sans politique ni droit client ni droit direct du rôle de service ; `lancer_deliberation`, `lire_cle_boss` et
   `effacer_cle_boss` par le rôle de service seul (jamais `authenticated` : la règle `count_tokens` est tenue par la route) ;
+  `cloturer_deliberation`, `terminer_deliberation` et `cloturer_cles_expirees` par le rôle de service seul (la route passe l'id
+  vérifié du Boss), leurs fonctions internes (`effacer_cle_sortie`, `audits_termines`, `abandonner_audits`) par aucun rôle ;
   `ecrire_tokens_exacts`, `marquer_envoye` et `enregistrer_audit` par le rôle de service seul, `cout_tokens` par aucun
   rôle ; le schéma `vault` est fermé à `anon` et `authenticated`.
 

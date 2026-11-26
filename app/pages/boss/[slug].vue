@@ -114,6 +114,26 @@ async function lancer() {
   }
 }
 
+// Fin de la délibération (story 4.6) : en délibération sans clé, le Boss termine sans relancer ; la base revérifie tout.
+async function terminer() {
+  if (occupe.value || !confirm('Terminer la délibération ? Un dépôt dont un audit a échoué n\'aura pas de score. Tu ne pourras plus relancer.')) return
+  occupe.value = true
+  annonce.value = ''
+  alerte.value = ''
+  try {
+    await $fetch(`/api/boss/${encodeURIComponent(slug)}/fin`, { method: 'POST', body: {} })
+    await refresh()
+    annonce.value = 'Délibération terminée. Un dépôt dont un audit a échoué n\'a pas de score.'
+    // Le bloc a disparu : le focus revient au titre, l'annonce est lue par la zone role="status".
+    await nextTick()
+    titre.value?.focus()
+  } catch (e) {
+    await echec(e)
+  } finally {
+    occupe.value = false
+  }
+}
+
 // Lien d'invitation (story 2.4) : URL absolue à partir de l'origine de la requête, la même au rendu serveur et dans le navigateur.
 const origine = useRequestURL().origin
 const lien = computed(() => data.value?.jeton_invitation ? `${origine}/invitation/${data.value.jeton_invitation}` : '')
@@ -220,6 +240,11 @@ async function supprimer() {
               <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">Lancer la délibération</button></p>
             </form>
           </template>
+        </template>
+        <template v-if="data.statut === 'deliberation' && !data.cle_fin && data.compte_actif && !data.bloquee_le">
+          <h2>Terminer la délibération</h2>
+          <p>La clé est effacée{{ estimation?.disponible && data.lancements < 3 ? ` : tu peux relancer avec une nouvelle clé (lancements restants\u00a0: ${3 - data.lancements}), seuls les audits manquants ou en échec repartent` : '' }}. Termine&nbsp;: un dépôt dont un audit a échoué n'aura pas de score, il ne sera ni classé ni noté zéro.</p>
+          <p class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="terminer">Terminer la délibération</button></p>
         </template>
         <template v-if="data.statut === 'brouillon' && actif">
           <h2>Ouvrir la campagne</h2>
