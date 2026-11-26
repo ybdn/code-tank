@@ -27,14 +27,14 @@ isOneToOne: false
                   ]
                 },"campagne": {
                   Row: {
-                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"jeton_invitation": string | null,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cle_fin": string | null,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"jeton_invitation": string | null,"lancements": number,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"plafond_usd": number | null,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"id"?: string,"jeton_invitation"?: string | null,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
+                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cle_fin"?: string | null,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"id"?: string,"jeton_invitation"?: string | null,"lancements"?: number,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"plafond_usd"?: number | null,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
                   }
                   Update: {
-                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"id"?: string,"jeton_invitation"?: string | null,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
+                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cle_fin"?: string | null,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"id"?: string,"jeton_invitation"?: string | null,"lancements"?: number,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"plafond_usd"?: number | null,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
                   }
                   Relationships: [
                     {
@@ -104,6 +104,44 @@ isOneToOne: false
       columns: ["participation_id"]
 isOneToOne: true
       referencedRelation: "participation"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"engagement": {
+                  Row: {
+                    "accepte_le": string,"campagne_id": string,"compte_id": string,"id": string,"version": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "accepte_le"?: string,"campagne_id": string,"compte_id": string,"id"?: string,"version": string
+                  }
+                  Update: {
+                    "accepte_le"?: string,"campagne_id"?: string,"compte_id"?: string,"id"?: string,"version"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "engagement_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "engagement_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne_calculee"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "engagement_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne_phase"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "engagement_compte_id_fkey"
+      columns: ["compte_id"]
+isOneToOne: false
+      referencedRelation: "compte"
       referencedColumns: ["id"]
     }
                   ]
@@ -242,11 +280,17 @@ isOneToOne: false
 "creer_compte":
 { Args: { "p_charte_acceptee": boolean,"p_compte": string,"p_majeur": boolean,"p_pseudo": string,"p_version_charte": string }; Returns: undefined
                            },
+"depense_audits":
+{ Args: { "p_campagne": string }; Returns: number
+                           },
 "deposer":
 { Args: { "p_campagne": string,"p_chemin": string,"p_demande": string,"p_droit_declare": boolean,"p_presentation": string }; Returns: undefined
                            },
 "effacer_archives":
 { Args: { "d": Omit<Database["public"]['Tables']["depot"]['Row'], Database["public"]['Tables']["depot"]['ComputedFields']> }; Returns: (string)[]
+                           },
+"effacer_cle_boss":
+{ Args: { "p_campagne": string }; Returns: undefined
                            },
 "est_admin":
 { Args: Record<PropertyKey, never>; Returns: boolean
@@ -256,6 +300,12 @@ isOneToOne: false
                            },
 "estimer_pire_cas":
 { Args: { "p_campagne": string }; Returns: number
+                           },
+"lancer_deliberation":
+{ Args: { "p_campagne": string,"p_cle": string,"p_compte": string,"p_plafond_usd": number,"p_version_engagements": string }; Returns: Json
+                           },
+"lire_cle_boss":
+{ Args: { "p_campagne": string }; Returns: string
                            },
 "lire_invitation":
 { Args: { "p_jeton": string }; Returns: {

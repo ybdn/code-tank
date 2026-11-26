@@ -15,7 +15,7 @@ export function erreurCampagne(error: { code: string; message: string }, context
   throw createError({ statusCode: 500, message })
 }
 
-export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le, jeton_invitation'
+export const COLONNES_CAMPAGNE = 'id, slug, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats, statut, regles_figees_le, bloquee_le, cree_le, jeton_invitation, plafond_usd, lancements, cle_fin'
 
 // Un slug hors de la forme imposée par la table (caractère nul, UTF-8 invalide…) ne peut désigner aucune campagne : 404
 // tout de suite, plutôt qu'une erreur de la base en 500.
@@ -41,7 +41,7 @@ export async function campagneDuBoss(event: H3Event) {
   const { data, error } = await client.from('campagne').select(COLONNES_CAMPAGNE).eq('slug', slug).maybeSingle()
   if (error) erreurCampagne(error, 'Lecture d\'une campagne :', 'La campagne ne peut pas être lue pour le moment.')
   if (!data) throw createError({ statusCode: 404, message: 'Campagne introuvable.' })
-  return { client, campagne: data }
+  return { client, campagne: data, user }
 }
 
 // Texte reçu : Postgres refuse le caractère nul et une demi-paire UTF-16 (22P05, 22P02 : un 500), retirés ou remplacés ici.

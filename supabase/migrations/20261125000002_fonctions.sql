@@ -872,3 +872,132 @@ begin
   );
 end
 $$;
+
+
+-- Lancement de la délibération (story 4.3, AD-4, AD-5) --------------------------------------------------------------
+
+-- Dépensé par les lancements de la campagne (AD-5) : somme des cout_usd de ses audits. Même garde qu'estimer_pire_cas : le Boss
+-- de la campagne (42501 sinon) ou le rôle de service ; lue par la route d'estimation, que le Boss ne lit pas audit sous RLS.
+create function public.depense_audits(p_campagne uuid)
+returns numeric
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if current_setting('role') <> 'service_role' and not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = '42501';
+  end if;
+  return (select coalesce(sum(a.cout_usd), 0) from public.audit a join public.depot d on d.id = a.depot_id
+    join public.participation p on p.id = d.participation_id where p.campagne_id = p_campagne);
+end
+$$;
+
+-- Lance la délibération de la campagne du Boss p_compte avec sa clé (SPECS § 6, § 9). Réservée au rôle de service : le site
+-- teste d'abord la clé (préfixe, jeton d'abonnement, count_tokens : règles de la route) et passe l'id vérifié du compte, que la
+-- fonction revérifie. Tous les refus passent avant la moindre écriture, et la clé n'est rangée qu'en dernier (Vault :
+-- secret `cle_boss_<campagne_id>`, que le nom suffit à retrouver) ; ses 4 derniers caractères vont dans cle_fin. Part de
+-- `ouverte` (dépôts clos) ou de `deliberation` sans clé (relance) ; trois lancements au plus ; au moins 48 h avant
+-- date_resultats (la borne de la route estimation, sans piège de changement d'heure) ; dépensé (somme des cout_usd de tous les
+-- lancements) + pire cas ≤ plafond. Crée en a_envoyer les audits manquants, et remet en a_envoyer ceux en echec (cout_usd
+-- gardé : le plafond porte sur le cumul de ce qui a été payé), sauf pour un dépôt trop_gros.
+-- La clé ne figure dans aucun message : aucun raise ne la cite, ni notice. Messages fixes, sauf l'écart du plafond (un montant).
+-- shortcut: cout_usd est nul tant qu'un audit est en_cours (story 4.4) : il n'entre pas dans le dépensé ; une relance part
+-- sans clé, donc après cloturer_deliberation (story 4.6), qui n'existe pas encore.
+create function public.lancer_deliberation(p_compte uuid, p_campagne uuid, p_cle text, p_plafond_usd numeric,
+  p_version_engagements text)
+returns jsonb
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_c public.campagne%rowtype;
+  v_depense numeric;
+  v_pire numeric;
+  v_nom constant text := 'cle_boss_' || p_campagne;
+begin
+  select * into v_c from public.campagne where id = p_campagne and boss_id = p_compte for update;
+  if not found then
+    raise exception 'Campagne introuvable.' using errcode = 'CT404';
+  end if;
+  if not exists (select 1 from public.compte where id = p_compte and etat = 'actif') then
+    raise exception 'Ton compte n''est pas actif.';
+  end if;
+  if v_c.bloquee_le is not null or now() > v_c.date_resultats then
+    raise exception 'Cette campagne est bloquée ou échue : la délibération ne part plus.';
+  end if;
+  if v_c.statut not in ('ouverte', 'deliberation') then
+    raise exception 'La délibération se lance quand la campagne est ouverte et ses dépôts clos.';
+  end if;
+  if v_c.statut = 'ouverte' and now() < v_c.cloture_depot then
+    raise exception 'Les dépôts ne sont pas encore clos.';
+  end if;
+  if exists (select 1 from public.reception r join public.participation p on p.id = r.participation_id
+    where p.campagne_id = p_campagne and r.statut = 'en_attente') then
+    raise exception 'Un dépôt est encore en cours de contrôle.';
+  end if;
+  if now() > v_c.date_resultats - interval '48 hours' then
+    raise exception 'Moins de 2 jours avant les résultats : la délibération ne peut plus partir.';
+  end if;
+  if v_c.lancements >= 3 then
+    raise exception 'Les trois lancements de la délibération sont consommés.';
+  end if;
+  if exists (select 1 from vault.secrets where name = v_nom) then
+    raise exception 'Une clé est déjà rangée : la délibération est en cours.';
+  end if;
+  if p_cle is null or p_cle !~ '^sk-ant-[A-Za-z0-9_-]{20,200}$' then
+    raise exception 'Clé refusée.';
+  end if;
+  if p_version_engagements is null or char_length(p_version_engagements) not between 1 and 40 then
+    raise exception 'Les engagements ne sont pas acceptés.';
+  end if;
+  if p_plafond_usd is null or p_plafond_usd < 0.01 or p_plafond_usd > 10000 then
+    raise exception 'Le plafond est un montant en dollars, de 0,01 à 10 000.';
+  end if;
+  v_pire := public.estimer_pire_cas(p_campagne);
+  if v_pire = 0 then
+    raise exception 'Aucun dépôt à auditer.';
+  end if;
+  v_depense := public.depense_audits(p_campagne);
+  if v_depense + v_pire > p_plafond_usd then
+    raise exception 'Plafond insuffisant : il manque % $.', replace(round(ceil((v_depense + v_pire - p_plafond_usd) * 100) / 100, 2)::text, '.', ',');
+  end if;
+
+  insert into public.audit as a (depot_id, jure)
+  select d.id, j.jure from public.depot d join public.participation p on p.id = d.participation_id
+    cross join (select distinct jure from public.critere) j
+  where p.campagne_id = p_campagne and not d.trop_gros
+  on conflict (depot_id, jure) do update
+    set statut = 'a_envoyer', batch_id = null, resultat = null, usage = null where a.statut = 'echec';
+  insert into public.engagement (campagne_id, compte_id, version) values (p_campagne, p_compte, p_version_engagements);
+  update public.campagne set lancements = lancements + 1, plafond_usd = p_plafond_usd, statut = 'deliberation'
+    where id = p_campagne;
+  -- En dernier : la clé n'est rangée que si tout le reste a réussi.
+  perform vault.create_secret(p_cle, v_nom);
+  update public.campagne set cle_fin = right(p_cle, 4) where id = p_campagne;
+  return jsonb_build_object('cle_fin', right(p_cle, 4), 'lancements', v_c.lancements + 1);
+end
+$$;
+
+-- La clé du Boss, pour prive (rôle de service seul) : nulle hors délibération ou sans secret.
+create function public.lire_cle_boss(p_campagne uuid)
+returns text
+language sql stable security definer set search_path = ''
+as $$
+  select s.decrypted_secret from vault.decrypted_secrets s
+  where s.name = 'cle_boss_' || p_campagne
+    and exists (select 1 from public.campagne c where c.id = p_campagne and c.statut = 'deliberation')
+$$;
+
+-- Efface la clé du Boss et ses 4 caractères visibles (rôle de service seul) : appelée à la fin de la délibération (story 4.6) et
+-- à l'expiration de la campagne. Sans effet si aucune clé n'est rangée.
+-- shortcut: rien ne l'appelle encore. Le passage deliberation → expiree n'efface pas la clé, et la suppression d'une campagne
+-- laisse son secret Vault (aucune clé étrangère vers vault) ; la story 4.6 (cloturer_deliberation, expirer_campagne) les ferme.
+create function public.effacer_cle_boss(p_campagne uuid)
+returns void
+language plpgsql security definer set search_path = ''
+as $$
+begin
+  -- Même verrou que lancer_deliberation : une relance concurrente ne range pas un secret que cet effacement laisserait sans cle_fin.
+  perform 1 from public.campagne where id = p_campagne for update;
+  delete from vault.secrets where name = 'cle_boss_' || p_campagne;
+  update public.campagne set cle_fin = null where id = p_campagne and cle_fin is not null;
+end
+$$;

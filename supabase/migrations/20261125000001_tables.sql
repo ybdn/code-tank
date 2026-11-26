@@ -87,6 +87,12 @@ create table public.campagne (
   -- Lien secret d'une campagne sur invitation (story 2.4) : 256 bits aléatoires en hexadécimal, posés et retirés avec la
   -- visibilité par creer_campagne et modifier_campagne, remplacés par regenerer_invitation. Lu par le Boss seul (RLS).
   jeton_invitation text unique check (jeton_invitation ~ '^[0-9a-f]{64}$'),
+  -- Délibération (story 4.3, AD-4, AD-5) : écrits par lancer_deliberation, effacer_cle_boss et leurs suites seulement. plafond_usd :
+  -- celui du dernier lancement (null avant le premier). lancements : trois au plus. cle_fin : les 4 derniers caractères de la
+  -- clé rangée dans Vault, seule trace visible ; la clé elle-même n'est dans aucune table (secret `cle_boss_<id>`).
+  plafond_usd numeric check (plafond_usd > 0 and plafond_usd <= 10000),
+  lancements integer not null default 0 check (lancements between 0 and 3),
+  cle_fin text check (cle_fin ~ '^.{4}$'),
   constraint campagne_dates_ordre check (ouverture_inscriptions < cloture_depot and cloture_depot < date_resultats),
   -- Jours comptés à l'heure de Paris, comme le formulaire, quel que soit le fuseau de la session (UTC sous PostgREST) :
   -- 30 jours qui traversent le passage à l'heure d'hiver ne deviennent pas 30 jours et 1 heure.
@@ -181,4 +187,14 @@ create table public.audit (
   tentatives integer not null default 0 check (tentatives >= 0),
   cree_le timestamptz not null default now(),
   constraint audit_unique unique (depot_id, jure)
+);
+
+-- Engagements du Boss au lancement (story 4.3, SPECS § 6) : une ligne par lancement, versionnée et datée, écrite par
+-- lancer_deliberation seule. `version` : celle du texte des trois engagements affiché par le site.
+create table public.engagement (
+  id uuid primary key default gen_random_uuid(),
+  campagne_id uuid not null references public.campagne on delete cascade,
+  compte_id uuid not null references public.compte,
+  version text not null check (char_length(version) between 1 and 40),
+  accepte_le timestamptz not null default now()
 );

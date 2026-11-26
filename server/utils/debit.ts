@@ -8,6 +8,7 @@ import { SECRET_MIN } from './secret'
 const JOUR = 86_400
 export const PLAFONDS = {
   compte: { max: 5, secondes: JOUR }, // création de compte
+  lancement: { max: 10, secondes: JOUR }, // essais de clé et lancements de la délibération : le site n'est pas un testeur de clés
 } as const
 
 // Première adresse de x-forwarded-for : le proxy de l'hébergeur la fixe, sans la reprendre d'un client. Sans adresse

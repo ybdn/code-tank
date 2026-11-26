@@ -9,7 +9,8 @@ const racine = fileURLToPath(new URL('../..', import.meta.url))
 export const statut = JSON.parse(execFileSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { cwd: racine, stdio: ['ignore', 'pipe', 'ignore'] }).toString())
 
 // `env` s'ajoute à l'environnement de base (Supabase local).
-export async function demarrer(port: number, env: Record<string, string> = {}): Promise<{ url: string; arreter: () => void }> {
+// `journal()` rend tout ce que le serveur a écrit sur sa sortie et son erreur.
+export async function demarrer(port: number, env: Record<string, string> = {}): Promise<{ url: string; arreter: () => void; journal: () => string }> {
   const proc: ChildProcess = spawn('node', ['.output/server/index.mjs'], {
     cwd: racine,
     env: {
@@ -21,12 +22,15 @@ export async function demarrer(port: number, env: Record<string, string> = {}): 
       NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
       ...env,
     },
-    stdio: 'ignore',
+    stdio: ['ignore', 'pipe', 'pipe'],
   })
+  let sortie = ''
+  proc.stdout?.on('data', (d) => { sortie += d })
+  proc.stderr?.on('data', (d) => { sortie += d })
   const url = `http://127.0.0.1:${port}`
   for (let i = 0; i < 100; i++) {
     try {
-      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill() }
+      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill(), journal: () => sortie }
     } catch { /* pas encore prêt */ }
     await new Promise((r) => setTimeout(r, 200))
   }

@@ -12,7 +12,7 @@ export type ResultatJury = { etat: EtatJury; code: number }
 let avertiNonConfigure = false
 
 // `origine` : pourquoi l'appel (journal). `code` : le code HTTP reçu, 0 sans réponse.
-export async function appelerJury(event: H3Event, origine: 'reception' | 'cron' | 'bouton'): Promise<ResultatJury> {
+export async function appelerJury(event: H3Event, origine: 'reception' | 'cron' | 'bouton' | 'lancement'): Promise<ResultatJury> {
   const { juryUrl, jurySecret } = useRuntimeConfig(event)
   if (!juryUrl || jurySecret.length < SECRET_MIN) {
     if (!avertiNonConfigure) {

@@ -18,6 +18,8 @@ export default defineNuxtConfig({
     // Jury (dépôt privé) : URL complète de POST /api/jury et secret partagé ; sans eux, le site n'appelle rien.
     juryUrl: '',
     jurySecret: '',
+    // Anthropic (story 4.3) : le test count_tokens de la clé du Boss ; réglable pour que les tests de pile visent un faux serveur.
+    anthropicUrl: 'https://api.anthropic.com/v1/messages/count_tokens',
     smtp: { host: '', port: 587, user: '', pass: '' },
   },
   css: [
