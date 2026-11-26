@@ -160,3 +160,24 @@ create table public.depot (
   droit_declare_le timestamptz not null,
   depose_le timestamptz not null default now()
 );
+
+-- Audit d'un juré sur un dépôt (story 4.2, AD-5, AD-6) : une ligne par couple dépôt × juré, créée au lancement (story 4.3) et
+-- écrite par les fonctions de prive (story 4.4) ; aucune écriture directe. statut : a_envoyer, en_cours (lot envoyé, batch_id),
+-- termine (resultat, usage, cout_usd) ou echec (renvoyé au relancement, compté par estimer_pire_cas). replique_masquee : la
+-- réplique du juré n'est pas montrée (SPECS § 5). Lecture du Boss : stories 4.7 et epic 5.
+create table public.audit (
+  id uuid primary key default gen_random_uuid(),
+  depot_id uuid not null references public.depot on delete cascade,
+  jure text not null check (jure in ('sudo', 'refacto', 'lint', 'pitch')),
+  modele text check (char_length(modele) between 1 and 80),
+  version_consignes text check (char_length(version_consignes) between 1 and 80),
+  batch_id text check (char_length(batch_id) between 1 and 200),
+  statut text not null default 'a_envoyer' check (statut in ('a_envoyer', 'en_cours', 'termine', 'echec')),
+  resultat jsonb,
+  replique_masquee boolean not null default false,
+  usage jsonb,
+  cout_usd numeric check (cout_usd >= 0),
+  tentatives integer not null default 0 check (tentatives >= 0),
+  cree_le timestamptz not null default now(),
+  constraint audit_unique unique (depot_id, jure)
+);

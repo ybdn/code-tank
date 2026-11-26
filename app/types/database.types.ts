@@ -5,7 +5,27 @@ export type Database = {
   
   "public": {
           Tables: {
-            "campagne": {
+            "audit": {
+                  Row: {
+                    "batch_id": string | null,"cout_usd": number | null,"cree_le": string,"depot_id": string,"id": string,"jure": string,"modele": string | null,"replique_masquee": boolean,"resultat": Json | null,"statut": string,"tentatives": number,"usage": Json | null,"version_consignes": string | null
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "batch_id"?: string | null,"cout_usd"?: number | null,"cree_le"?: string,"depot_id": string,"id"?: string,"jure": string,"modele"?: string | null,"replique_masquee"?: boolean,"resultat"?: Json | null,"statut"?: string,"tentatives"?: number,"usage"?: Json | null,"version_consignes"?: string | null
+                  }
+                  Update: {
+                    "batch_id"?: string | null,"cout_usd"?: number | null,"cree_le"?: string,"depot_id"?: string,"id"?: string,"jure"?: string,"modele"?: string | null,"replique_masquee"?: boolean,"resultat"?: Json | null,"statut"?: string,"tentatives"?: number,"usage"?: Json | null,"version_consignes"?: string | null
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "audit_depot_id_fkey"
+      columns: ["depot_id"]
+isOneToOne: false
+      referencedRelation: "depot"
+      referencedColumns: ["id"]
+    }
+                  ]
+                },"campagne": {
                   Row: {
                     "bloquee_le": string | null,"boss_id": string,"brief": string,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"jeton_invitation": string | null,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
                   }
@@ -233,6 +253,9 @@ isOneToOne: false
                            },
 "est_boss":
 { Args: { "p_campagne": string }; Returns: boolean
+                           },
+"estimer_pire_cas":
+{ Args: { "p_campagne": string }; Returns: number
                            },
 "lire_invitation":
 { Args: { "p_jeton": string }; Returns: {

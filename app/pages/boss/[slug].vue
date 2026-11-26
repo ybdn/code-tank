@@ -17,6 +17,10 @@ const reglable = computed(() => actif.value && ['brouillon', 'ouverte'].includes
 const clotureAVenir = computed(() => !!data.value && Date.parse(data.value.cloture_depot) > Date.now())
 // Visible du public : ni brouillon, ni expirée, ni bloquée (vue campagne_phase).
 const publiee = computed(() => !!data.value && !['brouillon', 'expiree'].includes(data.value.statut) && !data.value.bloquee_le)
+// Pire cas de la délibération (story 4.2) : relu quand le statut change (ouverture). Chargement et échec ont leur phrase.
+const { data: estimation, status: etatEstimation } = useFetch<{ disponible: true; pire_cas_usd: number } | { disponible: false; raison: string }>(
+  `/api/boss/${encodeURIComponent(slug)}/estimation`, { lazy: true, watch: [() => data.value?.statut] })
+const dollars = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD', minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(n)
 const occupe = ref(false)
 const annonce = ref(route.query.cree ? 'Brouillon créé.' : '')
 const alerte = ref('')
@@ -152,6 +156,13 @@ async function supprimer() {
           <p v-else>Le lien ne se régénère plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : 'la date des résultats est passée.' }}</p>
         </template>
         <p v-if="data.role_boss === 'juge'">Tu juges cette campagne&nbsp;: ton vote compte pour 33&nbsp;% du score final.</p>
+        <template v-if="data.statut === 'ouverte'">
+          <h2>Délibération</h2>
+          <p v-if="estimation?.disponible">Au pire, la délibération te coûtera <strong>{{ dollars(estimation.pire_cas_usd) }}</strong> sur ta clé Anthropic&nbsp;: quatre jurés par dépôt, prix des lots, sans aucune lecture de cache. En pratique, le cache la rend moins chère.</p>
+          <p v-else-if="estimation">{{ estimation.raison }}</p>
+          <p v-else-if="etatEstimation === 'error'" class="avis avis--erreur">Le pire cas ne peut pas être calculé pour le moment.</p>
+          <p v-else>Calcul du pire cas…</p>
+        </template>
         <template v-if="data.statut === 'brouillon' && actif">
           <h2>Ouvrir la campagne</h2>
           <template v-if="clotureAVenir">
