@@ -1,7 +1,8 @@
 import { serverSupabaseClient } from '#supabase/server'
 
 // Page publique d'une campagne : la vue campagne_phase lue avec la session si elle existe (le Boss voit sa campagne sur
-// invitation, un inscrit aussi), sinon en anonyme. Le reste (404, critères, état de l'appelant) : pageCampagne.
+// invitation, un inscrit aussi), sinon en anonyme. Le reste (404, critères, état de l'appelant) : pageCampagne ; `?exclus=1`
+// (page de dépôt) y ajoute la liste des fichiers exclus du dépôt.
 export default defineEventHandler(async (event) => {
   const slug = slugDeLaRoute(event)
   const client = await serverSupabaseClient(event)
@@ -12,5 +13,5 @@ export default defineEventHandler(async (event) => {
         if (error) erreurCampagne(error, 'Lecture d\'une campagne publique :', 'La campagne ne peut pas être lue pour le moment.')
         return data as CampagnePublique & { id: string } | null
       })
-    : lirePublic<(CampagnePublique & { id: string })[]>(event, `campagne_phase?select=${colonnes.replaceAll(' ', '')}&slug=eq.${slug}`).then((l) => l[0] ?? null))
+    : lirePublic<(CampagnePublique & { id: string })[]>(event, `campagne_phase?select=${colonnes.replaceAll(' ', '')}&slug=eq.${slug}`).then((l) => l[0] ?? null), getQuery(event).exclus === '1')
 })

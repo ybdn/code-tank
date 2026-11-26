@@ -76,10 +76,10 @@ select is_empty($$
   where has_table_privilege('authenticated', t, d)
 $$, 'authenticated : aucun droit de table sur reception ni depot (lecture par colonnes)');
 select is_empty($$
-  select r, t from unnest(array['anon', 'service_role']) r, unnest(array['public.reception', 'public.depot']) t
+  select r, t from (values ('anon', 'public.reception'), ('anon', 'public.depot'), ('service_role', 'public.depot')) v(r, t)
   where has_table_privilege(r, t, 'select,insert,update,delete,truncate,references,trigger')
     or has_any_column_privilege(r, t, 'select,insert,update,references')
-$$, 'aucun droit sur reception ni depot pour anon ni pour le rôle de service');
+$$, 'aucun droit sur reception ni depot pour anon, ni sur depot pour le rôle de service (sa lecture de reception : 12_controle)');
 select is_empty($$
   select t, c from (values ('public.reception', 'chemin_stockage'), ('public.reception', 'tentatives'), ('public.depot', 'chemin_stockage'),
     ('public.depot', 'chemin_filtre'), ('public.depot', 'faits'), ('public.depot', 'note_outillage'),

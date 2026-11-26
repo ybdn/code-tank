@@ -21,7 +21,7 @@ select is(has_table_privilege('authenticated', 'public.campagne', 'select'), tru
 select is_empty($$
   select r from unnest(array['anon', 'service_role']) r
   where has_table_privilege(r, 'public.campagne', 'select,insert,update,delete,truncate,references,trigger')
-$$, 'aucun droit sur campagne pour anon ni pour le rôle de service');
+$$, 'aucun droit de table sur campagne pour anon ni pour le rôle de service (colonnes de prive : 12_controle)');
 select is_empty($$
   select d from unnest(array['insert', 'update', 'delete', 'truncate', 'references', 'trigger']) d
   where has_table_privilege('authenticated', 'public.campagne', d)
@@ -190,7 +190,7 @@ select throws_ok($$update public.campagne set titre = 'Direct'$$, '42501', null,
 select throws_ok($$delete from public.campagne$$, '42501', null, 'le visiteur ne supprime pas dans campagne');
 reset role;
 set local role service_role;
-select throws_ok('select 1 from public.campagne', '42501', null, 'le rôle de service ne lit pas campagne');
+select throws_ok('select titre from public.campagne', '42501', null, 'le rôle de service ne lit pas le titre d''une campagne (quatre colonnes pour prive, story 3.4)');
 select throws_ok($$insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants, ouverture_inscriptions, cloture_depot, date_resultats)
   values ('direct', '70000000-0000-4000-8000-00000000000b', 'T', 'T', 'B', array['Go'], 'publique', 'juge', 5, timestamptz '2090-06-01 09:00 Europe/Paris', timestamptz '2090-06-01 09:00 Europe/Paris' + interval '1 day', timestamptz '2090-06-01 09:00 Europe/Paris' + interval '2 days')$$, '42501', null, 'le rôle de service n''insère pas dans campagne');
 select throws_ok($$update public.campagne set titre = 'Direct'$$, '42501', null, 'le rôle de service ne modifie pas campagne');

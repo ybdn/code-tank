@@ -201,7 +201,10 @@ isOneToOne: false
                 }
           }
           Functions: {
-            "campagne_vivante":
+            "accepter_depot":
+{ Args: { "p_alerte_manipulation": boolean,"p_alertes_integrite": Json,"p_chemin_filtre": string,"p_faits": Json,"p_fichiers_exclus": Json,"p_nb_fichiers": number,"p_nb_tokens_estime": number,"p_note_outillage": number,"p_reception": string,"p_sha256": string }; Returns: (string)[]
+                           },
+"campagne_vivante":
 { Args: { "p_campagne": string }; Returns: boolean
                            },
 "changer_pseudo":
@@ -259,6 +262,9 @@ isOneToOne: false
 "modifier_campagne":
 { Args: { "p_brief": string,"p_campagne": string,"p_cloture_depot": string,"p_date_resultats": string,"p_langages": (string)[],"p_max_participants": number,"p_ouverture_inscriptions": string,"p_role_boss": string,"p_theme": string,"p_titre": string,"p_visibilite": string }; Returns: undefined
                            },
+"noter_tentative_reception":
+{ Args: { "p_reception": string }; Returns: number
+                           },
 "ouvrir_campagne":
 { Args: { "p_campagne": string }; Returns: undefined
                            },
@@ -267,6 +273,9 @@ isOneToOne: false
                            },
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
+                           },
+"refuser_reception":
+{ Args: { "p_motifs": Json,"p_reception": string }; Returns: string
                            },
 "regenerer_invitation":
 { Args: { "p_campagne": string }; Returns: string

@@ -55,7 +55,7 @@ insert into public.critere (cle, libelle, jure, poids, calcule) values
   ('originalite_finition', 'Originalité et finition', 'pitch', 10, false);
 
 -- campagne (story 2.1) : le Boss lit ses campagnes et rien d'autre, jeton d'invitation compris (le public lit la vue
--- campagne_phase, plus bas, qui ne le porte pas) ;
+-- campagne_phase, plus bas, qui ne le porte pas) ; le rôle de service lit quatre colonnes (prive, en fin de fichier) ;
 -- aucune écriture directe, pas même du rôle de service : creer_campagne, modifier_campagne, supprimer_brouillon et
 -- ouvrir_campagne seules. Ces quatre RPC sont exécutables par authenticated seul et tiennent toutes leurs règles (compte_actif(), est_boss, verrou
 -- de la ligne, campagne_vivante) : un appel direct par /rest/v1/rpc ne contourne rien. Les gardes est_boss et
@@ -87,7 +87,8 @@ revoke all on public.campagne_phase, public.campagne_calculee from service_role;
 grant select on public.campagne_phase to anon, authenticated;
 
 -- participation (story 2.3) : chaque compte lit ses lignes et rien d'autre (les places restantes se lisent dans
--- campagne_phase) ; aucune écriture directe, pas même du rôle de service, qui n'a aucun droit : sinscrire et se_desinscrire
+-- campagne_phase) ; aucune écriture directe, pas même du rôle de service, qui ne lit que deux colonnes (prive, en fin de
+-- fichier) : sinscrire et se_desinscrire
 -- seules, exécutables par authenticated seul. Leurs règles vivent dans les fonctions (verrou de la campagne, compte_actif(),
 -- phase, places, limite de débit par compte) : un appel direct par /rest/v1/rpc ne contourne rien.
 alter table public.participation enable row level security;
@@ -106,8 +107,8 @@ grant execute on function public.lire_invitation(text), public.regenerer_invitat
 -- Dépôt (story 3.3) : reception et depot, chacun lit les lignes de ses participations et rien d'autre, ni l'autre candidat
 -- ni le Boss (la lecture du Boss juge vient à l'epic 5) ; colonnes choisies : ni les chemins de stockage, ni les tentatives,
 -- ni les faits, la note d'outillage et les alertes (lues du seul Boss juge, SPECS § 13). Aucune écriture directe, pas même
--- du rôle de service, qui n'a aucun droit : deposer et retirer_depot seules (accepter_depot et les droits de prive viennent
--- avec la story 3.4). deposer, retirer_depot et peut_deposer sont exécutables par authenticated seul et tiennent toutes
+-- du rôle de service : deposer et retirer_depot pour le candidat, noter_tentative_reception, refuser_reception et
+-- accepter_depot pour prive (rôle de service seul, story 3.4). deposer, retirer_depot et peut_deposer sont exécutables par authenticated seul et tiennent toutes
 -- leurs règles (verrou de la campagne, campagne_vivante, compte_actif(), phase, Boss juge, inscription, chemin et objet du
 -- bucket, limite de débit par compte) : un appel direct par /rest/v1/rpc ne contourne rien. effacer_archives : rôle de
 -- service seul (AD-11). Le bucket depots n'a aucune politique (…_tables.sql) : le site signe et efface avec la clé de service.
@@ -126,3 +127,12 @@ revoke all on function public.peut_deposer(uuid), public.deposer(uuid, text, tex
 grant execute on function public.peut_deposer(uuid), public.deposer(uuid, text, text, text, boolean), public.retirer_depot(uuid)
   to authenticated;
 grant execute on function public.effacer_archives(public.depot) to service_role;
+
+-- prive (story 3.4, AD-1) : il lit en direct, avec le rôle de service, les colonnes qui trouvent les réceptions en attente et
+-- l'état de leur campagne, et rien d'autre (ni présentation, ni dépôt : accepter_depot recopie et rend ce qu'il faut). Il
+-- écrit seulement par noter_tentative_reception, refuser_reception et accepter_depot, exécutables par le rôle de service seul.
+grant select (id, participation_id, chemin_stockage, statut, cree_le) on public.reception to service_role;
+grant select (id, campagne_id) on public.participation to service_role;
+grant select (id, statut, bloquee_le, date_resultats) on public.campagne to service_role;
+grant execute on function public.noter_tentative_reception(uuid), public.refuser_reception(uuid, jsonb),
+  public.accepter_depot(uuid, text, text, integer, jsonb, integer, jsonb, integer, boolean, jsonb) to service_role;

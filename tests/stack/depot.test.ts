@@ -18,6 +18,7 @@ const jury = createServer((req, res) => {
   req.on('end', () => { appelsJury.push({ headers: req.headers, corps }); res.statusCode = 500; res.end() })
 })
 const SECRET_JURY = 'secret-jury-de-test-' + randomBytes(16).toString('hex')
+const SECRET_CRON = 'secret-cron-de-test-' + randomBytes(16).toString('hex')
 
 async function envoyer(methode: string, chemin: string, cookie: string, corps: unknown = {}, type = 'application/json') {
   const r = await fetch(serveur.url + chemin, {
@@ -95,6 +96,7 @@ beforeAll(async () => {
     NUXT_SECRET_DEBIT: 'secret-debit-de-test-' + randomBytes(16).toString('hex'),
     NUXT_JURY_URL: 'http://127.0.0.1:3998/api/jury',
     NUXT_JURY_SECRET: SECRET_JURY,
+    CRON_SECRET: SECRET_CRON,
   })
   sql('update public.reglage set mode_acces = \'ouvert\'')
   juge = await campagne('juge')
@@ -252,5 +254,67 @@ describe('dépôt', () => {
     expect(objets(zip)).toBe(0)
     expect(objets(filtre)).toBe(0)
     expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/inscription`, c.cookie)).statut).toBe(200)
+  })
+
+  it('dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte ; jamais les alertes. Refus : le message du motif', async () => {
+    const a = await inscrit(juge.slug)
+    const zip = await envoi(juge.slug, a.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${juge.slug}/depot`, a.cookie, { chemin: zip, presentation: 'Mon minuteur.', droit: true })).statut).toBe(200)
+    const p = ligne(`select p.id from public.participation p where p.compte_id = '${a.u.id}'`)
+    // prive refuse (simulé en SQL, comme refuser_reception l'écrit) : la page montre le message, pas le code.
+    sql(`update public.reception set statut = 'refusee', motifs = '[{"code": "SECRETS", "message": "Ton archive contient ce qui ressemble à des secrets. Retire-les et redépose :\\n- .env (fichier .env)"}]' where participation_id = '${p}'`)
+    let page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('Retire-les et redépose :\n- .env (fichier .env)')
+    expect(page).not.toMatch(/<li[^>]*>SECRETS/)
+    // prive accepte (simulé) : un dépôt avec mesures, faits et alertes.
+    sql(`delete from public.reception where participation_id = '${p}'`)
+    const sha = 'f'.repeat(64)
+    sql(`insert into public.depot (participation_id, chemin_stockage, sha256, nb_fichiers, fichiers_exclus, nb_tokens_estime, faits, note_outillage,
+      alerte_manipulation, alertes_integrite, presentation, droit_declare_le)
+      values ('${p}', '${zip}', '${sha}', 12, '[{"chemin": "assets/logo.png", "raison": "image"}, {"chemin": "package-lock.json", "raison": "verrouillage"}]',
+        1200, '{"secret_des_faits": 1}', 7, true, '[{"type": "alerte-integrite-secrete", "fichier": "a.ts"}]', 'Mon minuteur.', now())`)
+    // La fiche ne transporte pas la liste des exclus ; la page de dépôt la demande (?exclus=1).
+    const fiche = (await lire(`/api/campagnes/${juge.slug}`, a.cookie)).json as { depot: Record<string, unknown> }
+    expect(fiche.depot).toMatchObject({ sha256: sha, nb_fichiers: 12, nb_tokens_estime: 1200 })
+    expect(fiche.depot).not.toHaveProperty('fichiers_exclus')
+    const json = JSON.stringify((await lire(`/api/campagnes/${juge.slug}?exclus=1`, a.cookie)).json)
+    expect(json).toContain('"fichiers_exclus":[{"chemin":"assets/logo.png","raison":"image"}')
+    page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
+    expect(page).toMatch(/<dt>Fichiers retenus<\/dt>\s*<dd>12<\/dd>/)
+    expect(page).toContain('assets/logo.png (image)')
+    expect(page).toContain('package-lock.json (fichier de verrouillage)')
+    expect(page).toMatch(/~1[\u202f\u00a0 ]200 tokens \(estimation\)/)
+    expect(page).toContain(`<dd class="empreinte">${sha}</dd>`)
+    for (const cache of ['alerte-integrite-secrete', 'secret_des_faits', 'alerte_manipulation', 'note_outillage']) {
+      expect(page).not.toContain(cache)
+      expect(json).not.toContain(cache)
+    }
+  })
+
+  it('refus CAMPAGNE_CLOSE : la page n\'invite pas à redéposer quand le dépôt n\'est plus possible', async () => {
+    const c = await campagne('juge')
+    const a = await inscrit(c.slug)
+    const zip = await envoi(c.slug, a.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/depot`, a.cookie, { chemin: zip, presentation: 'x', droit: true })).statut).toBe(200)
+    sql(`update public.reception r set statut = 'refusee', motifs = '[{"code": "CAMPAGNE_CLOSE", "message": "Cette campagne n''accepte plus de dépôt : ton archive n''a pas été retenue."}]'
+      from public.participation p where p.id = r.participation_id and p.compte_id = '${a.u.id}'`)
+    // Dépôt encore ouvert : l'invitation à redéposer reste.
+    let page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('a été refusée. Corrige ce qui suit, puis redépose')
+    sql(`update public.campagne set ouverture_inscriptions = now() - interval '2 days', cloture_depot = now() - interval '1 minute', date_resultats = now() + interval '5 days' where slug = '${c.slug}'`)
+    page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toMatch(/a été refusée(&nbsp;|\u00a0):/)
+    expect(page).not.toContain('puis redépose')
+    expect(page).toContain('n&#39;a pas été retenue.')
+    expect(page).toContain('La date limite de dépôt est passée.')
+  })
+
+  it('le cron déclenche le jury à chaque passage, sans échouer quand le jury est en panne (filet d\'AD-7)', async () => {
+    const avant = appelsJury.length
+    const r = await fetch(serveur.url + '/api/cron/conservation', { headers: { authorization: `Bearer ${SECRET_CRON}` } })
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({})
+    for (let i = 0; i < 50 && appelsJury.length === avant; i++) await new Promise((ok) => setTimeout(ok, 100))
+    expect(appelsJury.slice(avant)).toEqual([{ headers: expect.objectContaining({ authorization: `Bearer ${SECRET_JURY}` }), corps: '' }])
   })
 })
