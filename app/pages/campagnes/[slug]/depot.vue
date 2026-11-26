@@ -141,7 +141,7 @@ async function demanderRetrait(v: boolean) {
             <button class="btn" type="button" :aria-disabled="occupe" @click="relire">Actualiser</button>
           </p>
           <template v-else>
-            <p>Ton archive envoyée le {{ dateParis(data.reception.cree_le) }} a été refusée. Corrige ce qui suit, puis redépose.</p>
+            <p>Ton archive envoyée le {{ dateParis(data.reception.cree_le) }} a été refusée{{ pourquoiPas ? '' : '. Corrige ce qui suit, puis redépose' }}&nbsp;:</p>
             <ul>
               <li v-for="(m, i) in data.reception.motifs ?? []" :key="i" class="brief">{{ m.message }}</li>
             </ul>

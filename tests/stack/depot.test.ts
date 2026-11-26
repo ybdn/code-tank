@@ -287,6 +287,24 @@ describe('dépôt', () => {
     }
   })
 
+  it('refus CAMPAGNE_CLOSE : la page n\'invite pas à redéposer quand le dépôt n\'est plus possible', async () => {
+    const c = await campagne('juge')
+    const a = await inscrit(c.slug)
+    const zip = await envoi(c.slug, a.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/depot`, a.cookie, { chemin: zip, presentation: 'x', droit: true })).statut).toBe(200)
+    sql(`update public.reception r set statut = 'refusee', motifs = '[{"code": "CAMPAGNE_CLOSE", "message": "Cette campagne n''accepte plus de dépôt : ton archive n''a pas été retenue."}]'
+      from public.participation p where p.id = r.participation_id and p.compte_id = '${a.u.id}'`)
+    // Dépôt encore ouvert : l'invitation à redéposer reste.
+    let page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('a été refusée. Corrige ce qui suit, puis redépose')
+    sql(`update public.campagne set ouverture_inscriptions = now() - interval '2 days', cloture_depot = now() - interval '1 minute', date_resultats = now() + interval '5 days' where slug = '${c.slug}'`)
+    page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toMatch(/a été refusée(&nbsp;|\u00a0):/)
+    expect(page).not.toContain('puis redépose')
+    expect(page).toContain('n&#39;a pas été retenue.')
+    expect(page).toContain('La date limite de dépôt est passée.')
+  })
+
   it('le cron déclenche le jury à chaque passage, sans échouer quand le jury est en panne (filet d\'AD-7)', async () => {
     const avant = appelsJury.length
     const r = await fetch(serveur.url + '/api/cron/conservation', { headers: { authorization: `Bearer ${SECRET_CRON}` } })

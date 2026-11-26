@@ -538,8 +538,10 @@ begin
   if not found then
     raise exception 'Tu n''es pas inscrit à cette campagne.';
   end if;
-  -- Une réception refusée ne survit pas au départ : sa présentation reviendrait à la réinscription. Son zip a été effacé
-  -- par prive au refus (story 3.4).
+  -- Une réception refusée ne survit pas au départ : sa présentation reviendrait à la réinscription. Son zip est effacé par
+  -- prive au refus (story 3.4).
+  -- shortcut: si cet effacement a échoué, le zip reste dans le bucket sans ligne qui le cite, jusqu'à objets_abandonnes
+  -- (AD-11, epic 6).
   delete from public.reception r using public.participation p
   where p.id = r.participation_id and p.campagne_id = p_campagne and p.compte_id = auth.uid();
 end
