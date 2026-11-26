@@ -83,7 +83,7 @@ describe('GET /api/boss/[slug]/estimation', () => {
       .toEqual({ disponible: false, raison: 'Un dépôt est encore en cours de contrôle.' })
     sql(`delete from public.reception where participation_id = '${participation}'`)
     // 4 jurés × (100 000 × 8 $ + 15 000 × 20 $) / 1 M / 2 = 2,20 $.
-    expect(await lire(`/api/boss/${slug}/estimation`, boss.cookie)).toEqual({ statut: 200, json: { disponible: true, pire_cas_usd: 2.2 } })
+    expect(await lire(`/api/boss/${slug}/estimation`, boss.cookie)).toEqual({ statut: 200, json: { disponible: true, pire_cas_usd: 2.2, depense_usd: 0 } })
   })
 
   it('pas encore : aucun dépôt à auditer (tous trop gros)', async () => {
@@ -112,7 +112,7 @@ describe('GET /api/boss/[slug]/estimation', () => {
     } finally {
       sql(`update public.campagne set cloture_depot = now() - interval '1 minute', date_resultats = now() + interval '5 days' where id = '${campagneId}'`)
     }
-    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2 })
+    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2, depense_usd: 0 })
   })
 
   it('pas encore : moins de 48 h avant les résultats', async () => {
@@ -123,7 +123,33 @@ describe('GET /api/boss/[slug]/estimation', () => {
     } finally {
       sql(`update public.campagne set date_resultats = now() + interval '5 days' where id = '${campagneId}'`)
     }
-    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2 })
+    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2, depense_usd: 0 })
+  })
+
+  it('pas encore : clé déjà rangée, trois lancements faits ; disponible en délibération sans clé (relance)', async () => {
+    sql(`update public.campagne set statut = 'deliberation', cle_fin = 'abcd', lancements = 1 where id = '${campagneId}'`)
+    try {
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: false, raison: 'Le jury délibère : une clé est déjà rangée.' })
+      sql(`update public.campagne set cle_fin = null where id = '${campagneId}'`)
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2, depense_usd: 0 })
+      sql(`update public.campagne set lancements = 3 where id = '${campagneId}'`)
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: false, raison: 'Les trois lancements de la délibération sont consommés.' })
+    } finally {
+      // Retour en ouverte : le graphe d'AD-2 ne revient pas en arrière, la ligne est remise par SQL direct (trigger coupé pour l'essai).
+      sql(`alter table public.campagne disable trigger campagne_transition`)
+      sql(`update public.campagne set statut = 'ouverte', cle_fin = null, lancements = 0 where id = '${campagneId}'`)
+      sql(`alter table public.campagne enable trigger campagne_transition`)
+    }
+  })
+
+  it('pas encore : compte du Boss suspendu', async () => {
+    sql(`update public.compte set etat = 'suspendu' where id = '${boss.u.id}'`)
+    try {
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: false, raison: 'Ton compte n\'est pas actif.' })
+    } finally {
+      sql(`update public.compte set etat = 'actif' where id = '${boss.u.id}'`)
+    }
+    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2, depense_usd: 0 })
   })
 
   it('pas encore : campagne en brouillon', async () => {

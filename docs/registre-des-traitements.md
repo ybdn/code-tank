@@ -99,3 +99,12 @@ Les DPA de chaque sous-traitant sont à accepter et à archiver (voir `A-FAIRE.m
 - En-têtes de sécurité HTTP et politique de sécurité du contenu (CSP).
 - Tâche planifiée quotidienne d'effacement aux durées prévues ; tâche protégée par un secret.
 - Les violations de données sont consignées dans `docs/registre-des-violations.md`.
+
+## À intégrer par la story 8.1 — lancement de la délibération par le Boss (story 4.3)
+
+Ce registre est réécrit par la story 8.1 ; ces deux traitements y entrent (le compte Anthropic du Boss est un destinataire nommé).
+
+| Traitement | Détail |
+|---|---|
+| Clé API Anthropic du Boss | Donnée confidentielle du Boss, rangée chiffrée dans Supabase Vault le temps de la délibération (ses 4 derniers caractères, visibles du Boss, dans `campagne.cle_fin`) ; jamais journalisée ni renvoyée. Test de la clé par un appel `count_tokens` à Anthropic sur un texte fixe. Effacement : story 4.6. |
+| Engagements du Boss | Version du texte et date d'acceptation, une ligne par lancement (`engagement`), liée au compte et à la campagne. Base légale : exécution de la charte (6.1.b). Durée : celle de la campagne (suppression en cascade). |

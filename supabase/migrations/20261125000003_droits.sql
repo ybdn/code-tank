@@ -146,3 +146,17 @@ revoke all on public.audit from service_role;
 grant select on public.audit to service_role;
 revoke all on function public.estimer_pire_cas(uuid) from public, anon;
 grant execute on function public.estimer_pire_cas(uuid) to authenticated, service_role;
+
+-- Délibération (story 4.3, AD-4) : engagement sans politique ni droit client ni droit direct du rôle de service (écrite par
+-- lancer_deliberation seule). lancer_deliberation, lire_cle_boss et effacer_cle_boss : rôle de service seul, jamais
+-- authenticated (PostgREST les exposerait : la règle count_tokens est tenue par la route, et la clé ne se lit pas). Le schéma
+-- vault n'est ouvert ni à anon ni à authenticated (Supabase) ; les fonctions security definer y accèdent avec les droits de postgres.
+alter table public.engagement enable row level security;
+revoke all on public.engagement from service_role;
+revoke all on function public.lancer_deliberation(uuid, uuid, text, numeric, text), public.lire_cle_boss(uuid),
+  public.effacer_cle_boss(uuid) from public, anon, authenticated;
+grant execute on function public.lancer_deliberation(uuid, uuid, text, numeric, text), public.lire_cle_boss(uuid),
+  public.effacer_cle_boss(uuid) to service_role;
+-- depense_audits, comme estimer_pire_cas : le Boss de la campagne seul (garde dans la fonction) et le rôle de service.
+revoke all on function public.depense_audits(uuid) from public, anon;
+grant execute on function public.depense_audits(uuid) to authenticated, service_role;

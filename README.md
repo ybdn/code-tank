@@ -72,12 +72,23 @@ pnpm build
   pour un dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte SHA-256 ; jamais les alertes).
 - `GET /api/boss/[slug]/estimation` (story 4.2) : pour le Boss de la campagne (**404** sinon), `{ disponible: false,
   raison }` tant que la campagne n'est pas ouverte, vivante, non bloquée, à plus de 48 h de ses résultats (borne de
-  `lancer_deliberation`, story 4.3), avec ses dépôts clos, sans réception en attente et avec au moins un audit à envoyer (lue avec la clé de service, que le Boss ne lit pas sous RLS) ; sinon `{ disponible: true, pire_cas_usd }` par
-  `estimer_pire_cas` avec le JWT du Boss. Affiché dans le bloc « Délibération » de `/boss/[slug]`.
+  `lancer_deliberation`, story 4.3), avec ses dépôts clos, sans réception en attente, sans clé déjà rangée, à moins de trois
+  lancements et avec au moins un audit à envoyer (lue avec la clé de service, que le Boss ne lit pas sous RLS) ; elle reste
+  disponible en `deliberation` sans clé (relance) ; sinon `{ disponible: true, pire_cas_usd, depense_usd }` par
+  `estimer_pire_cas` et `depense_audits` (somme des `cout_usd` des lancements précédents) avec le JWT du Boss. Affiché dans le bloc « Délibération » de `/boss/[slug]`.
+- `POST /api/boss/[slug]/lancement` (story 4.3, AD-4) : corps `{ plafond_usd, cle, engagements: [true, true, true], version }`.
+  Ordre : Boss (**404**), JSON (**415**), limite de 10 essais par adresse et par 24 h (**429** : le site n'est pas un testeur
+  de clés), corps (**400** ; **409** si `version` n'est plus celle de `shared/utils/engagements.ts`), forme de la clé
+  (`sk-ant-`, jamais `sk-ant-oat`, jeu de caractères et longueur bornés : **400**), `count_tokens` sur un texte fixe sans
+  code (`server/utils/anthropic.ts` ; refus 401 ou 403 : **400**, autre statut ou panne : **502**, sans consommer de
+  lancement), puis `lancer_deliberation` avec la clé de service et l'id vérifié du Boss (refus de la base : **409**, plafond
+  insuffisant avec l'écart), puis `appelerJury(…, 'lancement')`. Réponse `{ cle_fin, lancements }`. La clé n'est ni journalisée
+  ni renvoyée ni citée par une erreur ; le journal ne porte que le statut de `count_tokens`.
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
   au-delà du plafond : **429** avec `Retry-After`.
+- `server/utils/anthropic.ts` : `formeCleValide` et `verifierCle` (count_tokens, délai de 10 s, aucun SDK, réponse jamais lue).
 - `server/utils/jury.ts` : `appelerJury`, réveil du jury (dépôt privé) par `POST <NUXT_JURY_URL>`, jamais bloquant.
 - `server/utils/conservation.ts` : `verifierCron`, contrôle de `CRON_SECRET` en temps constant (**404** sinon).
   `GET /api/cron/conservation`, appelée chaque jour par le planificateur de Vercel (`vercel.json`) : aucune tâche de
@@ -116,6 +127,7 @@ sont l'alternative locale (tests, pile locale) et **l'emportent** sur `SUPABASE_
 | `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo) |
 | `NUXT_JURY_URL` | Facultatif : URL complète de `POST /api/jury` du projet Vercel du jury (dépôt privé). Sans elle ou sans le secret, le site n'appelle rien |
 | `NUXT_JURY_SECRET` | Le secret de ce jury (`JURY_SECRET` de son projet), **32 caractères au moins** |
+| `NUXT_ANTHROPIC_URL` | Ne se règle pas en ligne : URL du test `count_tokens` de la clé du Boss (défaut : `https://api.anthropic.com/v1/messages/count_tokens`), que les tests de pile pointent vers un faux serveur |
 
 ## Base de données
 
@@ -172,8 +184,14 @@ Trois migrations datées du même jour (AD-13) :
   réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne ; `estimer_pire_cas`
   (story 4.2 : pire cas en dollars des audits à envoyer, tarifs du modèle du jury en constantes ; Boss de la campagne ou
   rôle de service, **42501** sinon ; refusée au Boss avant la clôture des dépôts, pour ne pas trahir la taille des
-  dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, écrit par les
-  fonctions des stories 4.3 et 4.4.
+  dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, créé par `lancer_deliberation` et écrit par les
+  fonctions de la story 4.4. Délibération (story 4.3) : colonnes `plafond_usd`, `lancements` (3 au plus) et `cle_fin` (4
+  derniers caractères de la clé) de `campagne`, table `engagement` (version et date de chaque lancement) ;
+  `depense_audits` (somme des `cout_usd`, Boss ou rôle de service) ; `lancer_deliberation(compte, campagne, clé, plafond, version)`
+  (Boss de la campagne, aucune réception en attente, dépôts
+  clos, 48 h au moins avant les résultats, moins de trois lancements, aucune clé rangée, dépensé + pire cas ≤ plafond ; crée
+  ou remet en `a_envoyer` les audits, garde le coût payé d'un audit en `echec`, passe en `deliberation`, et ne range la clé
+  dans Vault, secret `cle_boss_<campagne>`, qu'en dernier), `lire_cle_boss` (nulle hors `deliberation`) et `effacer_cle_boss`.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
@@ -194,7 +212,10 @@ Trois migrations datées du même jour (AD-13) :
   (prive) et rien de `depot` ; `peut_deposer`, `deposer` et `retirer_depot` exécutables par `authenticated` seul (leurs
   règles vivent dans les fonctions) ; `effacer_archives`, `noter_tentative_reception`, `refuser_reception` et
   `accepter_depot` par le rôle de service seul ; `audit` sans politique ni droit client, le rôle de service la lit
-  seulement ; `estimer_pire_cas` exécutable par `authenticated` et le rôle de service (garde du Boss dans la fonction).
+  seulement ; `estimer_pire_cas` et `depense_audits` exécutables par `authenticated` et le rôle de service (garde du Boss dans la fonction) ; `engagement`
+  sans politique ni droit client ni droit direct du rôle de service ; `lancer_deliberation`, `lire_cle_boss` et
+  `effacer_cle_boss` par le rôle de service seul (jamais `authenticated` : la règle `count_tokens` est tenue par la route) ;
+  le schéma `vault` est fermé à `anon` et `authenticated`.
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux

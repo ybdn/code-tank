@@ -17,13 +17,24 @@ const reglable = computed(() => actif.value && ['brouillon', 'ouverte'].includes
 const clotureAVenir = computed(() => !!data.value && Date.parse(data.value.cloture_depot) > Date.now())
 // Visible du public : ni brouillon, ni expirée, ni bloquée (vue campagne_phase).
 const publiee = computed(() => !!data.value && !['brouillon', 'expiree'].includes(data.value.statut) && !data.value.bloquee_le)
-// Pire cas de la délibération (story 4.2) : relu quand le statut change (ouverture). Chargement et échec ont leur phrase.
-// shortcut: montant lu à l'ouverture de la page, pas relu à la clôture des dépôts ni après un contrôle ; à rafraîchir avant
-// le lancement (story 4.3, qui revérifie de toute façon en SQL).
-const { data: estimation, status: etatEstimation } = useFetch<{ disponible: true; pire_cas_usd: number } | { disponible: false; raison: string }>(
+// Pire cas de la délibération (story 4.2) et déjà dépensé par les lancements précédents (4.3) : relus quand le statut change
+// (ouverture, lancement) et après un refus du lancement. Chargement et échec ont leur phrase.
+// shortcut: montant lu à l'ouverture de la page, pas relu à la clôture des dépôts ni après un contrôle ; lancer_deliberation
+// revérifie tout en SQL, et un refus (409) relit l'estimation.
+const { data: estimation, status: etatEstimation, refresh: relireEstimation } = useFetch<{ disponible: true; pire_cas_usd: number; depense_usd: number } | { disponible: false; raison: string }>(
   `/api/boss/${encodeURIComponent(slug)}/estimation`, { lazy: true, watch: [() => data.value?.statut] })
 const dollars = (n: number) => new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'USD' }).format(n)
 const occupe = ref(false)
+// Lancement (story 4.3) : plafond prérempli au pire cas (avec le déjà dépensé) arrondi au dollar supérieur. La clé reste dans ce champ
+// seulement : jamais relue du serveur, effacée après le lancement.
+const plafond = ref('')
+const cle = ref('')
+// La clé ne reste pas dans le champ quand le formulaire disparaît sans succès (clé déjà rangée par ailleurs).
+watch(() => data.value?.cle_fin, (fin) => { if (fin) cle.value = '' })
+const engagements = ref<boolean[]>(ENGAGEMENTS.map(() => false))
+watch(estimation, (e) => {
+  if (e?.disponible && !plafond.value) plafond.value = String(Math.ceil(e.pire_cas_usd + e.depense_usd))
+}, { immediate: true })
 const annonce = ref(route.query.cree ? 'Brouillon créé.' : '')
 const alerte = ref('')
 const titre = useTemplateRef<HTMLElement>('titre')
@@ -39,7 +50,7 @@ async function echec(e: unknown) {
   const err = e as { statusCode?: number; data?: { message?: string } }
   alerte.value = err.data?.message ?? 'Une erreur est survenue.'
   // Une règle a pu changer entre-temps (règles figées, blocage) : la page se remet à jour.
-  if (err.statusCode === 409) await refresh()
+  if (err.statusCode === 409) await Promise.all([refresh(), relireEstimation()])
   await nextTick()
   zoneAlerte.value?.focus()
 }
@@ -69,6 +80,31 @@ async function ouvrir() {
     await refresh()
     annonce.value = 'Campagne ouverte.'
     // Le bouton a disparu : le focus revient au titre, l'annonce est lue par la zone role="status".
+    await nextTick()
+    titre.value?.focus()
+  } catch (e) {
+    await echec(e)
+  } finally {
+    occupe.value = false
+  }
+}
+
+async function lancer() {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
+  if (occupe.value) return
+  occupe.value = true
+  annonce.value = ''
+  alerte.value = ''
+  try {
+    const r = await $fetch<{ cle_fin: string }>(`/api/boss/${encodeURIComponent(slug)}/lancement`, {
+      method: 'POST', body: { plafond_usd: Number(plafond.value), cle: cle.value.trim(), engagements: engagements.value, version: ENGAGEMENTS_VERSION },
+    })
+    cle.value = ''
+    plafond.value = ''
+    engagements.value = ENGAGEMENTS.map(() => false)
+    await refresh()
+    annonce.value = `Délibération lancée. Clé …${r.cle_fin}.`
+    // Le formulaire a disparu : le focus revient au titre, l'annonce est lue par la zone role="status".
     await nextTick()
     titre.value?.focus()
   } catch (e) {
@@ -158,12 +194,32 @@ async function supprimer() {
           <p v-else>Le lien ne se régénère plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : 'la date des résultats est passée.' }}</p>
         </template>
         <p v-if="data.role_boss === 'juge'">Tu juges cette campagne&nbsp;: ton vote compte pour 33&nbsp;% du score final.</p>
-        <template v-if="data.statut === 'ouverte'">
+        <template v-if="data.statut === 'ouverte' || data.statut === 'deliberation'">
           <h2>Délibération</h2>
-          <p v-if="estimation?.disponible">Au pire, la délibération te coûtera <strong>{{ dollars(estimation.pire_cas_usd) }}</strong> sur ta clé Anthropic&nbsp;: chaque juré sur chaque dépôt, prix des lots, sans aucune lecture de cache. En pratique, le cache la rend moins chère.</p>
-          <p v-else-if="estimation">{{ estimation.raison }}</p>
-          <p v-else-if="etatEstimation === 'error'" class="avis avis--erreur">Le pire cas ne peut pas être calculé pour le moment.</p>
-          <p v-else>Calcul du pire cas…</p>
+          <p v-if="data.cle_fin">Le jury délibère (clé …{{ data.cle_fin }}).</p>
+          <template v-else>
+            <p v-if="estimation?.disponible">Au pire, la délibération te coûtera <strong>{{ dollars(estimation.pire_cas_usd) }}</strong> sur ta clé Anthropic&nbsp;: chaque juré sur chaque dépôt, prix des lots, sans aucune lecture de cache. En pratique, le cache la rend moins chère.<template v-if="estimation.depense_usd > 0"> Tes lancements précédents ont déjà coûté {{ dollars(estimation.depense_usd) }}, compté dans ton plafond.</template></p>
+            <p v-else-if="estimation">{{ estimation.raison }}</p>
+            <p v-else-if="etatEstimation === 'error'" class="avis avis--erreur">Le pire cas ne peut pas être calculé pour le moment.</p>
+            <p v-else>Calcul du pire cas…</p>
+            <form v-if="estimation?.disponible && data.compte_actif" @submit.prevent="lancer">
+              <div class="champ">
+                <label for="plafond">Plafond de dépense, en dollars</label>
+                <input id="plafond" v-model="plafond" type="number" min="1" :max="PLAFOND_MAX_USD" step="any" required inputmode="decimal" aria-describedby="aide-plafond">
+                <p id="aide-plafond">Les agents ne dépensent jamais au-delà&nbsp;: il couvre au moins le pire cas{{ estimation.depense_usd > 0 ? ' et ce qui est déjà dépensé' : '' }}. Tu peux le relever à une relance.</p>
+              </div>
+              <div class="champ">
+                <label for="cle">Ta clé API Anthropic (Console)</label>
+                <input id="cle" v-model="cle" type="password" autocomplete="off" spellcheck="false" required aria-describedby="aide-cle">
+                <p id="aide-cle">Elle commence par sk-ant-. Elle est rangée chiffrée, et seuls ses 4 derniers caractères te sont montrés.</p>
+              </div>
+              <div v-for="(texte, i) in ENGAGEMENTS" :key="i" class="champ champ--case">
+                <input :id="`engagement-${i}`" v-model="engagements[i]" type="checkbox" required>
+                <label :for="`engagement-${i}`">{{ texte }}</label>
+              </div>
+              <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">Lancer la délibération</button></p>
+            </form>
+          </template>
         </template>
         <template v-if="data.statut === 'brouillon' && actif">
           <h2>Ouvrir la campagne</h2>
