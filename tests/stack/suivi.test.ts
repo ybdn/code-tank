@@ -162,6 +162,8 @@ describe('POST /api/boss/[slug]/actualisation', () => {
 
 describe('e-mail « délibération terminée »', () => {
   it('constats simultanés (écran du Boss et cron) : un seul e-mail, au Boss, sans lien de pistage ; l\'adresse ne sort pas', async () => {
+    // Campagnes prete laissées par une exécution précédente (ou un autre fichier) : déjà prévenues, hors de ce test.
+    sql(`update public.campagne set fin_prevenue_le = now() where statut = 'prete' and fin_prevenue_le is null`)
     expect(await cron()).toMatchObject({ fins_prevenues: 0 })
     expect(courriels).toHaveLength(0)
     sql(`update public.campagne set statut = 'prete' where id = '${campagneId}'`)

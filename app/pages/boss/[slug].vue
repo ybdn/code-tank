@@ -146,6 +146,14 @@ const ANNONCES_JURY: Record<string, string> = {
   deja_en_cours: 'Progression à jour. Le jury travaille déjà.',
   attente: 'Progression à jour. Le jury a été relancé il y a moins d\'une minute.',
 }
+// Campagne passée à prete : pas d'erreur, l'écran « terminée » remplace le bouton ; l'annonce est lue et le focus revient au titre.
+function finAnnoncee() {
+  if (data.value?.statut !== 'prete') return false
+  alerte.value = ''
+  annonce.value = 'La délibération est terminée.'
+  nextTick(() => titre.value?.focus())
+  return true
+}
 async function actualiser(silencieux = false) {
   // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
   if (actualisation.value) return
@@ -155,15 +163,13 @@ async function actualiser(silencieux = false) {
   try {
     const r = await $fetch<{ etat: string; progression: Progression }>(`/api/boss/${encodeURIComponent(slug)}/actualisation`, { method: 'POST', body: {} })
     progression.value = r.progression
-    if (!silencieux) annonceSuivi.value = ANNONCES_JURY[r.etat] ?? 'Progression à jour. Le jury n\'a pas pu être relancé : réessaie dans une minute.'
+    if (silencieux) return
+    // Le jury a pu finir pendant l'appel : la campagne est relue, et l'écran « terminée » se voit dès ce clic.
+    await refresh()
+    if (!finAnnoncee()) annonceSuivi.value = ANNONCES_JURY[r.etat] ?? 'Progression à jour. Le jury n\'a pas pu être relancé : réessaie dans une minute.'
   } catch (e) {
     await echec(e)
-    // Le jury a fini entre-temps : pas d'erreur, l'écran « terminée » remplace le bouton ; le focus revient au titre.
-    if (data.value?.statut === 'prete') {
-      alerte.value = ''
-      annonce.value = 'La délibération est terminée.'
-      titre.value?.focus()
-    }
+    finAnnoncee()
   } finally {
     actualisation.value = false
   }

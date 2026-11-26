@@ -25,8 +25,10 @@ export async function prevenirFin(event: H3Event, campagneId: string): Promise<b
   try {
     await envoyerCourriel(config, lu.user.email, sujet, texte)
     return true
-  } catch {
-    console.error('E-mail de fin de délibération : envoi en échec, e-mail perdu.')
+  } catch (e) {
+    // Le code de nodemailer (EAUTH, ECONNECTION…) seulement : le message peut citer l'adresse.
+    const code = (e as { code?: unknown }).code
+    console.error('E-mail de fin de délibération : envoi en échec, e-mail perdu,', typeof code === 'string' ? code : 'sans code')
     return false
   }
 }
