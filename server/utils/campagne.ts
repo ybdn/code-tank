@@ -122,7 +122,7 @@ export async function pageCampagne(event: H3Event, client: Awaited<ReturnType<ty
     if (participation.data) {
       const [reception, depot] = await Promise.all([
         client.from('reception').select('statut, motifs, presentation, demande, cree_le').eq('participation_id', participation.data.id).maybeSingle(),
-        client.from('depot').select('presentation, demande, depose_le').eq('participation_id', participation.data.id).maybeSingle(),
+        client.from('depot').select('presentation, demande, depose_le, sha256, nb_fichiers, fichiers_exclus, nb_tokens_estime').eq('participation_id', participation.data.id).maybeSingle(),
       ])
       if (reception.error || depot.error) erreurCampagne((reception.error ?? depot.error)!, 'Lecture du dépôt :', 'La campagne ne peut pas être lue pour le moment.')
       return { ...publique, criteres, ...moi, reception: reception.data as ReceptionLue | null, depot: depot.data }

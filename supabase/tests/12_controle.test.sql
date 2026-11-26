@@ -3,13 +3,13 @@
 -- candidat (A1), rôle de service. Dates relatives à now() pour la phase de dépôt, now() seulement pour « échue ».
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(47);
+select plan(48);
 
 insert into auth.users (id, email)
-select ('92000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4']) h;
+select ('92000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
 insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
 select ('92000000-0000-4000-8000-0000000000' || h)::uuid, '92' || h, 'ctrl_' || h, now(), '2026-11-25', now(), 'actif'
-from unnest(array['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4']) h;
+from unnest(array['a1', 'a2', 'a3', 'a4', 'b1', 'b2', 'b3', 'b4', 'b5']) h;
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
   ouverture_inscriptions, cloture_depot, date_resultats)
 select s, ('92000000-0000-4000-8000-0000000000' || b)::uuid, 'Titre ' || s, 'Thème', 'Brief', array['Go'], 'publique', 'juge', 5, o, c, d
@@ -17,30 +17,32 @@ from (values
   ('ccpub', 'b1', now() - interval '1 day', now() + interval '10 days', now() + interval '20 days'),
   ('ccdelib', 'b2', now() - interval '1 day', now() + interval '10 days', now() + interval '20 days'),
   ('ccbloq', 'b3', now() - interval '1 day', now() + interval '10 days', now() + interval '20 days'),
-  ('ccechue', 'b4', now() - interval '3 days', now() - interval '2 days', now() - interval '1 day')) v(s, b, o, c, d);
+  ('ccechue', 'b4', now() - interval '3 days', now() - interval '2 days', now() - interval '1 day'),
+  ('ccclos', 'b5', now() - interval '3 days', now() - interval '1 hour', now() + interval '5 days')) v(s, b, o, c, d);
 update public.campagne set statut = 'ouverte' where slug like 'cc%';
 update public.campagne set statut = 'deliberation' where slug = 'ccdelib';
 update public.campagne set bloquee_le = now(), motif_blocage = 'Essai' where slug = 'ccbloq';
 select set_config('t.' || substr(slug, 3), id::text, true) from public.campagne where slug like 'cc%';
 
--- f1 : A1 à pub ; f2 : A2 à pub ; f3, f4, f5 : A3 à delib, bloq, echue.
+-- f1 : A1 à pub ; f2 : A2 à pub ; f3, f4, f5, f7 : A3 à delib, bloq, echue, clos.
 insert into public.participation (id, campagne_id, compte_id, connaissance_envoi_le) values
   ('92000000-0000-4000-8000-0000000000f1', current_setting('t.pub')::uuid, '92000000-0000-4000-8000-0000000000a1', now()),
   ('92000000-0000-4000-8000-0000000000f2', current_setting('t.pub')::uuid, '92000000-0000-4000-8000-0000000000a2', now()),
   ('92000000-0000-4000-8000-0000000000f3', current_setting('t.delib')::uuid, '92000000-0000-4000-8000-0000000000a3', now()),
   ('92000000-0000-4000-8000-0000000000f4', current_setting('t.bloq')::uuid, '92000000-0000-4000-8000-0000000000a3', now()),
-  ('92000000-0000-4000-8000-0000000000f5', current_setting('t.echue')::uuid, '92000000-0000-4000-8000-0000000000a3', now());
--- Chemins <campagne>/<participation>/<uuid>.zip : z1 et z2 pour A1 (deux dépôts successifs), z3 pour A2, z4 à z6 pour A3.
+  ('92000000-0000-4000-8000-0000000000f5', current_setting('t.echue')::uuid, '92000000-0000-4000-8000-0000000000a3', now()),
+  ('92000000-0000-4000-8000-0000000000f7', current_setting('t.clos')::uuid, '92000000-0000-4000-8000-0000000000a3', now());
+-- Chemins <campagne>/<participation>/<uuid>.zip : z1 et z2 pour A1 (deux dépôts successifs), z3 pour A2, z4 à z7 pour A3.
 select set_config('t.z' || n, current_setting('t.' || c) || '/92000000-0000-4000-8000-0000000000' || f || '/9b000000-0000-4000-8000-00000000000' || n || '.zip', true)
-from (values (1, 'pub', 'f1'), (2, 'pub', 'f1'), (3, 'pub', 'f2'), (4, 'delib', 'f3'), (5, 'bloq', 'f4'), (6, 'echue', 'f5')) v(n, c, f);
+from (values (1, 'pub', 'f1'), (2, 'pub', 'f1'), (3, 'pub', 'f2'), (4, 'delib', 'f3'), (5, 'bloq', 'f4'), (6, 'echue', 'f5'), (7, 'clos', 'f7')) v(n, c, f);
 insert into storage.objects (bucket_id, name)
-select 'depots', current_setting('t.z' || n) from generate_series(1, 6) n
-union all select 'depots', replace(current_setting('t.z' || n), '.zip', '.filtre.zip') from unnest(array[2, 4, 5, 6]) n;
+select 'depots', current_setting('t.z' || n) from generate_series(1, 7) n
+union all select 'depots', replace(current_setting('t.z' || n), '.zip', '.filtre.zip') from unnest(array[2, 4, 5, 6, 7]) n;
 -- Réceptions en attente, posées comme deposer les écrit ; r3 (A2) sert au refus.
 insert into public.reception (id, participation_id, chemin_stockage, presentation, demande, droit_declare_le)
 select ('92000000-0000-4000-8000-0000000000e' || n)::uuid, ('92000000-0000-4000-8000-0000000000' || f)::uuid,
   current_setting('t.z' || n), 'Présentation ' || n, case n when 1 then 'Je vise 8/10' end, timestamptz '2026-11-20 10:00 Europe/Paris'
-from (values (1, 'f1'), (3, 'f2'), (4, 'f3'), (5, 'f4'), (6, 'f5')) v(n, f);
+from (values (1, 'f1'), (3, 'f2'), (4, 'f3'), (5, 'f4'), (6, 'f5'), (7, 'f7')) v(n, f);
 create temp table mesure (b text, c integer, d jsonb, e integer, f jsonb, g integer, h boolean, i jsonb) on commit drop;
 grant select on mesure to service_role;
 insert into mesure values (repeat('c', 64), 3, '[{"chemin": "logo.png", "raison": "image"}]', 1200, '{"tests": 2}', 7, true,
@@ -164,6 +166,10 @@ reset role;
 select results_eq($$select chemin_stockage, presentation, demande, sha256 from public.depot where participation_id = '92000000-0000-4000-8000-0000000000f1'$$,
   $$values (current_setting('t.z2'), 'Version 2', null::text, repeat('d', 64))$$, 'un seul dépôt : le nouveau');
 select is((select count(*) from public.depot), 1::bigint, 'aucun autre dépôt écrit');
+set local role service_role;
+select is(public.accepter_depot('92000000-0000-4000-8000-0000000000e7', replace(current_setting('t.z7'), '.zip', '.filtre.zip'), b, c, d, e, f, g, h, i),
+  '{}'::text[], 'campagne ouverte après la clôture du dépôt : une réception déposée à temps est acceptée') from mesure;
+reset role;
 select is((select count(*) from public.reception where statut = 'en_attente'), 3::bigint, 'les réceptions des campagnes closes restent en attente');
 
 select * from finish();

@@ -143,7 +143,7 @@ async function demanderRetrait(v: boolean) {
           <template v-else>
             <p>Ton archive envoyée le {{ dateParis(data.reception.cree_le) }} a été refusée. Corrige ce qui suit, puis redépose.</p>
             <ul>
-              <li v-for="(m, i) in data.reception.motifs ?? []" :key="i">{{ m.message ?? m.code }}</li>
+              <li v-for="(m, i) in data.reception.motifs ?? []" :key="i" class="brief">{{ m.message }}</li>
             </ul>
           </template>
         </template>
@@ -151,6 +151,25 @@ async function demanderRetrait(v: boolean) {
           <p>Ton dépôt accepté le {{ dateParis(data.depot.depose_le) }}&nbsp;:</p>
           <p class="brief">{{ data.depot.presentation }}</p>
           <p v-if="data.depot.demande">Ta demande&nbsp;: {{ data.depot.demande }}</p>
+          <!-- Ce que le jury lira (SPECS § 4) ; les alertes sont réservées au Boss juge (epic 5). -->
+          <dl class="dates">
+            <dt>Fichiers retenus</dt>
+            <dd>{{ data.depot.nb_fichiers }}</dd>
+            <dt>Fichiers exclus (listés au jury, pas lus)</dt>
+            <dd>
+              {{ data.depot.fichiers_exclus.length }}
+              <details v-if="data.depot.fichiers_exclus.length">
+                <summary>Voir la liste</summary>
+                <ul>
+                  <li v-for="f in data.depot.fichiers_exclus" :key="f.chemin">{{ f.chemin }} ({{ RAISONS_EXCLUSION[f.raison] ?? f.raison }})</li>
+                </ul>
+              </details>
+            </dd>
+            <dt>Taille</dt>
+            <dd>~{{ data.depot.nb_tokens_estime.toLocaleString('fr-FR') }} tokens (estimation)</dd>
+            <dt>Empreinte SHA-256 de l'archive</dt>
+            <dd class="empreinte">{{ data.depot.sha256 }}</dd>
+          </dl>
           <p v-if="pasDeRetrait">{{ pasDeRetrait }}</p>
           <p v-else-if="!confirmer" class="btns"><button ref="boutonRetrait" class="btn" type="button" :aria-disabled="occupe" @click="demanderRetrait(true)">Retirer mon dépôt</button></p>
           <div v-else class="avis" role="group" aria-labelledby="retrait-titre">

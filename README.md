@@ -68,14 +68,16 @@ pnpm build
   `deposer` crée la réception `en_attente`, puis `appelerJury` sans attendre ; règle métier : **409**, limite de 10 dépôts
   par compte et par 24 h : **429**. `DELETE /api/campagnes/[slug]/depot` : `retirer_depot`, puis effacement du bucket des
   chemins rendus (clé de service ; un échec est journalisé) ; sans dépôt : **404**. `GET /api/campagnes/[slug]` renvoie
-  aussi `reception` et `depot` de l'inscrit (lus sous RLS). Page : `/campagnes/[slug]/depot`.
+  aussi `reception` et `depot` de l'inscrit (lus sous RLS). Page : `/campagnes/[slug]/depot` (motifs d'un refus en phrases ;
+  pour un dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte SHA-256 ; jamais les alertes).
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
   au-delà du plafond : **429** avec `Retry-After`.
 - `server/utils/jury.ts` : `appelerJury`, réveil du jury (dépôt privé) par `POST <NUXT_JURY_URL>`, jamais bloquant.
 - `server/utils/conservation.ts` : `verifierCron`, contrôle de `CRON_SECRET` en temps constant (**404** sinon).
-  `GET /api/cron/conservation`, appelée chaque jour par le planificateur de Vercel (`vercel.json`), ne fait encore aucune tâche.
+  `GET /api/cron/conservation`, appelée chaque jour par le planificateur de Vercel (`vercel.json`) : aucune tâche de
+  conservation encore (epic 6) ; elle réveille le jury (`appelerJury`, sans attendre ni échouer avec lui, filet d'AD-7).
 - `server/utils/courriel.ts` : `envoyerCourriel`, envoi d'un e-mail texte signé depuis `code-tank@ybdn.io`.
 - `server/utils/secret.ts` : `SECRET_MIN`, longueur minimale des secrets (32 caractères).
 - `server/utils/session.ts`, `server/utils/publique.ts` : session vérifiée par Auth, lecture anonyme de PostgREST à délai court.
@@ -159,24 +161,31 @@ Trois migrations datées du même jour (AD-13) :
   la campagne, phase de dépôt, Boss juge refusé, case, présentation rognée 1 à 500, demande 80 au plus, chemin de sa
   participation et objet présent dans le bucket, limite de débit par compte 10 par 24 h,
   premier dépôt qui pose `regles_figees_le`), `retirer_depot` (`for update`, statut `ouverte` avant la clôture, rend les
-  chemins de `effacer_archives`) et `effacer_archives(depot)` (zip et archive filtrée, seul chemin d'effacement, AD-11).
+  chemins de `effacer_archives`) et `effacer_archives(depot)` (zip et archive filtrée, seul chemin d'effacement, AD-11) ;
+  pour prive (story 3.4), `noter_tentative_reception` (compte un essai, rend le nombre), `refuser_reception` (motifs
+  `[{ code, message }]`, rend le zip à effacer) et `accepter_depot` (campagne ouverte et vivante, archive filtrée présente
+  à côté du zip ; crée ou remplace le dépôt avec les mesures de prive et la déclaration de la réception, supprime la
+  réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
   propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
   par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
   `est_admin()`), sans droit du rôle de service ; `critere` en lecture seule pour tous,
   rôle de service compris,
-  remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, sans droit du rôle de service ;
+  remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, le rôle de service n'en lit que quatre
+  colonnes (prive) ;
   `creer_campagne`, `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` exécutables par `authenticated` seul
   (leurs règles vivent dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun
   client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service ; `campagne_calculee`
   lisible par aucun client ; `lire_invitation` et `regenerer_invitation` exécutables par `authenticated` seul (leurs règles
   vivent dans les fonctions) ; `participation`
-  lisible par son compte seul (RLS), sans écriture directe ni droit du rôle de service ; `sinscrire` et `se_desinscrire`
+  lisible par son compte seul (RLS), sans écriture directe, le rôle de service n'en lit que deux colonnes (prive) ;
+  `sinscrire` et `se_desinscrire`
   exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions) ; `reception`
   et `depot` lisibles par le compte de leur participation seul (RLS, colonnes choisies : ni chemins, ni tentatives, ni
-  faits, note d'outillage et alertes), sans écriture directe ni droit du rôle de service ; `peut_deposer`, `deposer` et
-  `retirer_depot` exécutables par `authenticated` seul (leurs règles vivent dans les fonctions) ; `effacer_archives` par
-  le rôle de service seul.
+  faits, note d'outillage et alertes), sans écriture directe ; le rôle de service lit cinq colonnes de `reception`
+  (prive) et rien de `depot` ; `peut_deposer`, `deposer` et `retirer_depot` exécutables par `authenticated` seul (leurs
+  règles vivent dans les fonctions) ; `effacer_archives`, `noter_tentative_reception`, `refuser_reception` et
+  `accepter_depot` par le rôle de service seul.
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux
