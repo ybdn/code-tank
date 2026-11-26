@@ -1074,17 +1074,21 @@ $$;
 -- Enregistre l'issue d'un audit (AD-5 (2)) : p_statut termine ou echec. Rend le reste du plafond (plafond_usd moins la somme
 -- des cout_usd de la campagne, tous lancements compris), après écriture. Contrats avec prive (story 4.5) :
 -- - p_usage : tableau des tentatives payées, [{ "lot": true|false, "input_tokens", "output_tokens",
---   "cache_creation_input_tokens", "cache_read_input_tokens" }] (entiers ≥ 0, absents = 0, autres clés ignorées), ou null ou []
+--   "cache_creation_input_tokens", "cache_read_input_tokens" }] (entiers ≥ 0, absents ou null = 0, autres clés ignorées), ou
+--   null ou []
 --   (echec sans appel). Le coût (cout_tokens, moitié prix si lot, écriture de cache au tarif d'une heure) s'ajoute à cout_usd ;
 --   les tentatives s'ajoutent à usage et à tentatives. Un audit en echec relancé garde ainsi ce qu'il a déjà coûté.
 -- - termine : p_resultat est la sortie du juré (SPECS § 6) plus "modele" et "version_consignes" (textes de 1 à 80 caractères),
---   rangés dans leurs colonnes. criteres couvre exactement les critères non calculés du juré dans critere (AD-8 : la note d'un
+--   rangés dans leurs colonnes (ni vides ni faits de blancs seuls). prive retire \u0000 des textes du juré (jsonb le refuse).
+--   criteres couvre exactement les critères non calculés du juré dans critere (AD-8 : la note d'un
 --   critère calcule vient du scan, depot.note_outillage), chaque note est un entier de 0 à 10 avec au moins une preuve
 --   { fichier, ligne, constat } ; verdict convaincu ou pas_convaincu ; replique est un texte. Sinon refus, que prive traite
 --   en relançant l'audit une fois en appel direct.
 -- - echec : p_resultat ignoré ; resultat vide, modele et version_consignes inchangés.
 -- - termine est refusé pour l'audit d'un dépôt trop_gros. a_envoyer → termine sans marquer_envoye reste permis (relance
 --   directe).
+-- Un refus n'écrit rien, pas même le coût de la tentative payée : l'appel suivant pour le même audit porte toutes les
+-- tentatives payées depuis la dernière écriture réussie.
 -- Pas d'idempotence : chaque appel ajoute son usage, son coût et ses tentatives, même pour un echec rejoué. Ne pas rejouer un
 -- appel dont la réponse est perdue sans relire audit.tentatives.
 -- shortcut: la taille de p_usage et de p_resultat n'est pas bornée, prive étant un appelant de confiance ; à borner si
@@ -1129,7 +1133,8 @@ begin
     select 1 from jsonb_array_elements(p_usage) u
     where jsonb_typeof(u) <> 'object' or jsonb_typeof(u -> 'lot') is distinct from 'boolean'
       or exists (select 1 from unnest(array['input_tokens', 'output_tokens', 'cache_creation_input_tokens',
-        'cache_read_input_tokens']) k where u ? k and (jsonb_typeof(u -> k) <> 'number' or (u ->> k) !~ '^[0-9]{1,12}$'))) then
+        'cache_read_input_tokens']) k where jsonb_typeof(u -> k) <> 'null'
+        and (jsonb_typeof(u -> k) <> 'number' or (u ->> k) !~ '^[0-9]{1,12}$'))) then
     raise exception 'Usage mal formé.';
   end if;
   select coalesce(sum(public.cout_tokens(coalesce((u ->> 'input_tokens')::numeric, 0), coalesce((u ->> 'output_tokens')::numeric, 0),
@@ -1139,9 +1144,10 @@ begin
 
   if p_statut = 'termine' and (
     jsonb_typeof(p_resultat) is distinct from 'object'
-    or jsonb_typeof(p_resultat -> 'modele') is distinct from 'string' or char_length(p_resultat ->> 'modele') not between 1 and 80
+    or jsonb_typeof(p_resultat -> 'modele') is distinct from 'string'
+    or char_length(btrim(p_resultat ->> 'modele', E' \t\r\n\u00a0')) not between 1 and 80
     or jsonb_typeof(p_resultat -> 'version_consignes') is distinct from 'string'
-    or char_length(p_resultat ->> 'version_consignes') not between 1 and 80
+    or char_length(btrim(p_resultat ->> 'version_consignes', E' \t\r\n\u00a0')) not between 1 and 80
     or (p_resultat ->> 'verdict') is distinct from 'convaincu' and (p_resultat ->> 'verdict') is distinct from 'pas_convaincu'
     or jsonb_typeof(p_resultat -> 'verdict') is distinct from 'string'
     or jsonb_typeof(p_resultat -> 'replique') is distinct from 'string'

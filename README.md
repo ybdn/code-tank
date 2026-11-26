@@ -200,12 +200,14 @@ Trois migrations datées du même jour (AD-13) :
   lot, ignore les autres, dont ceux d'un dépôt sans compte exact ou `trop_gros`, rend le nombre ; prive appelle donc
   `ecrire_tokens_exacts` sur chaque dépôt avant `marquer_envoye`) ; `enregistrer_audit(audit, statut, resultat, usage)` (`termine` ou `echec`, rend le
   reste du plafond). Contrat avec prive : `usage` est le tableau des tentatives payées, `[{ lot, input_tokens,
-  output_tokens, cache_creation_input_tokens, cache_read_input_tokens }]` (entiers ≥ 0, absents = 0), ou `null` ; son coût
+  output_tokens, cache_creation_input_tokens, cache_read_input_tokens }]` (entiers ≥ 0, absents ou `null` = 0), ou `null` ; son coût
   s'ajoute à `cout_usd` (écriture de cache au tarif d'une heure), ses tentatives à `usage` et `tentatives`. Pour `termine`,
-  `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés dans leurs colonnes) : `criteres`
+  `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés dans leurs colonnes, 1 à 80 caractères hors blancs ; prive retire
+  `\u0000` des textes du juré) : `criteres`
   couvre exactement les critères non calculés du juré dans `critere` (aucune note sur `outillage_doc`), notes entières de 0
   à 10 avec au moins une preuve `{ fichier, ligne, constat }`, `verdict` `convaincu` ou `pas_convaincu`, `replique` texte.
-  Pour `echec`, `resultat` est ignoré. `termine` est refusé pour un dépôt `trop_gros`. Pas d'idempotence : chaque appel
+  Pour `echec`, `resultat` est ignoré. `termine` est refusé pour un dépôt `trop_gros`. Un refus n'écrit rien, pas même le coût payé : l'appel suivant pour le même audit
+  porte toutes les tentatives payées depuis la dernière écriture réussie. Pas d'idempotence : chaque appel
   ajoute son usage ; ne pas rejouer un appel dont la réponse est perdue sans relire `audit.tentatives`. Une preuve porte une
   `ligne` entière ≥ 1.
 - `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son

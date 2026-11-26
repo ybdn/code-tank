@@ -248,7 +248,7 @@ select is((select lancements from public.campagne where id = current_setting('t.
 -- Relance : d1 sudo termine (1 $), d1 refacto echec (0,25 $ payé), d2 lint supprimé (manquant) ; dépensé 1,25 $, pire cas =
 -- d1 refacto, lint, pitch (3 × 0,55 $) + d2 sudo, refacto, pitch, lint (4 × 0,23 $) = 2,57 $ ; total 3,82 $.
 update public.audit set statut = 'termine', cout_usd = 1 where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'sudo';
-update public.audit set statut = 'echec', cout_usd = 0.25, batch_id = 'lot', resultat = '{}', usage = '{}'
+update public.audit set statut = 'echec', cout_usd = 0.25, batch_id = 'lot', resultat = '{}', usage = '[{"lot": true, "input_tokens": 1}]'
   where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'refacto';
 delete from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d2' and jure = 'lint';
 set local role service_role;
@@ -259,7 +259,7 @@ select is(public.lancer_deliberation('94000000-0000-4000-8000-0000000000b1', cur
 reset role;
 select is((select count(*) from public.audit), 8::bigint, 'relance : l''audit manquant est recréé, aucun doublon');
 select is((select statut || ':' || coalesce(batch_id, '-') || ':' || coalesce(resultat::text, '-') || ':' || coalesce(usage::text, '-') || ':' || cout_usd
-  from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'refacto'), 'a_envoyer:-:-:{}:0.25',
+  from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'refacto'), 'a_envoyer:-:-:[{"lot": true, "input_tokens": 1}]:0.25',
   'relance : l''audit en echec repart en a_envoyer, son coût et son usage payés restent');
 select is((select statut from public.audit where depot_id = '94000000-0000-4000-8000-0000000000d1' and jure = 'sudo'), 'termine', 'relance : un audit terminé ne bouge pas');
 select is((select lancements || ':' || cle_fin || ':' || plafond_usd from public.campagne where id = current_setting('t.x')::uuid), '2:0abc:3.82', 'relance : deux lancements, nouvelle clé, nouveau plafond');

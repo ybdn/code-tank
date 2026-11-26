@@ -3,7 +3,7 @@
 -- Clé factice seulement. Rôles : Boss (B1, B2), candidats (A1 à A3), rôle de service.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(105);
+select plan(109);
 
 insert into auth.users (id, email)
 select ('95000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['a1', 'a2', 'a3', 'b1', 'b2']) h;
@@ -49,9 +49,14 @@ select is_empty($$
 $$, 'le rôle de service exécute les trois fonctions de prive');
 select is(has_function_privilege('service_role', 'public.cout_tokens(numeric, numeric, numeric, numeric, boolean)', 'execute'), false,
   'cout_tokens : pas même le rôle de service');
-select ok(bool_and(pg_get_functiondef(f) ~ 'for update of c'), 'les trois fonctions verrouillent la ligne campagne')
-from unnest(array['public.ecrire_tokens_exacts(uuid, integer)'::regprocedure, 'public.marquer_envoye(uuid[], text)'::regprocedure,
-  'public.enregistrer_audit(uuid, text, jsonb, jsonb)'::regprocedure]) f;
+-- Test de forme : la clause de verrou de chaque fonction, sur la ligne campagne de l'objet reçu.
+select is_empty($$
+  select f from (values
+    ('public.ecrire_tokens_exacts(uuid, integer)'::regprocedure, 'where d\.id = p_depot for update of c;'),
+    ('public.marquer_envoye(uuid[], text)'::regprocedure, 'where a\.id = any\(p_audits\) order by c\.id for update of c;'),
+    ('public.enregistrer_audit(uuid, text, jsonb, jsonb)'::regprocedure, 'where a\.id = p_audit for update of c;')) v(f, clause)
+  where pg_get_functiondef(f) !~ clause
+$$, 'chaque fonction verrouille la ligne campagne de son objet (for update of c)');
 select is(has_table_privilege('service_role', 'public.audit', 'insert,update,delete,truncate,references,trigger'), false,
   'audit : toujours aucune écriture directe du rôle de service');
 select is(has_any_column_privilege('service_role', 'public.depot', 'insert,update,references'), false,
@@ -184,6 +189,10 @@ select throws_ok($$select pg_temp.essai(null)$$, 'P0001', 'Résultat mal formé.
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb - 'modele')$$, 'P0001', 'Résultat mal formé.', 'sans modèle : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || jsonb_build_object('version_consignes', repeat('v', 81)))$$,
   'P0001', 'Résultat mal formé.', 'version des consignes de 81 caractères : refus');
+select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || jsonb_build_object('modele', E' \t\u00a0'))$$,
+  'P0001', 'Résultat mal formé.', 'modèle fait de blancs seuls : refus');
+select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || '{"version_consignes": "   "}')$$,
+  'P0001', 'Résultat mal formé.', 'version des consignes faite de blancs seuls : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb || '{"verdict": "peut_etre"}')$$, 'P0001', 'Résultat mal formé.',
   'verdict hors liste : refus');
 select throws_ok($$select pg_temp.essai(current_setting('t.ok')::jsonb - 'replique')$$, 'P0001', 'Résultat mal formé.', 'sans réplique : refus');
@@ -317,6 +326,14 @@ select lives_ok($$select public.enregistrer_audit(current_setting('t.d2_sudo')::
 reset role;
 select is((select jsonb_array_length(usage) || ':' || tentatives || ':' || (usage -> 0 ->> 'lot') from public.audit
   where id = current_setting('t.d2_sudo')::uuid), '2:2:true', 'l''usage d''avant la relance est conservé, le nouveau s''y ajoute');
+
+-- Une clé d'usage à null (l'API en renvoie) compte pour 0 : 10 tokens d'entrée en lot = 10 × 4 / 1 M / 2 = 0,00002 $.
+set local role service_role;
+select lives_ok($$select public.enregistrer_audit(current_setting('t.d2_lint')::uuid, 'echec', null,
+  '[{"lot": true, "input_tokens": 10, "cache_read_input_tokens": null}]')$$, 'usage avec une clé à null : accepté');
+reset role;
+select is((select trim_scale(cout_usd) || ':' || tentatives from public.audit where id = current_setting('t.d2_lint')::uuid), '0.00002:1',
+  'la clé à null compte pour 0 : coût attendu');
 
 delete from vault.secrets where name like 'cle_boss_%';
 select * from finish();
