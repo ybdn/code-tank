@@ -115,6 +115,17 @@ describe('GET /api/boss/[slug]/estimation', () => {
     expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2 })
   })
 
+  it('pas encore : moins de 48 h avant les résultats', async () => {
+    sql(`update public.campagne set date_resultats = now() + interval '47 hours' where id = '${campagneId}'`)
+    try {
+      expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json)
+        .toEqual({ disponible: false, raison: 'Moins de 2 jours avant les résultats : la délibération ne peut plus partir.' })
+    } finally {
+      sql(`update public.campagne set date_resultats = now() + interval '5 days' where id = '${campagneId}'`)
+    }
+    expect((await lire(`/api/boss/${slug}/estimation`, boss.cookie)).json).toEqual({ disponible: true, pire_cas_usd: 2.2 })
+  })
+
   it('pas encore : campagne en brouillon', async () => {
     const r = await envoyer('POST', '/api/boss', autre.cookie, {
       titre: 'Brouillon ' + randomBytes(3).toString('hex'), theme: 'Un minuteur', brief: 'Écris un minuteur.', langages: ['Go'],

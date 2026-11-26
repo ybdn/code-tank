@@ -10,6 +10,9 @@ export default defineEventHandler(async (event) => {
   if (campagne.statut !== 'ouverte') return pasEncore('La délibération se lance quand la campagne est ouverte et ses dépôts clos.')
   if (campagne.bloquee_le) return pasEncore('La campagne est bloquée.')
   if (Date.parse(campagne.date_resultats) < Date.now()) return pasEncore('La date des résultats est passée.')
+  // Formulaire voué au refus : lancer_deliberation (story 4.3) refusera tout lancement à moins de 48 h exactes des résultats
+  // (now() > date_resultats - interval '48 hours'). Une durée en heures, pas en jours : pas d'écart au changement d'heure.
+  if (Date.now() > Date.parse(campagne.date_resultats) - 48 * 3600 * 1000) return pasEncore('Moins de 2 jours avant les résultats : la délibération ne peut plus partir.')
   if (Date.parse(campagne.cloture_depot) > Date.now()) return pasEncore('Les dépôts ne sont pas encore clos.')
   // Le Boss ne lit pas les réceptions des candidats (RLS) : lecture avec la clé de service, après la garde du Boss.
   const { count, error: erreurReception } = await serverSupabaseServiceRole(event).from('reception')

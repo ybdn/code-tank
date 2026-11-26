@@ -71,8 +71,8 @@ pnpm build
   aussi `reception` et `depot` de l'inscrit (lus sous RLS). Page : `/campagnes/[slug]/depot` (motifs d'un refus en phrases ;
   pour un dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte SHA-256 ; jamais les alertes).
 - `GET /api/boss/[slug]/estimation` (story 4.2) : pour le Boss de la campagne (**404** sinon), `{ disponible: false,
-  raison }` tant que la campagne n'est pas ouverte, vivante, non bloquée, avec ses dépôts clos et sans réception en
-  attente (lue avec la clé de service, que le Boss ne lit pas sous RLS) ; sinon `{ disponible: true, pire_cas_usd }` par
+  raison }` tant que la campagne n'est pas ouverte, vivante, non bloquée, à plus de 48 h de ses résultats (borne de
+  `lancer_deliberation`, story 4.3), avec ses dépôts clos, sans réception en attente et avec au moins un audit à envoyer (lue avec la clé de service, que le Boss ne lit pas sous RLS) ; sinon `{ disponible: true, pire_cas_usd }` par
   `estimer_pire_cas` avec le JWT du Boss. Affiché dans le bloc « Délibération » de `/boss/[slug]`.
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
