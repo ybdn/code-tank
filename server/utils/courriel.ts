@@ -41,6 +41,6 @@ export function courrielFin(siteUrl: string, slug: string, titre: string) {
   const t = titre.replace(/[\r\n\u0085\u2028\u2029]+/g, ' ').trim()
   return {
     sujet: `Code Tank — ${t} : la délibération est terminée`,
-    texte: `Le jury a fini de délibérer sur ta campagne « ${t} ». Relis les répliques, puis publie les résultats :\n${siteUrl}/boss/${slug}`,
+    texte: `Le jury a fini de délibérer sur ta campagne « ${t} ». Relis les répliques, puis publie les résultats :\n${siteUrl.replace(/\/+$/, '')}/boss/${slug}`,
   }
 }

@@ -14,4 +14,8 @@ describe('e-mail « délibération terminée »', () => {
     expect(sujet).toBe('Code Tank — Ligne 1 Bcc: autre@example.org fin : la délibération est terminée')
     expect(sujet).not.toMatch(/[\r\n\u2028]/)
   })
+  it('une URL du site terminée par / ne donne pas de double slash', () => {
+    expect(courrielFin('https://code-tank.ybdn.io/', 's', 'T').texte).toContain('https://code-tank.ybdn.io/boss/s')
+    expect(courrielFin('https://code-tank.ybdn.io/', 's', 'T').texte).not.toContain('//boss')
+  })
 })

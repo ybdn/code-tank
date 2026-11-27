@@ -149,6 +149,9 @@ const ANNONCES_JURY: Record<string, string> = {
   attente: 'Progression à jour. Le jury a été relancé il y a moins d\'une minute.',
 }
 // Campagne passée à prete : pas d'erreur, l'écran « terminée » remplace le bouton ; l'annonce est lue et le focus revient au titre.
+// Relecture de la campagne après une actualisation : un échec garde l'écran affiché (refresh() remettrait data à vide et
+// afficherait l'erreur pleine page pour une simple coupure).
+const relire = () => $fetch<CampagneBoss>(`/api/boss/${encodeURIComponent(slug)}`).then((c) => { data.value = c }, () => {})
 function finAnnoncee() {
   if (data.value?.statut !== 'prete') return false
   alerte.value = ''
@@ -172,13 +175,13 @@ async function actualiser(silencieux = false) {
     progressionIndisponible.value = false
     // Le jury a pu finir pendant l'appel : la campagne est relue (ce qui envoie aussi l'e-mail de fin), et l'écran « terminée » se
     // voit dès ce clic ou dès l'ouverture. À l'ouverture, sans annonce.
-    await refresh()
+    await relire()
     if (silencieux) return
     if (!finAnnoncee()) annonceSuivi.value = ANNONCES_JURY[r.etat] ?? 'Progression à jour. Le jury n\'a pas pu être relancé : réessaie dans une minute.'
   } catch (e) {
     if (!progression.value) progressionIndisponible.value = true
     // 409 : la campagne a pu passer à prete ; relue d'abord, la fin s'annonce sans erreur.
-    if ((e as { statusCode?: number }).statusCode === 409) await refresh()
+    if ((e as { statusCode?: number }).statusCode === 409) await relire()
     if (!finAnnoncee()) await echec(e)
   } finally {
     actualisation.value = false
