@@ -26,7 +26,12 @@ export type CampagneBoss = {
   inscrits: number
   // Délibération (story 4.3) : plafond du dernier lancement, lancements faits (3 au plus), 4 derniers caractères de la clé rangée.
   plafond_usd: number | null; lancements: number; cle_fin: string | null
+  // E-mail « délibération terminée » (story 4.7) : posé à l'envoi, null avant.
+  fin_prevenue_le: string | null
 }
+
+// Progression du jury (story 4.7, progression_deliberation) : audits par statut et coût cumulé en dollars.
+export type Progression = { termines: number; en_cours: number; echecs: number; a_envoyer: number; cout_usd: number }
 export const STATUT_BOSS: Record<string, string> = {
   brouillon: 'Brouillon', ouverte: 'Ouverte', deliberation: 'Délibération', prete: 'Prête', publiee: 'Publiée', archivee: 'Archivée', expiree: 'Expirée',
 }

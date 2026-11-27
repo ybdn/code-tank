@@ -134,6 +134,61 @@ async function terminer() {
   }
 }
 
+// Écran « le jury délibère » (story 4.7) : en délibération avec une clé rangée, la page déclenche le jury et lit la progression à
+// l'ouverture et au bouton Actualiser ; le serveur n'appelle le jury qu'une fois par minute au plus par campagne. Sans clé, l'écran
+// de fin et de relance (story 4.6) reste seul. Un refus 409 (campagne passée à prete entre-temps) relit la page.
+const suivi = computed(() => data.value?.statut === 'deliberation' && !!data.value.cle_fin)
+const progression = ref<Progression | null>(null)
+const actualisation = ref(false)
+const annonceSuivi = ref('')
+// L'appel d'ouverture a échoué sans progression : la page le dit, plutôt que « Lecture… » sans fin.
+const progressionIndisponible = ref(false)
+const ANNONCES_JURY: Record<string, string> = {
+  lance: 'Progression à jour. Le jury est relancé.',
+  deja_en_cours: 'Progression à jour. Le jury travaille déjà.',
+  attente: 'Progression à jour. Le jury a été relancé il y a moins d\'une minute.',
+}
+// Campagne passée à prete : pas d'erreur, l'écran « terminée » remplace le bouton ; l'annonce est lue et le focus revient au titre.
+// Relecture de la campagne après une actualisation : un échec garde l'écran affiché (refresh() remettrait data à vide et
+// afficherait l'erreur pleine page pour une simple coupure).
+const relire = () => $fetch<CampagneBoss>(`/api/boss/${encodeURIComponent(slug)}`).then((c) => { data.value = c }, () => {})
+function finAnnoncee() {
+  if (data.value?.statut !== 'prete') return false
+  alerte.value = ''
+  annonce.value = 'La délibération est terminée.'
+  nextTick(() => titre.value?.focus())
+  return true
+}
+async function actualiser(silencieux = false) {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi ; un clic pendant un appel en cours le dit.
+  if (actualisation.value) {
+    if (!silencieux) annonceSuivi.value = 'Actualisation en cours…'
+    return
+  }
+  actualisation.value = true
+  // Vidée puis remplie : un second clic redit l'annonce. Une erreur d'un essai précédent disparaît.
+  annonceSuivi.value = ''
+  alerte.value = ''
+  try {
+    const r = await $fetch<{ etat: string; progression: Progression }>(`/api/boss/${encodeURIComponent(slug)}/actualisation`, { method: 'POST', body: {} })
+    progression.value = r.progression
+    progressionIndisponible.value = false
+    // Le jury a pu finir pendant l'appel : la campagne est relue (ce qui envoie aussi l'e-mail de fin), et l'écran « terminée » se
+    // voit dès ce clic ou dès l'ouverture. À l'ouverture, sans annonce.
+    await relire()
+    if (silencieux) return
+    if (!finAnnoncee()) annonceSuivi.value = ANNONCES_JURY[r.etat] ?? 'Progression à jour. Le jury n\'a pas pu être relancé : réessaie dans une minute.'
+  } catch (e) {
+    if (!progression.value) progressionIndisponible.value = true
+    // 409 : la campagne a pu passer à prete ; relue d'abord, la fin s'annonce sans erreur.
+    if ((e as { statusCode?: number }).statusCode === 409) await relire()
+    if (!finAnnoncee()) await echec(e)
+  } finally {
+    actualisation.value = false
+  }
+}
+onMounted(() => watch(suivi, (oui) => { if (oui) actualiser(true) }, { immediate: true }))
+
 // Lien d'invitation (story 2.4) : URL absolue à partir de l'origine de la requête, la même au rendu serveur et dans le navigateur.
 const origine = useRequestURL().origin
 const lien = computed(() => data.value?.jeton_invitation ? `${origine}/invitation/${data.value.jeton_invitation}` : '')
@@ -215,8 +270,20 @@ async function supprimer() {
         </template>
         <p v-if="data.role_boss === 'juge'">Tu juges cette campagne&nbsp;: ton vote compte pour 33&nbsp;% du score final.</p>
         <template v-if="data.statut === 'ouverte' || data.statut === 'deliberation'">
-          <h2>Délibération</h2>
-          <p v-if="data.cle_fin">Le jury délibère (clé …{{ data.cle_fin }}).</p>
+          <h2>{{ data.cle_fin ? 'Le jury délibère' : 'Délibération' }}</h2>
+          <template v-if="data.cle_fin">
+            <p>Ta clé …{{ data.cle_fin }} est rangée le temps des audits.</p>
+            <ul v-if="progression">
+              <li>Audits terminés&nbsp;: {{ progression.termines }}</li>
+              <li>En cours&nbsp;: {{ progression.en_cours }}</li>
+              <li v-if="progression.a_envoyer">À envoyer&nbsp;: {{ progression.a_envoyer }}</li>
+              <li>En échec&nbsp;: {{ progression.echecs }}</li>
+              <li>Coût cumulé&nbsp;: {{ dollars(progression.cout_usd) }}</li>
+            </ul>
+            <p v-else>{{ progressionIndisponible ? 'Progression indisponible.' : 'Lecture de la progression…' }}</p>
+            <p class="btns"><button class="btn" type="button" :aria-disabled="actualisation" @click="actualiser()">Actualiser</button></p>
+            <p role="status" aria-live="polite">{{ annonceSuivi }}</p>
+          </template>
           <template v-else>
             <p v-if="estimation?.disponible">Au pire, la délibération te coûtera <strong>{{ dollars(estimation.pire_cas_usd) }}</strong> sur ta clé Anthropic&nbsp;: chaque juré sur chaque dépôt, prix des lots, sans aucune lecture de cache. En pratique, le cache la rend moins chère.<template v-if="estimation.depense_usd > 0"> Tes lancements précédents ont déjà coûté {{ dollars(estimation.depense_usd) }}, compté dans ton plafond.</template></p>
             <p v-else-if="estimation">{{ estimation.raison }}</p>
@@ -241,7 +308,11 @@ async function supprimer() {
             </form>
           </template>
         </template>
-        <template v-if="data.statut === 'deliberation' && !data.cle_fin && data.compte_actif && !data.bloquee_le">
+        <template v-if="data.statut === 'prete'">
+          <h2>La délibération est terminée</h2>
+          <p>Le jury a rendu ses audits&nbsp;: il reste à relire les répliques et à publier les résultats.</p>
+        </template>
+        <template v-else-if="data.statut === 'deliberation' && !data.cle_fin && data.compte_actif && !data.bloquee_le">
           <h2>Terminer la délibération</h2>
           <p>La clé est effacée{{ estimation?.disponible && data.lancements < 3 ? ` : tu peux relancer avec une nouvelle clé (lancements restants\u00a0: ${3 - data.lancements}), seuls les audits manquants ou en échec repartent` : '' }}. Termine&nbsp;: un dépôt dont un audit a échoué n'aura pas de score, il ne sera ni classé ni noté zéro.</p>
           <p class="btns"><button class="btn" type="button" :aria-disabled="occupe" @click="terminer">Terminer la délibération</button></p>

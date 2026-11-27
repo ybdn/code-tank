@@ -27,14 +27,14 @@ isOneToOne: false
                   ]
                 },"campagne": {
                   Row: {
-                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cle_fin": string | null,"cloture_depot": string,"cree_le": string,"date_resultats": string,"id": string,"jeton_invitation": string | null,"lancements": number,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"plafond_usd": number | null,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
+                    "bloquee_le": string | null,"boss_id": string,"brief": string,"cle_fin": string | null,"cloture_depot": string,"cree_le": string,"date_resultats": string,"fin_prevenue_le": string | null,"id": string,"jeton_invitation": string | null,"lancements": number,"langages": (string)[],"max_participants": number,"motif_blocage": string | null,"ouverture_inscriptions": string,"plafond_usd": number | null,"regles_figees_le": string | null,"role_boss": string,"slug": string,"statut": string,"theme": string,"titre": string,"visibilite": string
                   }
                   ComputedFields: never
                   Insert: {
-                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cle_fin"?: string | null,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"id"?: string,"jeton_invitation"?: string | null,"lancements"?: number,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"plafond_usd"?: number | null,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
+                    "bloquee_le"?: string | null,"boss_id": string,"brief": string,"cle_fin"?: string | null,"cloture_depot": string,"cree_le"?: string,"date_resultats": string,"fin_prevenue_le"?: string | null,"id"?: string,"jeton_invitation"?: string | null,"lancements"?: number,"langages": (string)[],"max_participants": number,"motif_blocage"?: string | null,"ouverture_inscriptions": string,"plafond_usd"?: number | null,"regles_figees_le"?: string | null,"role_boss": string,"slug": string,"statut"?: string,"theme": string,"titre": string,"visibilite": string
                   }
                   Update: {
-                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cle_fin"?: string | null,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"id"?: string,"jeton_invitation"?: string | null,"lancements"?: number,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"plafond_usd"?: number | null,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
+                    "bloquee_le"?: string | null,"boss_id"?: string,"brief"?: string,"cle_fin"?: string | null,"cloture_depot"?: string,"cree_le"?: string,"date_resultats"?: string,"fin_prevenue_le"?: string | null,"id"?: string,"jeton_invitation"?: string | null,"lancements"?: number,"langages"?: (string)[],"max_participants"?: number,"motif_blocage"?: string | null,"ouverture_inscriptions"?: string,"plafond_usd"?: number | null,"regles_figees_le"?: string | null,"role_boss"?: string,"slug"?: string,"statut"?: string,"theme"?: string,"titre"?: string,"visibilite"?: string
                   }
                   Relationships: [
                     {
@@ -322,6 +322,9 @@ isOneToOne: false
 "estimer_pire_cas":
 { Args: { "p_campagne": string }; Returns: number
                            },
+"fins_a_prevenir":
+{ Args: Record<PropertyKey, never>; Returns: string[]
+                           },
 "lancer_deliberation":
 { Args: { "p_campagne": string,"p_cle": string,"p_compte": string,"p_plafond_usd": number,"p_version_engagements": string }; Returns: Json
                            },
@@ -371,6 +374,9 @@ isOneToOne: false
 "prendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string,"p_secondes": number }; Returns: boolean
                            },
+"progression_deliberation":
+{ Args: { "p_campagne": string }; Returns: Json
+                           },
 "refuser_reception":
 { Args: { "p_motifs": Json,"p_reception": string }; Returns: string
                            },
@@ -382,6 +388,9 @@ isOneToOne: false
                            },
 "rendre_verrou":
 { Args: { "p_detenteur": string,"p_nom": string }; Returns: boolean
+                           },
+"reserver_envoi":
+{ Args: { "p_campagne": string }; Returns: Json
                            },
 "retirer_depot":
 { Args: { "p_campagne": string }; Returns: (string)[]

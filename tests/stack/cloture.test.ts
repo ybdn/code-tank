@@ -107,7 +107,7 @@ describe('cron : clôture des clés de plus de 48 h', () => {
   it('refuse sans le secret du planificateur (404) et laisse une clé fraîche', async () => {
     expect((await lancer(2.5, '0123')).json).toEqual({ cle_fin: '0123', lancements: 1 })
     expect((await cron('Bearer faux')).status).toBe(404)
-    expect(await (await cron()).json()).toEqual({ cles_cloturees: 0, echecs: 0 })
+    expect(await (await cron()).json()).toEqual({ cles_cloturees: 0, echecs: 0, fins_prevenues: expect.any(Number) })
     expect(secrets()).toBe(1)
     // Tant que la clé est rangée, le Boss ne peut pas terminer : le jury travaille.
     expect(await envoyer('POST', fin, boss.cookie)).toMatchObject({ statut: 409, json: { message: expect.stringContaining('Le jury travaille encore') } })
@@ -116,12 +116,12 @@ describe('cron : clôture des clés de plus de 48 h', () => {
   it('une clé de 49 h : audits abandonnés (un lot en cours aussi), clé effacée, la campagne attend le Boss', async () => {
     sur('sudo', `statut = 'en_cours', batch_id = 'lot'`)
     dater(`update vault.secrets set created_at = now() - interval '49 hours' where name = 'cle_boss_${campagneId}'`)
-    expect(await (await cron()).json()).toEqual({ cles_cloturees: 1, echecs: 0 })
+    expect(await (await cron()).json()).toEqual({ cles_cloturees: 1, echecs: 0, fins_prevenues: expect.any(Number) })
     expect(secrets()).toBe(0)
     expect(etat()).toBe('1:deliberation:-')
     expect(audits()).toBe('echec,echec,echec,echec')
     expect((await lire(`/api/boss/${slug}`, boss.cookie))).toMatchObject({ statut: 'deliberation', cle_fin: null, lancements: 1 })
-    expect(await (await cron()).json()).toEqual({ cles_cloturees: 0, echecs: 0 })
+    expect(await (await cron()).json()).toEqual({ cles_cloturees: 0, echecs: 0, fins_prevenues: expect.any(Number) })
   })
 })
 

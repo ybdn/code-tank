@@ -313,7 +313,7 @@ describe('dépôt', () => {
     const avant = appelsJury.length
     const r = await fetch(serveur.url + '/api/cron/conservation', { headers: { authorization: `Bearer ${SECRET_CRON}` } })
     expect(r.status).toBe(200)
-    expect(await r.json()).toEqual({ cles_cloturees: expect.any(Number), echecs: 0 })
+    expect(await r.json()).toEqual({ cles_cloturees: expect.any(Number), echecs: 0, fins_prevenues: expect.any(Number) })
     for (let i = 0; i < 50 && appelsJury.length === avant; i++) await new Promise((ok) => setTimeout(ok, 100))
     expect(appelsJury.slice(avant)).toEqual([{ headers: expect.objectContaining({ authorization: `Bearer ${SECRET_JURY}` }), corps: '' }])
   })

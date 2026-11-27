@@ -1354,3 +1354,53 @@ begin
   return jsonb_build_object('cles_cloturees', v_n, 'echecs', v_e);
 end
 $$;
+
+
+-- Suivi de la délibération et e-mail de fin (story 4.7, AD-7, AD-12) ------------------------------------------------------
+
+-- Progression du jury pour l'écran du Boss : audits par statut et coût cumulé (la même somme que depense_audits). Même garde :
+-- le Boss de la campagne (42501 sinon), qui ne lit pas audit sous RLS. Rien d'autre ne sort (ni dépôt, ni juré, ni réplique).
+create function public.progression_deliberation(p_campagne uuid)
+returns jsonb
+language plpgsql stable security definer set search_path = ''
+as $$
+begin
+  if not public.est_boss(p_campagne) then
+    raise exception 'Campagne introuvable.' using errcode = '42501';
+  end if;
+  return (select jsonb_build_object(
+      'termines', count(*) filter (where a.statut = 'termine'),
+      'en_cours', count(*) filter (where a.statut = 'en_cours'),
+      'echecs', count(*) filter (where a.statut = 'echec'),
+      'a_envoyer', count(*) filter (where a.statut = 'a_envoyer'),
+      'cout_usd', coalesce(sum(a.cout_usd), 0))
+    from public.audit a join public.depot d on d.id = a.depot_id join public.participation p on p.id = d.participation_id
+    where p.campagne_id = p_campagne);
+end
+$$;
+
+-- Réservation de l'e-mail « délibération terminée » (AD-12) : pose fin_prevenue_le si la campagne est prete, non bloquée, pas
+-- encore prévenue et si son Boss a une adresse, et rend ce qu'il faut à l'envoi (slug, titre, adresse du Boss, lue ici dans
+-- auth.users : aucune lecture séparée qui pourrait échouer après la marque) ; null pour tout autre appelant. L'UPDATE ... WHERE
+-- ... IS NULL est atomique : de deux constats simultanés, un seul obtient la ligne. Le site n'envoie qu'ensuite (un e-mail perdu
+-- plutôt qu'un doublon). Bloquée : rien n'est réservé.
+-- shortcut: une campagne débloquée après coup redevient réservable (fins_a_prevenir la relistera) ; à trancher avec la story 7.4.
+create function public.reserver_envoi(p_campagne uuid)
+returns jsonb
+language sql security definer set search_path = ''
+as $$
+  update public.campagne set fin_prevenue_le = now()
+  where id = p_campagne and statut = 'prete' and fin_prevenue_le is null and bloquee_le is null
+    and exists (select 1 from auth.users u where u.id = boss_id and u.email is not null)
+  returning jsonb_build_object('slug', slug, 'titre', titre, 'email', (select u.email from auth.users u where u.id = boss_id))
+$$;
+
+-- Cron : les campagnes prete non bloquées dont le Boss, qui a une adresse, n'est pas prévenu (ids seulement, mêmes conditions que
+-- reserver_envoi), que le site réserve une à une.
+create function public.fins_a_prevenir()
+returns setof uuid
+language sql stable security definer set search_path = ''
+as $$
+  select c.id from public.campagne c where c.statut = 'prete' and c.fin_prevenue_le is null and c.bloquee_le is null
+    and exists (select 1 from auth.users u where u.id = c.boss_id and u.email is not null)
+$$;

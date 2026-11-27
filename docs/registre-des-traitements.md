@@ -102,9 +102,10 @@ Les DPA de chaque sous-traitant sont à accepter et à archiver (voir `A-FAIRE.m
 
 ## À intégrer par la story 8.1 — lancement de la délibération par le Boss (story 4.3)
 
-Ce registre est réécrit par la story 8.1 ; ces deux traitements y entrent (le compte Anthropic du Boss est un destinataire nommé).
+Ce registre est réécrit par la story 8.1 ; ces traitements y entrent (le compte Anthropic du Boss est un destinataire nommé).
 
 | Traitement | Détail |
 |---|---|
 | Clé API Anthropic du Boss | Donnée confidentielle du Boss, rangée chiffrée dans Supabase Vault le temps de la délibération (ses 4 derniers caractères, visibles du Boss, dans `campagne.cle_fin`) ; jamais journalisée ni renvoyée. Test de la clé par un appel `count_tokens` à Anthropic sur un texte fixe. Effacement : story 4.6. |
+| E-mail de fin de délibération au Boss (story 4.7) | Adresse e-mail du compte du Boss (Auth), lue avec le rôle de service au seul moment de l'envoi (`reserver_envoi`), jamais renvoyée au navigateur ni journalisée. Un e-mail texte « délibération terminée » (Brevo, `code-tank@ybdn.io`, aucun lien de pistage), une fois par campagne (`campagne.fin_prevenue_le`). Base légale : exécution de la charte (6.1.b). Durée : celle de la campagne pour la date d'envoi. |
 | Engagements du Boss | Version du texte et date d'acceptation, une ligne par lancement (`engagement`), liée au compte et à la campagne. Base légale : exécution de la charte (6.1.b). Durée : celle de la campagne (suppression en cascade). |

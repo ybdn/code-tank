@@ -3,7 +3,7 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 // Appelée une fois par jour par le planificateur de l'hébergeur (vercel.json). Les tâches de conservation reviendront avec
 // le schéma qu'elles purgent (epic 6). Elle déclenche aussi le jury, filet d'AD-7 si un appel après dépôt s'est perdu ; sans
 // attendre sa réponse ni échouer avec lui (appelerJury ne lève jamais). Elle clôture enfin toute clé du Boss de plus de 48 h ou
-// dont la campagne n'est plus en délibération (story 4.6, AD-4 (4)). Réponse : des compteurs, jamais une donnée personnelle.
+// dont la campagne n'est plus en délibération (story 4.6, AD-4 (4)), et prévient le Boss d'une délibération terminée (story 4.7). Réponse : des compteurs, jamais une donnée personnelle.
 export default defineEventHandler(async (event) => {
   verifierCron(event)
   event.waitUntil(appelerJury(event, 'cron'))
@@ -12,5 +12,10 @@ export default defineEventHandler(async (event) => {
     console.error('Clôture des clés expirées :', error.code)
     throw createError({ statusCode: 500, message: 'Les clés expirées n\'ont pas pu être clôturées.' })
   }
-  return data as { cles_cloturees: number; echecs: number }
+  // Campagnes prete dont le Boss n'est pas prévenu (story 4.7, AD-12) : une réservation et un e-mail chacune. Un échec ne fait
+  // pas échouer le cron (journalisé par code, sans adresse).
+  const fins = await serverSupabaseServiceRole(event).rpc('fins_a_prevenir')
+  if (fins.error) console.error('Liste des fins à prévenir :', fins.error.code)
+  const envois = await Promise.all(((fins.data ?? []) as string[]).map((id) => prevenirFin(event, id)))
+  return { ...(data as { cles_cloturees: number; echecs: number }), fins_prevenues: envois.filter(Boolean).length }
 })
