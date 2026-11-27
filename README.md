@@ -95,7 +95,9 @@ pnpm build
   sous la limite, `appelerJury(…, 'bouton')`. Réponse `{ etat, progression }` : `etat` vaut `lance`, `deja_en_cours`,
   `non_configure`, `echec`, ou `attente` (limite atteinte : **200** sans appel, un double clic n'est pas une erreur) ;
   `progression` vient de `progression_deliberation` (JWT du Boss). Sur `/boss/[slug]`, l'écran « Le jury délibère » (en
-  `deliberation` avec une clé rangée) l'appelle à l'ouverture et au bouton « Actualiser ».
+  `deliberation` avec une clé rangée) l'appelle à l'ouverture et au bouton « Actualiser », puis relit la campagne (un passage à
+  `prete` se voit tout de suite, et ce constat envoie l'e-mail de fin). Juste après un lancement, l'appel d'ouverture consomme la
+  minute de la limite : un Actualiser dans la minute répond `attente`, ce qui est voulu (le lancement vient d'appeler le jury).
 - E-mail « délibération terminée » (story 4.7, AD-12) : `GET /api/boss/[slug]` d'une campagne `prete` pas encore prévenue, et le
   cron, appellent `prevenirFin` (`server/utils/fin.ts`) : `reserver_envoi` pose `fin_prevenue_le` et rend l'adresse du Boss
   au seul gagnant (rôle de service), qui envoie (`courrielFin`, `envoyerCourriel`). Un envoi en échec n'est pas rejoué
@@ -218,7 +220,7 @@ Trois migrations datées du même jour (AD-13) :
   terminés, puis `prete`) et `cloturer_cles_expirees()` (cron : clés de plus de 48 h ou hors `deliberation`, rend `{ cles_cloturees, echecs }`).
   Suivi (story 4.7) : `progression_deliberation(campagne)` (Boss seul : audits `termines`, `en_cours`, `echecs`, `a_envoyer` et
   `cout_usd`, la somme de `depense_audits`), `reserver_envoi(campagne)` (pose `fin_prevenue_le` d'une campagne `prete` pas encore
-  prévenue, non bloquée, dont le Boss a une adresse, et rend `{ slug, titre, email }`, null pour tout autre appelant) et `fins_a_prevenir()` (ids des campagnes `prete` non bloquées
+  prévenue, non bloquée, dont le Boss a une adresse, et rend `{ slug, titre, email }`, null pour tout autre appelant) et `fins_a_prevenir()` (ids des campagnes `prete` non bloquées dont le Boss a une adresse
   non prévenues).
   Le déclencheur `campagne_cle_sortie` efface la clé et `cle_fin` à toute sortie de `deliberation` (`prete`, `expiree`), et
   `campagne_cle_suppression` à la suppression de la campagne (Vault n'a pas de clé étrangère).

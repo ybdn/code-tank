@@ -10,6 +10,8 @@ export default defineEventHandler(async (event) => {
   exigerJson(event)
   if (campagne.statut !== 'deliberation') throw createError({ statusCode: 409, message: 'La campagne n\'est pas en délibération.' })
   const { data: attente, error: erreurDebit } = await serverSupabaseServiceRole(event).rpc('consommer_debit', {
+    // shortcut: les lignes debit des campagnes finies ne sont purgées qu'à leur prochain appel (jamais) ; la purge globale vient
+    // avec les tâches de conservation (epic 6).
     p_empreinte: createHash('sha256').update(`${campagne.id}:actualisation`).digest('hex'),
     p_action: 'actualisation',
     p_maximum: 1,

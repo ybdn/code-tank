@@ -141,6 +141,8 @@ const suivi = computed(() => data.value?.statut === 'deliberation' && !!data.val
 const progression = ref<Progression | null>(null)
 const actualisation = ref(false)
 const annonceSuivi = ref('')
+// L'appel d'ouverture a échoué sans progression : la page le dit, plutôt que « Lecture… » sans fin.
+const progressionIndisponible = ref(false)
 const ANNONCES_JURY: Record<string, string> = {
   lance: 'Progression à jour. Le jury est relancé.',
   deja_en_cours: 'Progression à jour. Le jury travaille déjà.',
@@ -155,8 +157,11 @@ function finAnnoncee() {
   return true
 }
 async function actualiser(silencieux = false) {
-  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi.
-  if (actualisation.value) return
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'envoi ; un clic pendant un appel en cours le dit.
+  if (actualisation.value) {
+    if (!silencieux) annonceSuivi.value = 'Actualisation en cours…'
+    return
+  }
   actualisation.value = true
   // Vidée puis remplie : un second clic redit l'annonce. Une erreur d'un essai précédent disparaît.
   annonceSuivi.value = ''
@@ -164,11 +169,14 @@ async function actualiser(silencieux = false) {
   try {
     const r = await $fetch<{ etat: string; progression: Progression }>(`/api/boss/${encodeURIComponent(slug)}/actualisation`, { method: 'POST', body: {} })
     progression.value = r.progression
-    if (silencieux) return
-    // Le jury a pu finir pendant l'appel : la campagne est relue, et l'écran « terminée » se voit dès ce clic.
+    progressionIndisponible.value = false
+    // Le jury a pu finir pendant l'appel : la campagne est relue (ce qui envoie aussi l'e-mail de fin), et l'écran « terminée » se
+    // voit dès ce clic ou dès l'ouverture. À l'ouverture, sans annonce.
     await refresh()
+    if (silencieux) return
     if (!finAnnoncee()) annonceSuivi.value = ANNONCES_JURY[r.etat] ?? 'Progression à jour. Le jury n\'a pas pu être relancé : réessaie dans une minute.'
   } catch (e) {
+    if (!progression.value) progressionIndisponible.value = true
     // 409 : la campagne a pu passer à prete ; relue d'abord, la fin s'annonce sans erreur.
     if ((e as { statusCode?: number }).statusCode === 409) await refresh()
     if (!finAnnoncee()) await echec(e)
@@ -269,7 +277,7 @@ async function supprimer() {
               <li>En échec&nbsp;: {{ progression.echecs }}</li>
               <li>Coût cumulé&nbsp;: {{ dollars(progression.cout_usd) }}</li>
             </ul>
-            <p v-else>Lecture de la progression…</p>
+            <p v-else>{{ progressionIndisponible ? 'Progression indisponible.' : 'Lecture de la progression…' }}</p>
             <p class="btns"><button class="btn" type="button" :aria-disabled="actualisation" @click="actualiser()">Actualiser</button></p>
             <p role="status" aria-live="polite">{{ annonceSuivi }}</p>
           </template>

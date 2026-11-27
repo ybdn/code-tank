@@ -1395,10 +1395,12 @@ as $$
   returning jsonb_build_object('slug', slug, 'titre', titre, 'email', (select u.email from auth.users u where u.id = boss_id))
 $$;
 
--- Cron : les campagnes prete non bloquées dont le Boss n'est pas prévenu (ids seulement), que le site réserve une à une.
+-- Cron : les campagnes prete non bloquées dont le Boss, qui a une adresse, n'est pas prévenu (ids seulement, mêmes conditions que
+-- reserver_envoi), que le site réserve une à une.
 create function public.fins_a_prevenir()
 returns setof uuid
 language sql stable security definer set search_path = ''
 as $$
-  select id from public.campagne where statut = 'prete' and fin_prevenue_le is null and bloquee_le is null
+  select c.id from public.campagne c where c.statut = 'prete' and c.fin_prevenue_le is null and c.bloquee_le is null
+    and exists (select 1 from auth.users u where u.id = c.boss_id and u.email is not null)
 $$;

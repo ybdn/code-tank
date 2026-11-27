@@ -2,7 +2,7 @@
 -- reserver_envoi (prete seulement, une seule réservation même rejouée), fins_a_prevenir. Boss B1 (campagne P), B2 (campagne Q).
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(21);
+select plan(23);
 
 insert into auth.users (id, email)
 select ('97000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2']) h;
@@ -76,6 +76,13 @@ select is(public.reserver_envoi(current_setting('t.p')::uuid), null, 'second con
 select set_eq($$select * from public.fins_a_prevenir()$$, format('values (%L::uuid)', current_setting('t.q')), 'P n''est plus à prévenir');
 reset role;
 select isnt((select fin_prevenue_le from public.campagne where slug = 'suivip'), null, 'fin_prevenue_le posée');
+-- Boss de Q sans adresse : ni listée ni réservée.
+update auth.users set email = null where id = '97000000-0000-4000-8000-0000000000b2';
+set local role service_role;
+select is_empty($$select * from public.fins_a_prevenir()$$, 'Boss sans adresse : pas listée');
+select is(public.reserver_envoi(current_setting('t.q')::uuid), null, 'Boss sans adresse : rien à réserver');
+reset role;
+update auth.users set email = 'b2@example.org' where id = '97000000-0000-4000-8000-0000000000b2';
 -- Q bloquée : ni listée ni réservée, la marque reste nulle.
 update public.campagne set bloquee_le = now(), motif_blocage = 'Motif' where slug = 'suiviq';
 set local role service_role;

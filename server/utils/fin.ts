@@ -7,15 +7,19 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 // shortcut: la marque est posée avant l'envoi (AD-12 : un e-mail perdu plutôt qu'un doublon) ; un envoi en échec n'est pas
 // rejoué. À revoir si une file d'envoi avec reprise arrive.
 export async function prevenirFin(event: H3Event, campagneId: string): Promise<boolean> {
-  const admin = serverSupabaseServiceRole(event)
-  const { data, error } = await admin.rpc('reserver_envoi', { p_campagne: campagneId })
+  const config = useRuntimeConfig(event)
+  const erreurConfig = erreurConfigCourriel(config)
+  if (erreurConfig) {
+    console.error('E-mail de fin de délibération : rien n\'est réservé,', erreurConfig)
+    return false
+  }
+  const { data, error } = await serverSupabaseServiceRole(event).rpc('reserver_envoi', { p_campagne: campagneId })
   if (error) {
     console.error('E-mail de fin de délibération : réservation en échec,', error.code)
     return false
   }
   if (!data) return false
   const { slug, titre, email } = data as { slug: string; titre: string; email: string }
-  const config = useRuntimeConfig(event)
   const { sujet, texte } = courrielFin(config.siteUrl, slug, titre)
   try {
     await envoyerCourriel(config, email, sujet, texte)

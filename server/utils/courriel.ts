@@ -19,11 +19,19 @@ function transport({ host, port, user, pass }: Config['smtp']) {
   })
 }
 
+// Configuration d'envoi en défaut : le message à lever ou journaliser (aucune donnée personnelle), null si elle est complète.
+// Un appelant qui réserve un envoi (AD-12) la vérifie avant la réservation, pour qu'une configuration manquante ne consomme pas la marque.
+export function erreurConfigCourriel(config: Config) {
+  if (!/^https?:\/\/[^/]+/.test(config.siteUrl)) return 'NUXT_SITE_URL manquante ou invalide (URL absolue attendue).'
+  if (!config.smtp.host) return 'NUXT_SMTP_HOST manquante.'
+  return null
+}
+
 // E-mail texte à un destinataire, signé. Lève si la configuration ou l'envoi sont en défaut ; l'appelant ne journalise
 // jamais le message d'erreur SMTP, qui peut citer l'adresse.
 export async function envoyerCourriel(config: Config, to: string, sujet: string, texte: string) {
-  if (!/^https?:\/\/[^/]+/.test(config.siteUrl)) throw new Error('NUXT_SITE_URL manquante ou invalide (URL absolue attendue).')
-  if (!config.smtp.host) throw new Error('NUXT_SMTP_HOST manquante.')
+  const erreur = erreurConfigCourriel(config)
+  if (erreur) throw new Error(erreur)
   await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}\n\nCode Tank by ybdn.io` })
 }
 
