@@ -1,13 +1,11 @@
 import { createTransport } from 'nodemailer'
-import { adresseUtilisable } from './jetable'
-import { creerJeton, SECRET_MIN } from './jeton'
 
 // Expéditeur de Code Tank (entreprise/identite.md).
 const EXPEDITEUR = 'Code Tank by ybdn.io <code-tank@ybdn.io>'
 
-type Config = { siteUrl: string; secretVerification: string; smtp: { host: string; port: number | string; user: string; pass: string } }
+type Config = { siteUrl: string; smtp: { host: string; port: number | string; user: string; pass: string } }
 
-// Délais courts : un SMTP injoignable ne doit pas retenir la requête de l'organisateur pendant des minutes.
+// Délais courts : un SMTP injoignable ne doit pas retenir la requête pendant des minutes.
 function transport({ host, port, user, pass }: Config['smtp']) {
   const p = Number(port)
   return createTransport({
@@ -21,59 +19,28 @@ function transport({ host, port, user, pass }: Config['smtp']) {
   })
 }
 
-const verifierSite = (config: Config) => {
-  if (!/^https?:\/\/[^/]+/.test(config.siteUrl)) throw new Error('NUXT_SITE_URL manquante ou invalide (URL absolue attendue).')
-  if (!config.smtp.host) throw new Error('NUXT_SMTP_HOST manquante.')
+// Configuration d'envoi en défaut : le message à lever ou journaliser (aucune donnée personnelle), null si elle est complète.
+// Un appelant qui réserve un envoi (AD-12) la vérifie avant la réservation, pour qu'une configuration manquante ne consomme pas la marque.
+export function erreurConfigCourriel(config: Config) {
+  if (!/^https?:\/\/[^/]+/.test(config.siteUrl)) return 'NUXT_SITE_URL manquante ou invalide (URL absolue attendue).'
+  if (!config.smtp.host) return 'NUXT_SMTP_HOST manquante.'
+  return null
 }
 
-export async function envoyerLienVerification(config: Config, compteId: string, email: string) {
-  // Échec explicite avant tout envoi : jamais un jeton signé d'une clé vide, ni un lien relatif.
-  if (config.secretVerification.length < SECRET_MIN) {
-    throw new Error(`NUXT_SECRET_VERIFICATION manquante ou trop courte (${SECRET_MIN} caractères au moins).`)
+// E-mail texte à un destinataire, signé. Lève si la configuration ou l'envoi sont en défaut ; l'appelant ne journalise
+// jamais le message d'erreur SMTP, qui peut citer l'adresse.
+export async function envoyerCourriel(config: Config, to: string, sujet: string, texte: string) {
+  const erreur = erreurConfigCourriel(config)
+  if (erreur) throw new Error(erreur)
+  await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}\n\nCode Tank by ybdn.io` })
+}
+
+// E-mail « délibération terminée » au Boss (story 4.7, AD-12, SPECS § 11) : objet et texte. Le titre est un texte reçu : sans
+// retour à la ligne (un en-tête Subject n'en porte pas). Lien direct vers l'espace du Boss, sans aucun paramètre de pistage.
+export function courrielFin(siteUrl: string, slug: string, titre: string) {
+  const t = titre.replace(/[\r\n\u0085\u2028\u2029]+/g, ' ').trim()
+  return {
+    sujet: `Code Tank — ${t} : la délibération est terminée`,
+    texte: `Le jury a fini de délibérer sur ta campagne « ${t} ». Relis les répliques, puis publie les résultats :\n${siteUrl.replace(/\/+$/, '')}/boss/${slug}`,
   }
-  verifierSite(config)
-  if (!adresseUtilisable(email)) throw new Error('Adresse de contact inutilisable : aucun e-mail envoyé.')
-  const lien = `${config.siteUrl}/compte/verifier?jeton=${creerJeton(compteId, email, config.secretVerification)}`
-  await transport(config.smtp).sendMail({
-    from: EXPEDITEUR,
-    to: email,
-    subject: 'Code Tank\u00a0: vérifie ton adresse e-mail',
-    text: `Bonjour,\n\nPour vérifier ton adresse e-mail et continuer ta candidature, ouvre ce lien puis confirme. Il est valable 24 heures\u00a0:\n\n${lien}\n\nSi tu n'as rien demandé, ignore ce message.\n\nCode Tank by ybdn.io`,
-  })
-}
-
-// Panne du SMTP lui-même (et non refus d'un destinataire) : inutile d'insister auprès des suivants.
-export const estPanneSmtp = (e: unknown) => ['ECONNECTION', 'ETIMEDOUT', 'ESOCKET', 'EDNS', 'EAUTH'].includes((e as { code?: string }).code ?? '')
-
-// Avis court à un candidat, avec un lien vers /compte. Lève si la configuration, l'adresse ou l'envoi sont en défaut :
-// l'appelant ne marque alors personne comme prévenu.
-export async function envoyerAvis(config: Config, to: string, sujet: string, texte: string) {
-  verifierSite(config)
-  if (!adresseUtilisable(to)) throw new Error('Adresse de contact inutilisable : aucun e-mail envoyé.')
-  await transport(config.smtp).sendMail({ from: EXPEDITEUR, to, subject: sujet, text: `Bonjour,\n\n${texte}\n\n${config.siteUrl}/compte\n\nCode Tank by ybdn.io` })
-}
-
-// E-mail de résultat à chaque adresse donnée, un par un. Texte seul, aucun score ni classement.
-// Ne lève jamais : il rend le compte des envois et des échecs. Rien d'un destinataire n'est journalisé (un message d'erreur
-// SMTP peut citer l'adresse) ; un SMTP injoignable arrête la boucle, le reste compte en échec.
-export async function envoyerResultats(config: Config, campagne: { slug: string; titre: string }, adresses: string[]) {
-  let envoyes = 0
-  try {
-    verifierSite(config)
-    const smtp = transport(config.smtp)
-    const texte = `Bonjour,\n\nLes résultats de la campagne «\u00a0${campagne.titre}\u00a0» viennent d'être publiés. Tu les retrouves sur la page de la campagne\u00a0:\n\n${config.siteUrl}/campagnes/${campagne.slug}\n\nCode Tank by ybdn.io`
-    for (const to of adresses) {
-      try {
-        await smtp.sendMail({ from: EXPEDITEUR, to, subject: `Code Tank\u00a0: les résultats de «\u00a0${campagne.titre}\u00a0» sont publiés`, text: texte })
-        envoyes++
-      } catch (e) {
-        const code = (e as { code?: string }).code
-        console.error('Envoi du résultat :', code ?? 'erreur')
-        if (estPanneSmtp(e)) break
-      }
-    }
-  } catch (e) {
-    console.error('Envoi du résultat :', e instanceof Error ? e.message : e)
-  }
-  return { envoyes, echecs: adresses.length - envoyes }
 }

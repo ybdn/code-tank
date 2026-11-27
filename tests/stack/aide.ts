@@ -1,43 +1,36 @@
-// Outils des tests d'intégration du dépôt : pile locale, serveur Nuxt construit, utilisateurs et campagnes simulés.
+// Outils des tests contre la pile locale : statut de Supabase, serveur Nuxt construit (pnpm build fait), utilisateurs.
+// Une vraie connexion GitHub est impossible ici : l'utilisateur est créé par l'API d'administration d'Auth, son identité
+// github est ajoutée en SQL dans auth.identities (ce qu'écrit Auth à la connexion), puis sa session est ouverte par mot de passe.
 import { type ChildProcess, execFileSync, spawn } from 'node:child_process'
 import { randomBytes, randomInt } from 'node:crypto'
 import { fileURLToPath } from 'node:url'
-import { createClient } from '@supabase/supabase-js'
 
 const racine = fileURLToPath(new URL('../..', import.meta.url))
 export const statut = JSON.parse(execFileSync('pnpm', ['exec', 'supabase', 'status', '-o', 'json'], { cwd: racine, stdio: ['ignore', 'pipe', 'ignore'] }).toString())
-export const API = statut.API_URL as string
-export const admin = createClient(API, statut.SERVICE_ROLE_KEY, { auth: { persistSession: false } })
-// Secret de l'empreinte des adresses IP (limite de débit), commun à tous les serveurs de test.
-export const SECRET_DEBIT = 'secret-debit-de-test-' + randomBytes(16).toString('hex')
-// SQL direct sur la base locale, pour ce que l'API n'expose pas (par exemple antidater un objet du stockage).
-export const sql = (requete: string) => execFileSync('docker', ['exec', 'supabase_db_code-tank-site', 'psql', '-U', 'postgres', '-d', 'postgres', '-c', requete], { stdio: 'pipe' })
-export const anon = () => createClient(API, statut.ANON_KEY, { auth: { persistSession: false } })
 
-// `env` s'ajoute à l'environnement de base. `sortie()` rend ce que le serveur a écrit (journal et erreurs).
-export async function demarrer(port: number, env: Record<string, string> = {}): Promise<{ url: string; arreter: () => void; sortie: () => string }> {
+// `env` s'ajoute à l'environnement de base (Supabase local).
+// `journal()` rend tout ce que le serveur a écrit sur sa sortie et son erreur.
+export async function demarrer(port: number, env: Record<string, string> = {}): Promise<{ url: string; arreter: () => void; journal: () => string }> {
   const proc: ChildProcess = spawn('node', ['.output/server/index.mjs'], {
     cwd: racine,
     env: {
       PATH: process.env.PATH,
       NITRO_PORT: String(port),
       NITRO_HOST: '127.0.0.1',
-      NUXT_PUBLIC_SUPABASE_URL: API,
+      NUXT_PUBLIC_SUPABASE_URL: statut.API_URL,
       NUXT_PUBLIC_SUPABASE_KEY: statut.ANON_KEY,
       NUXT_SUPABASE_SECRET_KEY: statut.SERVICE_ROLE_KEY,
-      NUXT_SITE_URL: `http://127.0.0.1:${port}`,
-      NUXT_SECRET_DEBIT: SECRET_DEBIT,
       ...env,
     },
     stdio: ['ignore', 'pipe', 'pipe'],
   })
   let sortie = ''
-  proc.stdout?.on('data', (d) => (sortie += d))
-  proc.stderr?.on('data', (d) => (sortie += d))
+  proc.stdout?.on('data', (d) => { sortie += d })
+  proc.stderr?.on('data', (d) => { sortie += d })
   const url = `http://127.0.0.1:${port}`
   for (let i = 0; i < 100; i++) {
     try {
-      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill(), sortie: () => sortie }
+      if ((await fetch(url + '/')).ok) return { url, arreter: () => proc.kill(), journal: () => sortie }
     } catch { /* pas encore prêt */ }
     await new Promise((r) => setTimeout(r, 200))
   }
@@ -45,115 +38,41 @@ export async function demarrer(port: number, env: Record<string, string> = {}): 
   throw new Error('Le serveur Nuxt ne démarre pas (pnpm build fait ?)')
 }
 
-export type Utilisateur = { id: string; email: string; githubId: string; cookie: string; client: ReturnType<typeof anon> }
-const crees: string[] = []
+export const API = statut.API_URL as string
+const service = { apikey: statut.SERVICE_ROLE_KEY, authorization: `Bearer ${statut.SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }
+export const sql = (requete: string) => execFileSync('docker', ['exec', 'supabase_db_code-tank-site', 'psql', '-U', 'postgres', '-d', 'postgres', '-c', requete], { stdio: 'pipe' })
 
-// Utilisateur simulé, sans compte : comme une vraie connexion, avec un user_metadata modifiable que le serveur ne doit pas croire.
-export async function utilisateur(options: { provider?: string; githubId?: string } = {}): Promise<Utilisateur> {
-  const provider = options.provider ?? 'github'
-  const githubId = options.githubId ?? String(randomInt(1e6, 1e9))
+export type Utilisateur = { id: string; email: string; githubId: string }
+const crees: string[] = []
+const MOT_DE_PASSE = 'mot-de-passe-de-test-1'
+
+export async function utilisateur(github = true): Promise<Utilisateur> {
   const email = `ada-${randomBytes(5).toString('hex')}@example.org`
-  const { data, error } = await admin.auth.admin.createUser({
-    email,
-    password: 'mot-de-passe-de-test-1',
-    email_confirm: true,
-    app_metadata: { provider, providers: [provider], ...(provider === 'github' ? { github_id: githubId } : {}) },
-    user_metadata: { provider_id: 'faux-id-modifiable' },
+  const r = await fetch(`${API}/auth/v1/admin/users`, { method: 'POST', headers: service, body: JSON.stringify({ email, password: MOT_DE_PASSE, email_confirm: true }) })
+  const { id } = await r.json() as { id: string }
+  crees.push(id)
+  const githubId = String(randomInt(1e6, 1e9))
+  if (github) sql(`insert into auth.identities (user_id, provider, provider_id, identity_data, created_at, updated_at) values ('${id}', 'github', '${githubId}', '{"sub":"${githubId}"}', now(), now())`)
+  return { id, email, githubId }
+}
+
+// Nouvelle session (une connexion) ; le cookie est celui qu'écrit @supabase/ssr : base64url préfixé, en morceaux de 3180.
+export async function connexion(u: Utilisateur) {
+  const r = await fetch(`${API}/auth/v1/token?grant_type=password`, {
+    method: 'POST', headers: { apikey: statut.ANON_KEY, 'content-type': 'application/json' }, body: JSON.stringify({ email: u.email, password: MOT_DE_PASSE }),
   })
-  if (error) throw error
-  crees.push(data.user.id)
-  const client = anon()
-  const { data: connexion, error: e2 } = await client.auth.signInWithPassword({ email, password: 'mot-de-passe-de-test-1' })
-  if (e2) throw e2
-  // Cookie de session tel que l'écrit @supabase/ssr : base64url préfixé, découpé en morceaux de 3180 caractères.
-  const valeur = 'base64-' + Buffer.from(JSON.stringify(connexion.session)).toString('base64url')
+  const session = await r.json() as { access_token: string }
+  const valeur = 'base64-' + Buffer.from(JSON.stringify(session)).toString('base64url')
   const morceaux = valeur.match(/.{1,3180}/g)!
   const cookie = morceaux.length === 1 ? `sb-code-tank=${valeur}` : morceaux.map((m, i) => `sb-code-tank.${i}=${m}`).join('; ')
-  return { id: data.user.id, email, githubId, cookie, client }
+  return { cookie, jeton: session.access_token }
 }
 
-// Utilisateur avec un compte déjà créé à l'état demandé (la création par l'API est testée dans compte.test.ts).
-export async function candidat(etat = 'autorise'): Promise<Utilisateur> {
-  const u = await utilisateur()
-  const maintenant = new Date().toISOString()
-  const { error } = await admin.from('compte').insert({
-    id: u.id, github_id: u.githubId, vrai_nom: 'Ada Lovelace', pseudo: 'ada' + randomBytes(4).toString('hex'), email_contact: u.email,
-    motivation: 'Je code.', depot_cite_url: 'https://example.org/ada', majeur_declare_le: maintenant, charte_acceptee_le: maintenant,
-    version_charte: '2026-12-01', etat: etat as 'autorise',
-  })
-  if (error) throw error
-  return u
-}
+// Lecture de compte avec le jeton de l'utilisateur, sous RLS, comme la page /compte.
+export const lireCompte = async (jeton: string) =>
+  (await fetch(`${API}/rest/v1/compte?select=id,github_id,pseudo,version_charte,role,etat`, { headers: { apikey: statut.ANON_KEY, authorization: `Bearer ${jeton}` } })).json()
 
-// Organisateur de test : le rôle n'est écrit par aucun client, seulement par la clé de service.
-export async function organisateur(): Promise<Utilisateur> {
-  const u = await candidat()
-  const { error } = await admin.from('compte').update({ role: 'organisateur' }).eq('id', u.id)
-  if (error) throw error
-  return u
-}
-
-const ordre = ['brouillon', 'inscriptions', 'depot', 'deliberation', 'prete', 'publiee', 'archivee']
-const campagnes: string[] = []
-// Campagne créée en brouillon puis avancée d'un cran à la fois (le déclencheur contrôle l'ordre).
-export async function campagne(cible: string, options: { cloture?: Date; max?: number; brief?: string } = {}) {
-  const jour = 86_400_000
-  const cloture = options.cloture ?? new Date(Date.now() + 7 * jour)
-  const slug = 'test-' + randomBytes(6).toString('hex')
-  const { data, error } = await admin.from('campagne').insert({
-    slug, titre: 'Campagne de test', theme: 'Un minuteur', brief: options.brief ?? 'Écris un minuteur.',
-    criteres: [{ cle: 'brief', libelle: 'Réponse au brief', poids: 100, jure: 'pitch' }],
-    ouverture_inscriptions: new Date(cloture.getTime() - 30 * jour).toISOString(), cloture_depot: cloture.toISOString(),
-    date_resultats: new Date(cloture.getTime() + 7 * jour).toISOString(), max_participants: options.max ?? 5,
-  }).select('id').single()
-  if (error) throw error
-  campagnes.push(data.id)
-  for (const s of ordre.slice(1, ordre.indexOf(cible) + 1)) {
-    const { error: e } = await admin.from('campagne').update({ statut: s as 'depot' }).eq('id', data.id)
-    if (e) throw e
-  }
-  return { id: data.id as string, slug }
-}
-
-export async function inscrire(c: { id: string }, u: Utilisateur) {
-  const { data, error } = await admin.from('participation').insert({ campagne_id: c.id, compte_id: u.id }).select('id').single()
-  if (error) throw error
-  return data.id as string
-}
-
-// Supprime ce que les tests ont créé, archives comprises (la suppression en base ne touche pas le stockage).
+// Supprime les utilisateurs créés ; leur compte suit (cascade).
 export async function nettoyer() {
-  for (const id of campagnes) {
-    const { data } = await admin.from('participation').select('id').eq('campagne_id', id)
-    for (const p of data ?? []) {
-      const { data: objets } = await admin.storage.from('depots').list(`${id}/${p.id}`)
-      if (objets?.length) await admin.storage.from('depots').remove(objets.map((o) => `${id}/${p.id}/${o.name}`))
-    }
-    await admin.from('campagne').delete().eq('id', id)
-  }
-  for (const id of crees) await admin.auth.admin.deleteUser(id)
-}
-
-// Adresse IP fictive, neuve à chaque appel : la limite de débit s'applique par adresse (x-forwarded-for), et les tests
-// qui enchaînent beaucoup de requêtes ne doivent pas se la partager. Passer `ip` pour viser une adresse précise.
-export const ipNeuve = () => `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`
-
-export async function api(base: string, methode: string, chemin: string, u?: Utilisateur, corps?: unknown, ip = ipNeuve()) {
-  const r = await fetch(base + chemin, {
-    method: methode,
-    redirect: 'manual',
-    headers: { 'x-forwarded-for': ip, ...(u ? { cookie: u.cookie } : {}), ...(corps ? { 'content-type': 'application/json' } : {}) },
-    body: corps ? JSON.stringify(corps) : undefined,
-  })
-  const texte = await r.text()
-  let json: { ok?: boolean; chemin?: string; token?: string; resultat?: string; courrielEnvoye?: boolean; statusMessage?: string; courriels?: { envoyes: number; echecs: number; sansAdresseVerifiee: number } | null; data: { erreurs: Record<string, string> } } = { data: { erreurs: {} } }
-  try { json = JSON.parse(texte) } catch { /* pas du JSON */ }
-  return { statut: r.status, json, texte, location: r.headers.get('location'), retryAfter: r.headers.get('retry-after') }
-}
-
-// Zip vide valide (fin de répertoire central seule) : le bucket contrôle le type et la taille, pas le contenu.
-export const zip = (octets = 22) => {
-  const b = new Uint8Array(octets)
-  b.set([0x50, 0x4b, 0x05, 0x06])
-  return new Blob([b], { type: 'application/zip' })
+  for (const id of crees.splice(0)) await fetch(`${API}/auth/v1/admin/users/${id}`, { method: 'DELETE', headers: service })
 }

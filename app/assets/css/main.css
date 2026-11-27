@@ -21,7 +21,8 @@
 }
 
 *, *::before, *::after { box-sizing: border-box; }
-html { scroll-behavior: smooth; }
+/* La barre de navigation reste en haut : les ancres s'arrêtent sous elle. */
+html { scroll-behavior: smooth; scroll-padding-top: calc(var(--nav-h) + 16px); }
 body { margin: 0; background: var(--bg); color: var(--ink); font: 400 1rem/1.6 var(--font-text); letter-spacing: .01em; }
 h1, h2, h3, .logo { font-family: var(--font-display); font-weight: 400; letter-spacing: -.05em; word-spacing: -.3em; line-height: 1.1; margin: 0; }
 h1 { font-size: clamp(2.25rem, 6vw, 4.25rem); }
@@ -56,16 +57,18 @@ main:focus { outline: none; }
 }
 .btns { display: flex; flex-wrap: wrap; gap: 12px; margin: 0; }
 
-.nav { border-bottom: 1px solid var(--line); }
-.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 68px; }
+:root { --nav-h: 77px; }
+.nav { position: sticky; top: 0; z-index: 20; background: var(--bg); border-bottom: 1px solid var(--line); }
+.nav__bar { display: flex; flex-wrap: nowrap; align-items: center; gap: 0 32px; min-height: 76px; }
 .logo { display: inline-flex; align-items: center; gap: 12px; flex: none; min-height: 44px; font-weight: 700; font-size: 1.25rem; text-decoration: none; letter-spacing: -.04em; white-space: nowrap; }
-/* 42 px = 3 px par case. Calage optique mesuré : le chapeau au haut de « ybdn.io », les pieds sur la ligne de base de « Code Tank ». */
-.logo .mascotte { width: 42px; height: 42px; flex: none; translate: 0 -3.5px; }
+/* 48 px = 2 px par case (pixels entiers), centrée dans la barre ; la couronne du Boss déborde au-dessus. */
+.logo .mascotte { width: 48px; height: 48px; flex: none; }
 /* Au survol, la mascotte saute d'une case, comme sur le plateau. */
 @media (hover: hover) and (prefers-reduced-motion: no-preference) { .logo:hover .mascotte { animation: saut .4s steps(1); } }
-@keyframes saut { 0%, 75% { transform: translateY(-3px); } }
-.logo__nom { display: grid; justify-items: start; line-height: 1; }
-.logo__par { margin-bottom: .67em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
+@keyframes saut { 0%, 75% { transform: translateY(-2px); } }
+/* « Code Tank » seul compte dans la hauteur, centré sur l'axe des liens ; « ybdn.io » se pose au-dessus. */
+.logo__nom { position: relative; display: block; line-height: 1; }
+.logo__par { position: absolute; left: 0; bottom: 100%; margin-bottom: .5em; font: 400 .6em/1 var(--font-display); letter-spacing: -.01em; color: var(--muted); }
 .nav__links { display: flex; gap: 0 24px; margin-right: auto; }
 .nav__links a, .legal-links a { position: relative; display: inline-flex; align-items: center; min-height: 44px; text-decoration: none; white-space: nowrap; }
 @media (hover: hover) { .legal-links a:hover { text-decoration: underline; } .nav__links a:hover { color: var(--ink); } }
@@ -75,6 +78,7 @@ main:focus { outline: none; }
 .nav__links a.router-link-exact-active::after { content: ''; position: absolute; left: 0; right: 0; bottom: 4px; height: 3px; background: repeating-linear-gradient(90deg, var(--accent) 0 6px, transparent 6px 8px); }
 .nav .btn { flex: none; padding: 0 18px; font-size: .92rem; }
 @media (max-width: 52rem) {
+  :root { --nav-h: 100px; }
   .nav__bar { flex-wrap: wrap; gap: 0 16px; padding-top: 10px; }
   .nav .btn { margin-left: auto; }
   .nav__links { order: 3; width: 100%; margin-right: 0; overflow-x: auto; scrollbar-width: none; border-top: 1px solid var(--line); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); padding-right: 24px; }
@@ -96,7 +100,7 @@ main:focus { outline: none; }
 .rows__val { grid-column: 2; grid-row: 1; color: var(--clair-muted); font-size: .9rem; text-align: right; }
 .note { color: var(--clair-muted); font-size: .9rem; }
 
-/* Le plateau : lattes orangées, traverse, lampes bleues, fauteuils blancs vides, parquet. */
+/* Le plateau : lattes orangées, traverse, lampes bleues, fauteuils graphite en pixels, parquet. */
 .plateau { position: relative; display: flex; align-items: flex-end; justify-content: space-around; gap: 8px; min-height: 400px; padding: 0 16px 56px; overflow: hidden; border-radius: 12px;
   background:
     linear-gradient(#8a3d17 0 0) 0 40% / 100% 12px no-repeat,
@@ -105,13 +109,16 @@ main:focus { outline: none; }
 .plateau::after { content: ''; position: absolute; inset: auto 0 0; height: 48px; background: #4a2617; border-top: 6px solid #d98a3a; }
 .lampes { position: absolute; inset: 0 0 auto; display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); gap: 8px; justify-items: center; padding: 0 16px; }
 .lampes i { width: 32px; height: 8px; background: #3d7fe0; box-shadow: 0 10px 36px 10px rgb(61 127 224 / .35); }
-.siege { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; gap: 8px; }
-.siege__dos { width: min(118px, 100%); aspect-ratio: 1 / 1; display: grid; align-items: end; justify-items: center; padding-bottom: 5px; background: #f1ece4; border-radius: 18px 18px 6px 6px; }
-.siege__dos .mascotte { width: 92%; max-width: 108px; height: auto; }
-.siege__table { width: min(80px, 90%); height: 12px; border-radius: 50%; background: #e9dcc6; }
+.siege { position: relative; z-index: 1; flex: 1 1 0; min-width: 0; display: grid; justify-items: center; }
+/* Dossier plus haut que large : la place de la couronne du Boss au-dessus de la capuche. */
+.siege__dos { width: min(112px, 100%); aspect-ratio: 5 / 6; display: grid; align-items: end; justify-items: center; background: #1b1d21; clip-path: var(--pixel); box-shadow: inset 0 6px 0 #2e3138; }
+.siege__dos .mascotte { width: 86%; max-width: 96px; height: auto; }
+/* Assise collée au dossier, pied jusqu'au parquet. */
+.siege__table { width: min(124px, 108%); height: 10px; background: #2e3138; clip-path: var(--pixel); --case: 3px; }
+.siege::after { content: ''; width: 10px; height: 8px; background: #141518; }
 
-/* Les mascottes respirent d'un pixel de leur grille (1/14 de la hauteur), en deux images. */
-@keyframes respire { to { transform: translateY(-7.1429%); } }
+/* Les mascottes respirent d'un pixel de leur grille (1/24 de la hauteur), en deux images. */
+@keyframes respire { to { transform: translateY(-4.1667%); } }
 @keyframes fondu { from { opacity: 0; } }
 @media (prefers-reduced-motion: no-preference) {
   .siege .mascotte { overflow: visible; animation: respire 1.6s steps(2, jump-none) infinite; }
@@ -142,6 +149,15 @@ main:focus { outline: none; }
 /* Sommaire : des cibles de 44 px, sans espace entre elles. */
 .legal .toc li + li { margin-top: 0; }
 .legal .toc a { display: inline-flex; align-items: center; min-height: 44px; }
+/* Grand écran : titre sur toute la largeur, sommaire collant à gauche, texte à droite. */
+@media (min-width: 64rem) {
+  .legal { max-width: 68rem; display: grid; grid-template-columns: 15rem minmax(0, 44rem); column-gap: 64px; align-items: start; }
+  .legal > :first-child { grid-column: 1 / -1; }
+  .legal .toc { position: sticky; top: calc(var(--nav-h) + 24px); font-size: .92rem; }
+  .legal .toc a { color: var(--muted); text-decoration: none; }
+  .legal .toc a:hover { color: var(--ink); text-decoration: underline; }
+  .legal > :last-child { grid-column: 2; }
+}
 .legal .tbl { overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
 .legal table { width: 100%; border-collapse: collapse; text-align: left; min-width: 34rem; }
 .legal :is(th, td) { padding: 12px 16px; vertical-align: top; border-bottom: 1px solid var(--line); }
@@ -149,9 +165,10 @@ main:focus { outline: none; }
 
 .footer { border-top: 1px solid var(--line); padding-block: 32px; color: var(--muted); }
 .footer__bar { display: flex; flex-wrap: wrap; justify-content: space-between; align-items: center; gap: 16px 32px; }
-.footer__marque { display: flex; flex-wrap: wrap; align-items: center; gap: 12px 24px; }
+/* Marque en colonne (logo, puis la phrase), liens à droite ; tout passe en colonne quand la place manque. */
+.footer__marque { display: grid; justify-items: start; gap: 16px; }
 .footer .logo { color: var(--ink); }
-.footer p { margin: 0; align-self: center; }
+.footer p { margin: 0; font-size: .92rem; }
 .legal-links { display: flex; flex-wrap: wrap; gap: 4px 20px; }
 
 /* Formulaires et état du compte. */
@@ -167,10 +184,10 @@ main:focus { outline: none; }
 .champ :is(input, textarea)[readonly] { color: var(--muted); border-style: dashed; }
 .champ--case { grid-template-columns: 24px 1fr; align-items: center; column-gap: 12px; min-height: 44px; }
 .champ--case input { width: 24px; height: 24px; accent-color: var(--accent); }
-.champ--case .champ__erreur { grid-column: 2; }
+.champ--case :is(.champ__erreur, .champ__aide) { grid-column: 2; }
 button.btn { cursor: pointer; background: transparent; color: inherit; font: inherit; font-weight: 500; }
 button.btn--primary { background: var(--accent); color: var(--accent-ink); }
-.btn:disabled { opacity: .6; cursor: default; }
+.btn:is(:disabled, [aria-disabled="true"]) { opacity: .6; cursor: default; }
 .avis { margin: 0; padding: 12px 16px; border-left: 4px solid var(--accent); background: var(--surface); max-width: 40rem; }
 .avis--erreur { border-color: var(--danger); }
 .etat { font-weight: 600; max-width: 40rem; }
@@ -196,45 +213,14 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .champ :is(input, textarea):disabled { opacity: .6; }
 .etat[data-etat="refusee"] { color: var(--danger); }
 
-/* Administration : sobre et dense. Les textes saisis par les candidats sont toujours du texte (overflow-wrap, pas de HTML). */
+/* Administration : sobre et dense. Les textes saisis sont toujours du texte (overflow-wrap, pas de HTML). */
 .sr-only { position: absolute; width: 1px; height: 1px; margin: -1px; padding: 0; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
-.admin :is(.section) { padding-block: clamp(32px, 5vw, 64px); }
 .admin h1 { font-size: clamp(1.75rem, 4vw, 2.5rem); }
-.admin h2 { margin-top: 2.5rem; font-size: clamp(1.25rem, 2.5vw, 1.75rem); }
-.admin :is(h1, h2, h3, h4) + * { margin-top: .75rem; }
-.admin :is(p, ul, .tableau, .fiche, .form, .avis, .bloc, .audit) + :is(p, ul, .tableau, .fiche, .form, .avis, .bloc, .audit, details) { margin-top: 1rem; }
-.admin h3 { margin-top: 1.5rem; font-size: 1.1rem; }
-.admin h4 { margin: 0; font-size: 1rem; }
-.fiche h3 { margin: 0; }
-.admin :is(p, li, dd, td) { overflow-wrap: anywhere; }
-.admin code { font: .9em var(--font-display); }
-/* position: relative : contient les .sr-only des cellules, qui sinon élargissent la page. */
-.tableau { position: relative; overflow-x: auto; border: 1px solid var(--line); border-radius: 8px; }
-.tableau table { width: 100%; min-width: 36rem; border-collapse: collapse; text-align: left; }
-.tableau :is(th, td) { padding: 10px 14px; vertical-align: top; border-bottom: 1px solid var(--line); font-weight: 400; }
-.tableau thead th { color: var(--muted); font-size: .85rem; font-weight: 600; }
-.tableau tbody th { font-weight: 600; }
-.tableau :is(tbody tr:last-child, tfoot tr) :is(th, td) { border-bottom: 0; }
-.tableau tfoot { border-top: 1px solid var(--line); }
-.tableau :is(input:not([type=checkbox]), select) { width: 100%; min-width: 8rem; min-height: 44px; padding: 8px 12px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
-.tableau input.court { min-width: 5rem; width: 6rem; }
-.fiche { display: grid; gap: 12px; padding: 20px; background: var(--surface); border-radius: 8px; }
-.infos { display: grid; grid-template-columns: minmax(8rem, max-content) 1fr; gap: 6px 20px; margin: 0; }
-.infos dt { color: var(--muted); font-size: .9rem; }
-.infos dd { margin: 0; }
-@media (max-width: 36rem) { .infos { grid-template-columns: 1fr; gap: 0; } .infos dd { margin-bottom: 8px; } }
-.bloc { border: 1px solid var(--line); border-radius: 8px; }
-.bloc > summary { display: list-item; list-style-position: inside; min-height: 44px; padding: 9px 16px; cursor: pointer; }
-.bloc__corps { padding: 4px 16px 20px; }
-.bloc__corps > * + * { margin-top: 1rem; }
-.audit { padding: 16px; background: var(--surface); border-radius: 8px; }
-.audit > * + * { margin-top: .75rem; }
-.form--large { max-width: 56rem; }
-.champ :is(select) { width: 100%; min-height: 44px; padding: 10px 14px; font: inherit; color: var(--ink); background: var(--surface); border: 1px solid var(--muted); border-radius: 8px; }
-.champ input.court { max-width: 8rem; }
-.empreinte { overflow-wrap: anywhere; }
+.admin h1 + * { margin-top: .75rem; }
+.admin :is(p, .form) + :is(p, .form) { margin-top: 1rem; }
+.admin p { overflow-wrap: anywhere; }
 
-/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par Claude sont du texte. */
+/* Résultats : podium, classement, entretien et rapport. Tous les textes saisis ou produits par les agents sont du texte. */
 .resultats :is(p, li, th, td, blockquote) { overflow-wrap: anywhere; }
 .resultats h2 { margin-top: 2.5rem; font-size: clamp(1.5rem, 3vw, 2.25rem); }
 .resultats .btns { margin-top: 1.5rem; }
@@ -248,18 +234,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .podium li[data-rang="1"] { border-top-color: var(--accent); }
 .podium__rang { color: var(--accent); font: 700 1.5rem var(--font-display); }
 .podium__nom { font-size: 1.15rem; }
-.tableau--serre table { min-width: 0; }
-.tableau--serre :is(th, td) { padding: 10px 8px; font-size: .95rem; }
-.tableau--serre :is(th, td):first-child { white-space: nowrap; }
-/* En-têtes et nombres ne se coupent qu'entre les mots ; le pseudo et sa mention passent à la ligne (sinon les colonnes de score s'écrasent lettre à lettre). */
-.tableau--serre :is(thead th, td) { overflow-wrap: normal; }
-.tableau.tableau--serre tbody th { white-space: normal; min-width: 8rem; }
-.tableau--notes table { min-width: 48rem; }
-.tableau--notes thead th { min-width: 7rem; }
-.tableau--notes tbody th { position: sticky; left: 0; background: var(--bg); min-width: 6rem; }
-/* Au téléphone, la colonne figée du pseudo laisse de la place aux notes. */
-@media (max-width: 48rem) { .tableau.tableau--notes tbody th { white-space: normal; max-width: 9rem; } }
-.tableau:focus-visible { outline: 3px solid var(--accent); outline-offset: 2px; }
 .mention { display: block; margin-top: 4px; color: var(--muted); font-size: .85rem; font-weight: 400; }
 .jure { display: grid; grid-template-columns: 72px 1fr; gap: 16px 20px; padding: 20px; background: var(--surface); border-radius: 8px; }
 .jure + .jure { margin-top: 1rem; }
@@ -298,20 +272,9 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .console__num { font: 700 .75rem var(--font-display); color: var(--accent); }
 
 .panneaux { display: grid; grid-template-columns: minmax(12rem, 16rem) minmax(0, 1fr); gap: 40px; align-items: start; margin-top: 2rem; }
-.panneaux__nav { position: sticky; top: 16px; display: grid; gap: 4px; }
-.panneaux__nav a { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: 48px; padding: 8px 12px 8px 16px; text-decoration: none; color: var(--muted); clip-path: var(--pixel); }
-@media (hover: hover) { .panneaux__nav a:hover { color: var(--ink); background: var(--surface); } }
-.panneaux__nav a[aria-current] { color: var(--ink); background: var(--surface); box-shadow: inset 4px 0 0 var(--accent); }
-.panneaux__nb { min-width: 2.25em; padding: 0 6px; background: var(--bg); font: 700 .8rem/1.8 var(--font-display); text-align: center; clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px)); }
-.panneaux__nb[data-urgent] { background: var(--accent); color: var(--accent-ink); }
-.admin .panneaux__corps > section > h2:first-child { margin-top: 0; }
-/* Jusqu'à 60rem, le menu latéral prendrait un tiers de la largeur : il passe en onglets au-dessus du panneau.
-   minmax(0, 1fr) : un tableau large défile dans son conteneur au lieu d'élargir la page. */
+/* Jusqu'à 60rem, une seule colonne. */
 @media (max-width: 60rem) {
   .panneaux { grid-template-columns: minmax(0, 1fr); gap: 24px; }
-  .panneaux__nav { position: static; display: flex; overflow-x: auto; scrollbar-width: none; padding-bottom: 8px; border-bottom: 1px solid var(--line); mask-image: linear-gradient(90deg, #000 calc(100% - 32px), transparent); padding-right: 24px; }
-  .panneaux__nav a { flex: none; }
-  .panneaux__nav a[aria-current] { box-shadow: inset 0 -4px 0 var(--accent); }
 }
 
 .tdb__tete { display: grid; gap: 12px; }
@@ -341,19 +304,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .plateau-mini .mascotte { width: 100%; max-width: 56px; height: auto; }
 .tdb__jury .note-claire { margin-top: 12px; }
 
-.admin .cartes { gap: 16px; }
-.admin .carte { position: relative; display: grid; gap: 14px; align-content: start; clip-path: var(--pixel); }
-.admin .carte h3 { margin: 0; }
-.admin .carte h3 a { text-decoration: none; }
-.admin .carte h3 a::after { content: ''; position: absolute; inset: 0; }
-@media (hover: hover) { .admin .carte:hover h3 a { text-decoration: underline; text-decoration-color: var(--accent); } }
-.admin .carte p { margin: 0; }
-.frise { display: grid; gap: 8px; }
-.frise ol { list-style: none; display: grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 3px; margin: 0; padding: 0; max-width: 18rem; }
-.frise li { height: 10px; background: var(--line); }
-.frise li[data-etat="fait"] { background: var(--muted); }
-.frise li[data-etat="courant"] { background: var(--accent); }
-.frise p { margin: 0; font: 700 .85rem var(--font-display); color: var(--accent); }
 .jauges { display: grid; gap: 12px; margin: 0; }
 .jauges div { display: grid; grid-template-columns: 1fr auto; gap: 6px 12px; }
 .jauges dt { color: var(--muted); font-size: .9rem; }
@@ -364,40 +314,17 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 
 @media (prefers-reduced-motion: no-preference) {
   .invite__curseur { animation: clignote 1.1s steps(1) 5; }
-  .indicateurs a, .admin .carte, .taches a { transition: transform .2s ease; }
+  .indicateurs a, .taches a { transition: transform .2s ease; }
   .taches__fleche { transition: transform .2s ease, color .2s ease; }
-  .panneaux__nav a { transition: background-color .15s ease, color .15s ease; }
   .jauge i[data-plein] { animation: remplit .5s steps(1) both; }
   .jauge i:nth-child(n+6) { animation-delay: .05s; } .jauge i:nth-child(n+11) { animation-delay: .1s; } .jauge i:nth-child(n+16) { animation-delay: .15s; }
 }
 @media (prefers-reduced-motion: no-preference) and (hover: hover) {
-  .indicateurs a:hover, .admin .carte:hover { transform: translateY(-2px); }
+  .indicateurs a:hover { transform: translateY(-2px); }
   .taches a:hover .taches__fleche { transform: translateX(4px); }
 }
 @keyframes clignote { 50% { opacity: 0; } }
 @keyframes remplit { from { background: var(--line); } }
-.admin h1 + .frise { margin-top: 1rem; }
-.admin .frise + p { margin-top: 1rem; }
-/* Tableaux de l'administration : un titre long se coupe au lieu d'étirer le tableau ; un bouton ne se replie pas lettre à lettre. */
-.admin .tableau tbody th { white-space: normal; }
-.admin .tableau .btn { white-space: nowrap; }
-/* Listes (campagnes, participants) : toutes les colonnes tiennent dès la tablette ; dates et statuts se coupent entre les
-   mots (jamais au milieu), le titre garde une largeur lisible. */
-.tableau--liste table { min-width: 0; }
-.tableau--liste td { overflow-wrap: normal; }
-.tableau--liste tbody th { min-width: 9rem; }
-/* Au téléphone, une ligne devient une fiche : titre, statut, puis « libellé : valeur » (data-label). Les rôles ARIA posés
-   sur le tableau gardent sa sémantique malgré display: block. */
-@media (max-width: 40rem) {
-  .tableau--liste { overflow: visible; border: 0; }
-  .tableau--liste table { min-width: 0; }
-  .tableau--liste thead { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
-  .tableau--liste :is(tbody, tr, th, td) { display: block; }
-  .tableau--liste tbody { display: grid; gap: 8px; }
-  .tableau--liste tr { display: grid; gap: 4px; padding: 14px 16px; background: var(--surface); clip-path: var(--pixel); }
-  .tableau--liste tbody :is(th, td) { min-width: 0; padding: 0; border: 0; white-space: normal; }
-  .tableau--liste td[data-label]::before { content: attr(data-label) " : "; color: var(--muted); font-size: .9rem; }
-}
 /* Téléphone, ou paysage peu haut : la console tient sur une rangée (mascotte et onglets), son titre reste lu par les lecteurs d'écran. */
 @media (max-width: 48rem), (max-height: 30rem) {
   .console__bar { flex-wrap: nowrap; gap: 4px; min-height: 0; }
@@ -406,7 +333,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
   .console__onglets a { flex: none; }
 }
 
-/* Le site entier parle la langue du plateau : cases, invite de terminal, frises et jauges. */
+/* Le site entier parle la langue du plateau : cases, invite de terminal et jauges. */
 .carte, .etapes li, .podium li, .jure, .audit, .vide, .terminal, .place, .taches__vide { clip-path: var(--pixel); border-radius: 0; }
 .vide { border: 0; background: var(--trame), var(--surface); font-family: var(--font-display); font-size: .95rem; }
 @media (prefers-reduced-motion: no-preference) {
@@ -429,7 +356,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .carte h3 { margin: 0; }
 .carte h3 a { text-decoration: none; }
 .carte h3 a::after { content: ''; position: absolute; inset: 0; }
-.carte .frise { margin-top: 6px; }
 .carte__rebours { position: absolute; top: 18px; right: 18px; margin: 0 !important; padding: 2px 10px; background: var(--accent); color: var(--accent-ink); font: 700 .85rem var(--font-display); clip-path: polygon(0 3px, 3px 3px, 3px 0, calc(100% - 3px) 0, calc(100% - 3px) 3px, 100% 3px, 100% calc(100% - 3px), calc(100% - 3px) calc(100% - 3px), calc(100% - 3px) 100%, 3px 100%, 3px calc(100% - 3px), 0 calc(100% - 3px)); }
 .carte:has(.carte__rebours) h3 { padding-right: 5rem; }
 .etapes li { background: var(--trame), var(--surface); }
@@ -443,13 +369,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .jures__nom { grid-area: nom; align-self: end; font: 700 1.05rem var(--font-display); }
 .jures__val { grid-area: val; color: var(--clair-muted); font: .85rem var(--font-display); }
 .jures p { grid-area: role; margin: 12px 0 0; color: var(--clair-muted); font-size: .95rem; }
-
-/* Frise publique : quatre étapes nommées sous leurs cases. */
-.frise[data-publique] ol { max-width: 30rem; grid-template-columns: repeat(4, 1fr); gap: 4px; }
-.frise[data-publique] li { height: auto; padding-top: 10px; background: none; border-top: 8px solid var(--line); font: .75rem var(--font-display); color: var(--muted); }
-.frise[data-publique] li[data-etat="fait"] { border-top-color: var(--muted); }
-.frise[data-publique] li[data-etat="courant"] { border-top-color: var(--accent); color: var(--ink); font-weight: 700; }
-.section--clair .frise[data-publique] li { color: var(--clair-muted); }
 
 /* Invite et fenêtre de terminal (hors administration aussi). */
 .terminal { background: #111214; border: 0; }
@@ -474,7 +393,7 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .criteres-jauges { list-style: none; margin: 0; padding: 0; display: grid; gap: 14px; }
 .criteres-jauges li { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; }
 .criteres-jauges strong { font-family: var(--font-display); }
-.place { position: sticky; top: 24px; display: grid; gap: 16px; padding: 24px; background: var(--trame), var(--surface); }
+.place { position: sticky; top: calc(var(--nav-h) + 24px); display: grid; gap: 16px; padding: 24px; background: var(--trame), var(--surface); }
 .place h2 { font-size: 1.5rem; margin: 0; }
 .place p { margin: 0; }
 .place__rebours { color: var(--muted); }
@@ -505,9 +424,6 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .podium .jauge { margin-top: 8px; }
 .criteres--notes li { display: grid; grid-template-columns: 1fr auto; gap: 6px 16px; }
 @media (max-width: 60rem) { .place { order: -1; position: static; } }
-@media (max-width: 30rem) { .frise[data-publique] li { font-size: .68rem; } }
-/* Sous 25rem, « Inscriptions » et « Délibération » ne tiennent plus dans leur case (ou s'y touchent) : seule l'étape en cours garde son nom. */
-@media (max-width: 25rem) { .frise[data-publique] li span { white-space: nowrap; } .frise[data-publique] li:not([data-etat="courant"]) span { visibility: hidden; } }
 h1 + .parcours { margin-top: 2rem; }
 
 /* Détails relevés en parcourant le site de bout en bout. */
@@ -529,8 +445,6 @@ h1 + .parcours { margin-top: 2rem; }
 @media (max-width: 30rem) { .terminal .dates div { grid-template-columns: 1fr; } }
 .terminal .dates dt { color: var(--muted); }
 .redepot > summary { font-weight: 600; }
-.tableau tbody th { white-space: nowrap; }
-.tableau tr[data-moi] :is(th, td) { background: rgb(255 74 31 / .1); }
 .moi { margin-left: 8px; padding: 1px 8px; background: var(--accent); color: var(--accent-ink); font: 700 .75rem var(--font-display); vertical-align: 2px; }
 .verdict-final { display: grid; gap: 10px; max-width: 36rem; padding: 24px; background: var(--trame), var(--surface); clip-path: var(--pixel); box-shadow: inset 0 4px 0 var(--line); }
 .verdict-final[data-rang="1"] { box-shadow: inset 0 4px 0 var(--accent); }
@@ -541,11 +455,11 @@ h1 + .parcours { margin-top: 2rem; }
 .verdict-final__score strong { color: var(--ink); font: 700 1.75rem var(--font-display); }
 
 /* Les liens découpés en cases (clip-path) perdent leur contour extérieur : le focus se dessine à l'intérieur. */
-:is(.indicateurs a, .taches a, .panneaux__nav a):focus-visible { outline-offset: -5px; }
+:is(.indicateurs a, .taches a):focus-visible { outline-offset: -5px; }
 :is(.indicateurs [data-urgent] a):focus-visible { outline-color: var(--accent-ink); }
 @media (max-width: 24rem) {
   .logo { gap: 8px; font-size: 1rem; }
-  .logo .mascotte { width: 28px; height: 28px; translate: 0 -2px; }
+  .logo .mascotte { width: 24px; height: 24px; }
   .logo__par { margin-bottom: .3em; }
   .nav .btn { padding: 0 14px; }
 }

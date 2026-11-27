@@ -6,7 +6,7 @@ const jures: Jure[] = ['sudo', 'refacto', 'boss', 'lint', 'pitch']
 </script>
 
 <template>
-  <div class="plateau" role="img" aria-label="Les cinq jurés assis sur le plateau&nbsp;: Sudo, Refacto, Lint et Pitch, quatre créatures coiffées chacune de leur chapeau, et, au centre, Le Boss, le juré humain en casquette">
+  <div class="plateau" role="img" aria-label="Les cinq jurés assis sur le plateau&nbsp;: Sudo, Refacto, Lint et Pitch, quatre hackers à capuche au visage d'écran de terminal, et, au centre, Le Boss, le juré humain, encapuchonné en sweat noir sous une couronne flottante">
     <span class="lampes" aria-hidden="true"><i v-for="j in jures" :key="j" /></span>
     <div v-for="j in jures" :key="j" class="siege">
       <div class="siege__dos"><MascottePixel :jure="j" /></div>

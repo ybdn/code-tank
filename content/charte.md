@@ -1,21 +1,17 @@
 # Charte du concours de code Code Tank
 
-> **PROJET, à faire relire par un avocat avant l'ouverture des comptes.**
-
 En créant ton compte, tu coches la case «&nbsp;J'ai lu et j'accepte la charte&nbsp;». Cette charte est le règlement du concours. La charte et la déclaration de majorité sont acceptées à la création du compte. À chaque dépôt, tu déclares en plus que ce code précis est open source, avec son fichier `LICENSE`, ou déposé avec l'accord écrit de son propriétaire.
 
 Version&nbsp;: en vigueur à l'ouverture des comptes. Le numéro et la date de version sont enregistrés avec ta déclaration.
 
 ## 1. Qui organise
 
-Code Tank est organisé par EI - YOANN BAUDRIN, sous la marque ybdn.io.
+Code Tank est organisé par Yoann BAUDRIN, à titre personnel et non professionnel, sans but lucratif.
 
-- SIREN&nbsp;: 994 347 979
-- Adresse&nbsp;: 11 rue de la Sellerie, C612 - 95300 Pontoise - France
 - Contact&nbsp;: support@ybdn.io
 - Site&nbsp;: code-tank.ybdn.io
 
-Dans ce texte, «&nbsp;l'organisateur&nbsp;» désigne cet éditeur.
+Dans ce texte, «&nbsp;l'organisateur&nbsp;» désigne Yoann BAUDRIN.
 
 ## 2. Qui peut participer
 

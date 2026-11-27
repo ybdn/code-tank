@@ -1,44 +1,19 @@
-// Enregistre la réception d'un zip déjà envoyé au stockage, avec la déclaration. Le contrôle du zip
-// (format, secrets, licence, tokens) est fait ailleurs, à partir de la table reception.
+// Dépôt (story 3.3) : le zip est déjà dans le bucket, au chemin rendu par url.post. deposer, avec le JWT de l'appelant, tient
+// toutes les règles (verrou de la campagne, phase, compte actif, Boss juge, inscription, case, présentation, demande, chemin
+// et objet présent, réception en attente, limite de débit par compte en 429). Puis le jury est appelé sans attendre : un
+// échec laisse la réception en_attente, sans erreur pour le candidat (prive la reprendra au prochain passage).
 export default defineEventHandler(async (event) => {
-  const { campagne, participation, service } = await contexteDepot(event)
-  const corps = (await readBody(event)) ?? {}
-  const declaration = declarationValide(corps)
-
-  // Le chemin vient du client : il doit être un de ceux que le serveur a délivrés à cette participation.
-  const dossier = `${campagne.id}/${participation.id}/`
-  const chemin = typeof corps.chemin === 'string' ? corps.chemin : ''
-  if (!chemin.startsWith(dossier) || !/^[0-9a-f-]{36}\.zip$/.test(chemin.slice(dossier.length))) {
-    throw createError({ statusCode: 422, statusMessage: 'Envoi inconnu\u00a0: recommence le dépôt.' })
-  }
-  const fichier = chemin.slice(dossier.length)
-  const { data: objets, error: erreurStockage } = await service.storage.from('depots').list(dossier.slice(0, -1), { search: fichier })
-  if (erreurStockage) {
-    console.error('Lecture du stockage :', erreurStockage.message)
-    throw createError({ statusCode: 500, statusMessage: 'Impossible de vérifier ton envoi. Réessaie dans un instant.' })
-  }
-  if (!objets.some((o) => o.name === fichier)) {
-    throw createError({ statusCode: 422, statusMessage: 'Ton archive n\'est pas arrivée\u00a0: recommence l\'envoi.' })
-  }
-
-  // Une nouvelle réception remplace l'ancienne ; le dépôt déjà accepté, lui, reste valable jusqu'au prochain contrôle.
-  const { data: depot } = await service.from('depot').select('chemin_stockage').eq('participation_id', participation.id).maybeSingle()
-  const { error } = await service.from('reception').upsert({
-    participation_id: participation.id,
-    chemin_stockage: chemin,
-    ...declaration,
-    declaration_code_le: new Date().toISOString(),
-    etat: 'en_attente',
-    motifs_refus: [],
-    recue_le: new Date().toISOString(),
-    traitee_le: null,
-  }, { onConflict: 'participation_id' })
-  if (error) {
-    console.error('Enregistrement de la réception :', error.message)
-    throw createError({ statusCode: 500, statusMessage: 'Enregistrement impossible. Réessaie dans un instant.' })
-  }
-  await effacerArchives(event, campagne.id, participation.id, [], [chemin, depot?.chemin_stockage])
-  // Le jury traite la réception sans que le candidat attende : la réponse part tout de suite.
+  exigerJson(event)
+  const corps = await readBody(event).catch(() => null)
+  const { client, id } = await campagneDeLInscrit(event)
+  const { error } = await client.rpc('deposer', {
+    p_campagne: id,
+    p_chemin: texteRecu(corps?.chemin),
+    p_presentation: texteRecu(corps?.presentation),
+    p_demande: texteRecu(corps?.demande),
+    p_droit_declare: corps?.droit === true,
+  })
+  if (error) erreurCampagne(error, 'Dépôt :', 'Le dépôt a échoué. Réessaie dans un instant.')
   event.waitUntil(appelerJury(event, 'reception'))
   return { ok: true }
 })

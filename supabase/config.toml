@@ -10,33 +10,28 @@ major_version = 17
 [db.migrations]
 enabled = true
 
-[db.seed]
-enabled = true
-sql_paths = ["./seed.sql"]
-
 [api]
 enabled = true
 # Décalé comme la base : 54321 est pris par un autre projet local.
 port = 54421
 schemas = ["public"]
 
-# Boîte mail locale : interface web et API des messages sur 54424, SMTP publié sur 54425.
+# Aucune boîte mail locale : aucun test n'envoie d'e-mail.
 [local_smtp]
-enabled = true
-port = 54424
-smtp_port = 54425
+enabled = false
 
 [auth]
 enabled = true
 site_url = "http://127.0.0.1:3000"
+# Retour de la connexion GitHub.
 additional_redirect_urls = ["http://127.0.0.1:3000/compte", "http://localhost:3000/compte"]
-# Les comptes naissent de la connexion GitHub. Le fournisseur e-mail reste actif en local seulement, pour que les
-# tests ouvrent des sessions ; en ligne, le désactiver dans Auth. La route de création refuse de toute façon
-# un utilisateur dont app_metadata.provider n'est pas github.
+# Les comptes naissent de la connexion GitHub. Le fournisseur e-mail (mot de passe, actif par défaut) ne sert qu'en local :
+# les tests de pile y ouvrent les sessions d'utilisateurs créés par l'API d'administration. En ligne, il est désactivé dans Auth.
 enable_anonymous_sign_ins = false
 
-# Identité et e-mail seulement : le fournisseur n'ajoute aucun scope. Les valeurs viennent de
-# l'environnement ; aucune application OAuth n'est créée par ce dépôt.
+# Identité et e-mail seulement : le fournisseur n'ajoute aucun scope (Auth ne demande que user:email, aucun accès aux
+# dépôts) et retient l'e-mail principal vérifié de GitHub. Les valeurs viennent de l'environnement ; aucune application
+# OAuth n'est créée par ce dépôt.
 [auth.external.github]
 enabled = true
 client_id = "env(SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID)"

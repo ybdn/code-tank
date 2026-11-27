@@ -19,36 +19,36 @@ const fichiers = (dir: string): string[] =>
 
 describe('pages publiques', () => {
   it.each([
-    ['/', 'Concours de code jugé par Claude'],
+    ['/', 'Affronte notre jury.'],
     ['/charte', 'Charte'],
     ['/confidentialite', 'confidentialité'],
     ['/mentions-legales', 'Mentions légales'],
-    ['/compte', 'Se connecter avec GitHub'],
+    ['/compte', 'Mon compte'],
   ])('%s répond avec son contenu rendu côté serveur', async (chemin, texte) => {
     expect(await $fetch<string>(chemin)).toContain(texte)
   })
 })
 
-describe('Supabase injoignable', () => {
-  it('l\'accueil reste rendu, vite, avec un message de repli', async () => {
-    const debut = Date.now()
+describe('code du concours supprimé', () => {
+  it('l\'accueil n\'a plus ni ancienne accroche ni liste de campagnes', async () => {
     const html = await $fetch<string>('/')
-    expect(Date.now() - debut).toBeLessThan(5000)
-    expect(html).toContain('Les campagnes ne peuvent pas être lues pour le moment.')
+    expect(html).not.toContain('Ton code face au jury')
+    expect(html).not.toContain('Le concours de code jugé par ybdn')
+    expect(html).not.toContain('id="campagnes"')
   })
 
-  it('une page de campagne répond 503 sans attendre', async () => {
-    const debut = Date.now()
-    expect((await fetch('/campagnes/une-campagne')).status).toBe(503)
-    expect(Date.now() - debut).toBeLessThan(5000)
+})
+
+describe('campagne publique', () => {
+  // Slug hors de la forme de la table : 404 avant toute lecture de la base.
+  it.each(['/api/campagnes/%00', '/api/campagnes/%ED%A0%80', '/api/campagnes/Majuscule'])('%s répond 404 sans base', async (chemin) => {
+    expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
   })
 })
 
-describe('administration sans session (Supabase injoignable)', () => {
-  it.each(['/admin', '/admin/comptes', '/Admin', '/api/admin/comptes'])('%s répond 404, sans redirection', async (chemin) => {
-    const res = await fetch(chemin, { redirect: 'manual' })
-    expect(res.status).toBe(404)
-    expect(res.headers.get('location')).toBeNull()
+describe('administration', () => {
+  it.each(['/admin', '/api/admin/reglage', '/api/admin/comptes'])('/admin et /api/admin répondent 404 sans session ni base : %s', async (chemin) => {
+    expect((await fetch(chemin, { redirect: 'manual' })).status).toBe(404)
   })
 })
 

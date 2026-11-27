@@ -1,25 +1,25 @@
 import { describe, expect, it } from 'vitest'
-import { envoyerLienVerification } from '../../server/utils/courriel'
+import { envoyerCourriel, erreurConfigCourriel } from '../../server/utils/courriel'
 
-const bon = {
-  siteUrl: 'https://code-tank.ybdn.io',
-  secretVerification: 's'.repeat(32),
-  smtp: { host: '127.0.0.1', port: 1, user: '', pass: '' },
-}
-const id = '6f1e5a0e-7a53-4a40-8f6a-0d8f4a0b1c2d'
+const bon = { siteUrl: 'https://code-tank.ybdn.io', smtp: { host: '127.0.0.1', port: 1, user: '', pass: '' } }
 
 // Chaque cas doit échouer avant toute connexion SMTP (le port 1 n'écoute pas : une tentative donnerait une autre erreur).
-describe('envoi du lien de vérification : configuration manquante', () => {
+describe('envoi d\'un e-mail : configuration manquante', () => {
   it.each([
-    [{ secretVerification: '' }, /NUXT_SECRET_VERIFICATION/],
-    [{ secretVerification: 'trop-court' }, /NUXT_SECRET_VERIFICATION/],
     [{ siteUrl: '' }, /NUXT_SITE_URL/],
     [{ siteUrl: '/relatif' }, /NUXT_SITE_URL/],
     [{ smtp: { ...bon.smtp, host: '' } }, /NUXT_SMTP_HOST/],
   ])('%j', async (surcharge, erreur) => {
-    await expect(envoyerLienVerification({ ...bon, ...surcharge }, id, 'ada@example.org')).rejects.toThrow(erreur)
+    await expect(envoyerCourriel({ ...bon, ...surcharge }, 'ada@example.org', 'Sujet', 'Texte')).rejects.toThrow(erreur)
   })
-  it('refuse une adresse inutilisable', async () => {
-    await expect(envoyerLienVerification(bon, id, 'a@example.org,b@example.org')).rejects.toThrow(/inutilisable/)
-  })
+})
+
+// prevenirFin (story 4.7) la vérifie avant reserver_envoi : une configuration manquante ne consomme pas la marque.
+describe('configuration d\'envoi', () => {
+  it('complète : aucune erreur', () => expect(erreurConfigCourriel(bon)).toBeNull())
+  it.each([
+    [{ siteUrl: '' }, /NUXT_SITE_URL/],
+    [{ siteUrl: 'code-tank.ybdn.io' }, /NUXT_SITE_URL/],
+    [{ smtp: { ...bon.smtp, host: '' } }, /NUXT_SMTP_HOST/],
+  ])('%j', (surcharge, erreur) => expect(erreurConfigCourriel({ ...bon, ...surcharge })).toMatch(erreur))
 })

@@ -1,12 +1,12 @@
 # Code Tank, le site
 
-Site public du concours de code Code Tank, jugé par Claude. Nuxt 4, TypeScript, rendu côté serveur, pnpm.
+Site public de Code Tank, plateforme de défis de code entre amis : chaque inscrit crée sa campagne et en devient le Boss.
+Nuxt 4, TypeScript, rendu côté serveur, pnpm.
 
-Ce lot contient le socle (accueil, charte, politique de confidentialité, mentions légales, en-têtes de sécurité),
-le schéma de la base (`supabase/`, voir plus bas) et les comptes : connexion GitHub par Supabase Auth, création du
-compte, vérification de l'e-mail de contact, page `/compte`, puis les campagnes : page publique, inscription et
-désinscription, dépôt du zip, reçu, retrait, et l'administration `/admin` de l'organisateur. Le contrôle du
-contenu du zip et le lancement des audits vivent hors de ce dépôt.
+Le site est en cours de réécriture sur un schéma neuf : il contient pour l'instant l'accueil, la charte, la politique de
+confidentialité, les mentions légales, les en-têtes de sécurité, la création de compte par GitHub (`/compte`) et le socle de
+la base (`supabase/`, voir plus bas), les campagnes, l'inscription et le dépôt. Le contrôle des dépôts et la délibération
+arrivent avec les stories suivantes.
 
 ## Commandes
 
@@ -19,181 +19,116 @@ pnpm test         # construit le site et vérifie les pages et les en-têtes
 pnpm build
 ```
 
-## Comptes
+## Utilitaires serveur
 
-Seule `/compte` (partie connectée) demande une session ; les pages publiques n'en ont pas besoin. La connexion
-GitHub ne demande que l'identité et l'e-mail (aucun scope ajouté). Le compte (table `compte`) est créé par la route
-serveur `POST /api/compte`, qui vérifie la session auprès d'Auth, exige `app_metadata.provider = 'github'`, lit
-l'identité GitHub dans l'identité vérifiée (jamais dans le corps ni dans `user_metadata`) et écrit avec la clé de
-service. Le profil se lit directement par la session de l'utilisateur (RLS) et se modifie par `PATCH /api/compte`
-(session de l'utilisateur, RLS). La vérification de l'e-mail passe par un jeton signé HMAC-SHA-256, valable 24 h,
-lié à l'adresse. Le lien de l'e-mail ouvre la page `/compte/verifier`, qui ne modifie rien : seul le clic sur « Confirmer
-mon adresse » envoie `POST /api/compte/verifier` (aperçus de lien et antivirus ne valident donc rien). L'adresse lue en base
-repasse par la règle du formulaire avant tout envoi et toute validation, car la colonne est écrivable directement.
-
-## Campagnes et dépôt
-
-L'accueil liste les campagnes lisibles (la RLS cache les brouillons) ; `/campagnes/[slug]` est publique et
-`/campagnes/[slug]/depot` demande un compte autorisé et inscrit. Les pages lisent la campagne par
-`GET /api/campagnes[/slug]` (le client Supabase de la page ne sait pas lire la session pendant le rendu serveur) et le
-reste, côté navigateur, avec la session du candidat (RLS et vues `ma_reception`, `mon_depot`, `places_campagne`).
-
-- **Inscription** : `POST /api/campagnes/[slug]/inscription` (limite de débit, puis `sinscrire` avec la session du candidat ; la page
-  passe par cette route). La fonction SQL reste appelable directement depuis un navigateur : c'est accepté, car elle ne permet qu'une
-  inscription par compte et par campagne, et seulement à un compte autorisé à la main. **Désinscription** :
-  `DELETE /api/campagnes/[slug]/inscription` appelle `se_desinscrire` avec sa session, puis efface la réception et les archives.
-- **Dépôt en trois temps**, le zip ne passant jamais par le serveur Nuxt (corps de requête plafonné vers 4,5 Mo chez
-  l'hébergeur, zip jusqu'à 20 Mo) :
-  1. `POST /api/campagnes/[slug]/depot/url` vérifie la session, le compte `autorise`, la participation `inscrit`, le statut
-     (`inscriptions` ou `depot`, comme `sinscrire`, car les deux phases se chevauchent), la clôture et la déclaration, puis
-     délivre une URL d'envoi signée (clé de service, chemin `{campagne}/{participation}/{uuid}.zip` choisi par le serveur ;
-     validité fixée à 2 h par Supabase, un seul envoi par chemin) ;
-  2. le navigateur envoie le fichier au bucket privé `depots` (20 Mo, zip seulement, aucune politique de stockage) ;
-  3. `POST /api/campagnes/[slug]/depot` revérifie tout, contrôle que l'archive est bien arrivée dans le dossier de la
-     participation, écrit la ligne de `reception` (`en_attente`, une seule par participation) et efface l'ancienne archive
-     ainsi que les envois jamais confirmés, sauf celle du dépôt déjà accepté.
-- **Retrait** : `DELETE /api/campagnes/[slug]/depot` (fonction `retirer_depot` avec la session ; règle équivalente quand il
-  n'existe qu'une réception), puis effacement de la réception et des archives. Un échec du stockage après la suppression
-  en base est journalisé sans donnée personnelle et renvoyé en erreur 500.
-- Rien dans ce lot ne fait passer une réception à `acceptee` ou `refusee` : le contrôle du zip, ailleurs, lira `reception`
-  et écrira `depot` avec la clé de service. Les tests simulent ce contrôle.
-- Limite connue : un envoi jamais confirmé reste dans le bucket jusqu'au prochain dépôt, retrait ou désinscription de ce
-  candidat ; aucune tâche de nettoyage dans ce lot.
-
-## Administration
-
-`/admin` (comptes, réglages, campagnes, dépôts, vote du Boss, publication) est réservée à l'organisateur.
-
-- **Accès** : le middleware `server/middleware/admin.ts` contrôle toute requête vers `/admin…` ou `/api/admin…` (casse,
-  pourcentages et barres doublées compris, `cheminAdmin` dans `shared/utils/admin.ts`) : session vérifiée par Auth, puis
-  `est_organisateur()` avec cette session. Sinon **404**, jamais 403 ni redirection. Pages et réponses d'administration
-  portent `noindex` ; le lien « Administration » n'apparaît dans la navigation que pour l'organisateur (affichage
-  seulement : la barrière est le serveur). Un candidat ou un visiteur qui arrive par la navigation du navigateur voit
-  aussi la page 404, car les pages lisent leurs données par `/api/admin/*`, que le middleware refuse.
-- **Écritures par la session de l'organisateur** (RLS et fonctions SQL : `decider_compte`, `changer_statut_campagne`,
-  `ajouter_participant`, `verrouiller_vote`, `masquer_replique`, `enregistrer_decision`, tables `reglage`, `campagne`,
-  `vote_boss`). La clé de service ne sert qu'à une chose : `GET /api/admin/participations/[id]/archive` délivre une URL de
-  lecture signée de **60 secondes** après contrôle de l'organisateur. Les refus de la base (poids ≠ 100, transition
-  interdite, vote verrouillé, publication sans vote verrouillé…) sont renvoyés tels quels (409).
-- **Vote à l'aveugle** : tant qu'un vote n'est pas verrouillé, la base cache à la session de l'organisateur les audits et la
-  case de réutilisation ; l'API ne les lit pas et l'écran le dit. Après verrouillage : audits, réplique (masquable), coût,
-  case de réutilisation, décisions. Rien n'est exécuté : l'archive se télécharge, c'est tout (SPECS § 4).
-- **Pages** : `/admin` (tableau de bord), `/admin/comptes`, `/admin/reglages`, `/admin/campagnes`,
-  `/admin/campagnes/[slug]`. Dates saisies et affichées à l'heure de Paris.
-- **E-mails de résultat** : quand `POST /api/admin/campagnes/[slug]/statut` fait passer une campagne à `publiee` avec succès,
-  le serveur envoie un e-mail (texte seul, tutoiement, lien vers la page de la campagne, aucun score ni classement, expéditeur
-  `code-tank@ybdn.io`) à chaque participant inscrit ayant un dépôt **et une adresse vérifiée**. Adresses lues avec la session de
-  l'organisateur (RLS), jamais avec la clé de service. L'envoi ne bloque ni n'annule la publication : la réponse donne
-  `{ envoyes, echecs, sansAdresseVerifiee }`, que la page affiche, et le journal ne cite aucune adresse. Un SMTP injoignable
-  arrête la boucle (délai de 10 s par connexion). Il n'y a **pas de bouton de renvoi** (risque de doublons, aucune colonne pour
-  se souvenir de qui a reçu quoi) ; la page le dit.
-- **Pas dans ce lot** : aperçu du classement (la vue `classement` ne montre que les campagnes publiées), lancement des audits.
-
-## Limite de débit
-
-Table `debit` (migration `20261124000001_debit.sql`) : empreinte de l'IP, action, horodatage. RLS activée, aucun droit pour
-`anon` ni `authenticated` ; seul le rôle de service y accède, par la fonction `consommer_debit`, qui compte, refuse ou enregistre
-dans une seule transaction (verrou consultatif par empreinte et action : deux requêtes simultanées au dernier créneau n'en
-laissent passer qu'une) et purge au passage les lignes de plus de 24 heures **de cette empreinte**. La purge générale des autres
-empreintes est faite par le lot des tâches planifiées : tant qu'il n'existe pas, la promesse « 24 heures » de la politique de
-confidentialité n'est tenue que pour les adresses qui reviennent.
-
-- **L'IP n'est jamais stockée** : Nuxt (`server/utils/debit.ts`) la lit dans la première adresse de `x-forwarded-for` (posée par le
-  proxy de l'hébergeur ; **ne vaut que derrière un proxy qui l'écrase**, sinon un client la choisit), en calcule un HMAC-SHA-256
-  avec `NUXT_SECRET_DEBIT` (32 caractères au moins) et n'envoie que l'empreinte. Sans adresse lisible, tous les appels partagent
-  une empreinte commune. Sans secret, ou si la base est injoignable : **503**, jamais un passage sans limite.
-- **Plafonds** (constante `PLAFONDS`, un seul endroit), par IP : création de compte 5 / 24 h ; renvoi du lien de vérification
-  5 / h ; demande d'URL de dépôt 30 / 24 h ; inscription à une campagne 20 / 24 h ; suppression de compte 5 / 24 h ;
-  confirmation d'e-mail (`POST /api/compte/verifier`) 30 / h. Au-delà : **429** avec un message français et `Retry-After`.
-  Le compte est fait juste avant l'action coûteuse, après les contrôles de session et de formulaire : une faute de frappe
-  n'entame pas le plafond, mais une demande valable le fait même si elle échoue ensuite.
-- **Non limités** : les autres routes (dont `PATCH /api/compte`, qui renvoie un lien si l'adresse change) et l'appel direct à
-  `sinscrire`.
-- **Tests** : les helpers de `tests/stack/aide.ts` envoient une adresse `x-forwarded-for` neuve à chaque requête ; aucun
-  interrupteur ne désactive la limite.
-
-## Conservation (tâches planifiées)
-
-`GET /api/cron/conservation`, appelée une fois par jour par le planificateur de Vercel (`vercel.json`, entrée `crons` :
-03:17 UTC). Elle exige `Authorization: Bearer <CRON_SECRET>` ; sans le bon secret, ou si `CRON_SECRET` manque ou fait moins de
-32 caractères : **404**. Le secret est lu dans `process.env.CRON_SECRET` (le nom que Vercel envoie, sans préfixe `NUXT_`) et
-comparé en temps constant. La route utilise la clé de service. Chaque tâche est idempotente, bornée (constantes `DELAIS` et
-`BORNES` de `server/utils/conservation.ts`) et indépendante : l'échec de l'une met son code d'erreur dans la réponse sans arrêter
-les suivantes. Réponse et journal : des compteurs et des codes, jamais de pseudo, d'adresse, de chemin ni d'identifiant.
-
-| Tâche | Ce qu'elle fait | Borne |
-|---|---|---|
-| `debit` | supprime les lignes de plus de 24 h (`purger_debit`) | 10 000 |
-| `envois` | efface les objets du bucket `depots` de plus de 24 h que ni `depot` ni `reception` ne référencent (`objets_abandonnes`) | 500 |
-| `archives` | campagne `publiee` depuis 30 jours (`campagne.publiee_le`) : efface toutes les archives de ses participations, met `depot.chemin_stockage` à nul, supprime ses lignes `reception`, passe à `archivee`. Une campagne dont les archives dépassent la borne finit au passage suivant | 500 objets |
-| `refuses` | supprime les comptes `refuse` depuis 30 jours | 50 |
-| `attente` | compte en liste d'attente sans confirmation depuis 12 mois : e-mail de demande (`attente_demandee_le`) ; sans réponse sous 30 jours : suppression. Sans adresse utilisable (non vérifiée ou refusée), la relance est impossible : le compte est supprimé directement, sans e-mail. Le candidat confirme par un bouton sur `/compte` (`confirmer_attente`) | 50 + 50 + 50 |
-| `non_verifies` | supprime, **sans avertissement** (l'adresse n'est pas prouvée, elle peut être à un tiers) : les comptes `email_a_verifier` créés depuis plus de 30 jours, et les comptes sans adresse vérifiée sans connexion depuis 24 mois | 50 + 50 |
-| `inactivite` | compte à adresse vérifiée sans connexion depuis 24 mois : e-mail d'avertissement (`prevenu_inactivite_le`) ; 30 jours plus tard, toujours sans connexion : suppression | 50 + 50 |
-
-- **Suppression d'un compte** : une seule routine (`supprimerCompte`, `server/utils/compte.ts`), partagée avec `DELETE /api/compte` :
-  archives du stockage, puis utilisateur Auth ; le déclencheur `participation_apres_depart` garde la ligne anonyme du classement.
-  Elle refuse le compte de l'organisateur, que les requêtes des tâches excluent d'ailleurs déjà.
-- **Délais que la spec ne fixe pas, confirmés par le porteur** : 30 jours pour répondre à la demande de la liste d'attente
-  (`attenteReponseJours`), 30 jours entre l'e-mail d'inactivité et la suppression (`avertissementJours`), 30 jours pour une
-  candidature qui n'a jamais vérifié son adresse (`nonVerifieJours`).
-- **Dernière connexion** : `/compte` appelle `noter_connexion` (au plus une écriture par jour) quand le candidat lit son compte ;
-  elle annule l'avertissement d'inactivité.
-- **E-mails** : texte seul, lien vers `/compte`, envoyés seulement à une adresse utilisable ; un échec d'envoi ne marque personne,
-  et une panne du SMTP arrête la boucle. Un échec d'envoi se retente le lendemain.
-- **Le planificateur ne règle rien chez Vercel** : définir `CRON_SECRET` dans le projet, puis déployer `vercel.json`.
-
-## Appel du jury
-
-Le jury (dépôt privé, second projet Vercel) traite les réceptions de dépôt et délibère ; le site le réveille par
-`POST <NUXT_JURY_URL>` avec `Authorization: Bearer <NUXT_JURY_SECRET>`, sans corps (`server/utils/jury.ts`, `appelerJury`).
-Le jury répond tout de suite : **202** (passage lancé) ou **409** (déjà en cours, grâce au bail `verrou` en base). L'appel n'est jamais
-bloquant : délai de 5 s, un échec est journalisé (code seulement) et n'empêche jamais l'action de l'utilisateur ; sans les deux
-variables, rien n'est appelé et un seul avertissement est journalisé.
-
-- **Après une réception** : `POST /api/campagnes/[slug]/depot` appelle le jury après l'enregistrement, hors de la réponse (`waitUntil`).
-- **Tâche quotidienne** : `/api/cron/conservation` appelle aussi le jury (tâche `jury` du bilan : `code`, le code HTTP reçu ; 0 si non configuré ou injoignable).
-- **« Relancer le jury »** : bouton de la page d'administration d'une campagne (non brouillon), `POST /api/admin/campagnes/[slug]/jury`,
-  organisateur seulement (404 sinon), **un appel par minute et par adresse** (`PLAFONDS.jury`, 429 au-delà). Réponse `{ etat }` :
-  `lance`, `deja_en_cours`, `non_configure` ou `echec`.
-- **Bail d'exclusion** : migration `20261126000001_verrou.sql`, table `verrou` (nom, détenteur, expiration), fonctions `prendre_verrou` et
-  `rendre_verrou` réservées au rôle de service. Le jury prend `prendre_verrou('jury', <uuid du passage>, 330)` avant tout travail.
-- **Tests** : pgTAP (`14_verrou.test.sql`) et `tests/stack/jury.test.ts` (faux jury HTTP local : appel après dépôt avec le bon secret, jury injoignable,
-  bouton refusé à un candidat, limite d'une minute, tâche quotidienne, vingt prises simultanées du bail).
-
-## Droits du candidat
-
-- **Suppression du compte** : `DELETE /api/compte` (session requise, corps `{ pseudo }` : le pseudo exact). L'organisateur ne
-  peut pas supprimer son compte par là. Le serveur efface d'abord du bucket tout le dossier de chaque participation du compte
-  (archives du dépôt, de la réception, envois jamais confirmés) ; si le stockage échoue, il répond 500 et ne touche à rien
-  d'autre. Il supprime ensuite l'utilisateur Auth (clé de service) et la base fait le reste dans une seule transaction.
-  Les clés étrangères suppriment `compte` (cascade depuis `auth.users`) et mettent `participation.compte_id` à nul ; le déclencheur
-  `participation_apres_depart` (migration `20261124000003_suppression_compte.sql`) :
-  - supprime la participation entière (donc dépôt, réception, audits, vote du Boss, décisions) quand elle n'a pas de dépôt ou que
-    la campagne n'est ni `publiee` ni `archivee` ;
-  - sinon la garde pour le classement, avec ses scores, et vide le reste : réception supprimée, décision `fermeture_compte`
-    supprimée, commentaire du Boss effacé, dépôt vidé (chemin, empreinte, présentation, demande, fichiers exclus, outils d'IA,
-    traces, faits, alertes, case de réutilisation), audits réduits à la clé et à la note de chaque critère (plus de
-    justification, de preuve ni de réplique). Restent : notes, note d'outillage, note du Boss, décisions publiques
-    (disqualification, départage) avec leur justification.
-  Il s'applique aussi à toute suppression future d'un compte (inactivité de 24 mois).
-- **Case de réutilisation** : `regler_contact_reutilisation(campagne, accord)` (session du candidat, appel direct depuis la page)
-  met à jour la case de **sa** participation dans `depot` et dans `reception` quand elles existent, rien d'autre, même après la
-  clôture. Interrupteur sur la page de dépôt dès qu'il existe une réception ou un dépôt.
+- `POST /api/compte` : crée le compte de la personne connectée par GitHub (pseudo, charte, majorité) par la RPC
+  `creer_compte`, appelée avec la clé de service et l'id vérifié de la session ; limite par IP `compte` d'abord.
+  Corps non JSON : **415**. Règle métier refusée : **409** `{ message }` en français.
+  La version de la charte est `VERSION_CHARTE` (`shared/utils/compte.ts`), jamais reçue du client. Le compte naît
+  `actif` en mode `ouvert`, `en_attente` en mode `liste_attente` ; en mode `ferme`, **409**.
+- `POST /api/compte/pseudo` : change le pseudo d'un compte `en_attente` par la RPC `changer_pseudo`, appelée avec le JWT
+  de la session (figé une fois le compte actif). Sans session : **401** ; corps non JSON : **415** ; refus : **409**.
+- `server/middleware/admin.ts` : `/admin` et `/api/admin/**` répondent **404** à quiconque n'est pas admin (visiteur
+  compris), d'après `est_admin()` appelée avec la session de l'utilisateur.
+- `GET /api/admin/reglage` : mode d'accès courant (`{ mode }`). `POST /api/admin/reglage` : le règle par la RPC
+  `regler_mode_acces`, avec le JWT de l'admin. Corps non JSON : **415** ; mode inconnu : **409**. Page : `/admin`
+  (« Mode d'accès »), sans lien dans l'en-tête. Le rôle `admin` se pose à la main en SQL (voir `A-FAIRE.md`).
+- `GET /api/boss` : état du compte connecté (`etat`) et ses campagnes, lus sous son JWT (RLS). `POST /api/boss` : crée une campagne en
+  brouillon par la RPC `creer_campagne` (compte actif, une seule campagne active ; un brouillon échu passe d'abord en
+  `expiree`), renvoie `{ slug }`.
+  `GET`, `PATCH`, `DELETE /api/boss/[slug]` : la campagne (avec `compte_actif`, qui dit à la page si elle propose les actions, et `inscrits`, lu dans `campagne_phase`), son réglage (`modifier_campagne`, brouillon ou ouverte, règles
+  non figées) et la suppression du brouillon (`supprimer_brouillon`), toutes avec le JWT de l'appelant. Tout autre compte
+  que le Boss, visiteur compris : **404** ; corps non JSON (`POST`, `PATCH`, `DELETE`) : **415** ; règle métier : **409**.
+  `POST /api/boss/[slug]/ouverture` : ouvre le brouillon par `ouvrir_campagne` (mêmes **404**, **415** et **409**).
+  `GET /api/boss/[slug]` renvoie aussi `jeton_invitation` (campagne sur invitation, sinon nul), seule réponse qui le porte ;
+  `POST /api/boss/[slug]/invitation` : nouveau lien par `regenerer_invitation`, renvoie `{ jeton_invitation }` (mêmes **404**
+  et **415** ; campagne publique, bloquée ou échue, compte non actif : **409**). L'ancien lien n'ouvre plus rien.
+  Correspondance des erreurs (`CT404` → 404, `P0001` → 409) : `server/utils/campagne.ts`. Pages : `/boss`, `/boss/[slug]`.
+- `GET /api/campagnes` : campagnes publiques ouvertes de la vue `campagne_phase`, lues en anonyme (accueil). `GET
+  /api/campagnes/[slug]` : une campagne de la vue, lue avec la session si elle existe (le Boss voit sa campagne sur
+  invitation), sinon en anonyme, avec les critères et poids de `critere` ; hors de la vue (brouillon, invitation d'un
+  autre, bloquée, expirée) ou slug hors forme : **404**. Avec une session, la page reçoit aussi `connecte`, `compte_actif`,
+  `est_boss` et `inscrit` (lus sous RLS) ; les deux routes renvoient `places_restantes`. Pages : `/`, `/campagnes/[slug]`.
+  Un inscrit voit aussi la campagne sur invitation par cette adresse, sans le lien.
+- `GET /api/invitation/[jeton]` : la campagne du lien d'invitation par `lire_invitation`, même forme que
+  `/api/campagnes/[slug]`, jamais le jeton. Jeton hors forme (64 caractères hexadécimaux), inconnu ou régénéré, campagne
+  bloquée, brouillon ou expirée : **404** ; sans session : **401** (la page `/invitation/[jeton]` propose la connexion).
+  Pas de limite de débit : 256 bits ne se devinent pas.
+- `POST /api/campagnes/[slug]/inscription` (corps `{ connaissance: boolean, jeton?: string }`, la case de prise de
+  connaissance de l'envoi à Anthropic et, pour une campagne sur invitation, le jeton du lien, **404** hors forme) et `DELETE /api/campagnes/[slug]/inscription` : inscription par `sinscrire` et désinscription par
+  `se_desinscrire`, avec le JWT de l'appelant. Corps non JSON : **415** ; sans session : **401** ; slug hors forme ou
+  campagne hors de `campagne_phase` : **404** ; règle métier (complet, hors phase, Boss juge, case non cochée…) : **409** ;
+  limite de débit par compte (20 inscriptions par 24 h, tenue dans `sinscrire`, `CT429`) : **429**. La désinscription
+  est refusée (**409**) tant qu'il y a un dépôt ou une réception en attente.
+- Dépôt (story 3.3), avec le JWT de l'appelant, corps JSON (**415** sinon), session (**401**), slug dans `campagne_phase`
+  (**404**) : `POST /api/campagnes/[slug]/depot/url` vérifie par `peut_deposer` qu'il peut déposer (mêmes gardes que
+  `deposer`, sauf la limite de dépôts, contrôlée par `deposer` ; **409**), passe la limite de 20 envois par compte et par 24 h (**429**), construit le chemin
+  `<campagne_id>/<participation_id>/<uuid>.zip` et le signe avec la clé de service (`{ chemin, jeton }`) : le zip part
+  directement au bucket privé `depots`. `POST /api/campagnes/[slug]/depot` (corps `{ chemin, presentation, demande, droit }`) :
+  `deposer` crée la réception `en_attente`, puis `appelerJury` sans attendre ; règle métier : **409**, limite de 10 dépôts
+  par compte et par 24 h : **429**. `DELETE /api/campagnes/[slug]/depot` : `retirer_depot`, puis effacement du bucket des
+  chemins rendus (clé de service ; un échec est journalisé) ; sans dépôt : **404**. `GET /api/campagnes/[slug]` renvoie
+  aussi `reception` et `depot` de l'inscrit (lus sous RLS). Page : `/campagnes/[slug]/depot` (motifs d'un refus en phrases ;
+  pour un dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte SHA-256 ; jamais les alertes).
+- `GET /api/boss/[slug]/estimation` (story 4.2) : pour le Boss de la campagne (**404** sinon), `{ disponible: false,
+  raison }` tant que la campagne n'est pas ouverte, vivante, non bloquée, à plus de 48 h de ses résultats (borne de
+  `lancer_deliberation`, story 4.3), avec ses dépôts clos, sans réception en attente, sans clé déjà rangée, à moins de trois
+  lancements et avec au moins un audit à envoyer (lue avec la clé de service, que le Boss ne lit pas sous RLS) ; elle reste
+  disponible en `deliberation` sans clé (relance) ; sinon `{ disponible: true, pire_cas_usd, depense_usd }` par
+  `estimer_pire_cas` et `depense_audits` (somme des `cout_usd` des lancements précédents) avec le JWT du Boss. Affiché dans le bloc « Délibération » de `/boss/[slug]`.
+- `POST /api/boss/[slug]/lancement` (story 4.3, AD-4) : corps `{ plafond_usd, cle, engagements: [true, true, true], version }`.
+  Ordre : Boss (**404**), JSON (**415**), limite de 10 essais par adresse et par 24 h (**429** : le site n'est pas un testeur
+  de clés), corps (**400** ; **409** si `version` n'est plus celle de `shared/utils/engagements.ts`), forme de la clé
+  (`sk-ant-`, jamais `sk-ant-oat`, jeu de caractères et longueur bornés : **400**), `count_tokens` sur un texte fixe sans
+  code (`server/utils/anthropic.ts` ; refus 401 ou 403 : **400**, autre statut ou panne : **502**, sans consommer de
+  lancement), puis `lancer_deliberation` avec la clé de service et l'id vérifié du Boss (refus de la base : **409**, plafond
+  insuffisant avec l'écart), puis `appelerJury(…, 'lancement')`. Réponse `{ cle_fin, lancements }`. La clé n'est ni journalisée
+  ni renvoyée ni citée par une erreur ; le journal ne porte que le statut de `count_tokens`.
+- `POST /api/boss/[slug]/fin` (story 4.6, AD-5) : Boss (**404**), JSON (**415**), puis `terminer_deliberation` avec la clé de service et
+  l'id vérifié du Boss. Campagne en `deliberation` sans clé : elle passe en `prete`, les audits non terminés en `echec` (un
+  dépôt dont un audit est en échec n'a pas de score, ni classé ni noté zéro ; l'affichage vient à l'epic 5). Refus de la base
+  (clé encore rangée : le jury travaille, autre étape, compte non actif, campagne bloquée ; une campagne échue se termine) : **409**. Réponse
+  `{ statut: 'prete' }`. Sur `/boss/[slug]`, le bloc « Terminer la délibération » s'affiche en `deliberation` sans clé, à côté du
+  formulaire de relance (nouvelle clé, plafond relevable, `lancements < 3`).
+- `POST /api/boss/[slug]/actualisation` (story 4.7, AD-7) : Boss (**404**), JSON (**415**), campagne en `deliberation` (**409**
+  sinon), puis `consommer_debit` sur une empreinte de la campagne (une fois par minute, tous onglets et adresses confondus) :
+  sous la limite, `appelerJury(…, 'bouton')`. Réponse `{ etat, progression }` : `etat` vaut `lance`, `deja_en_cours`,
+  `non_configure`, `echec`, ou `attente` (limite atteinte : **200** sans appel, un double clic n'est pas une erreur) ;
+  `progression` vient de `progression_deliberation` (JWT du Boss). Sur `/boss/[slug]`, l'écran « Le jury délibère » (en
+  `deliberation` avec une clé rangée) l'appelle à l'ouverture et au bouton « Actualiser », puis relit la campagne (un passage à
+  `prete` se voit tout de suite, et ce constat envoie l'e-mail de fin). Juste après un lancement, l'appel d'ouverture consomme la
+  minute de la limite : un Actualiser dans la minute répond `attente`, ce qui est voulu (le lancement vient d'appeler le jury).
+- E-mail « délibération terminée » (story 4.7, AD-12) : `GET /api/boss/[slug]` d'une campagne `prete` pas encore prévenue, et le
+  cron, appellent `prevenirFin` (`server/utils/fin.ts`) : `reserver_envoi` pose `fin_prevenue_le` et rend l'adresse du Boss
+  au seul gagnant (rôle de service), qui envoie (`courrielFin`, `envoyerCourriel`). Un envoi en échec n'est pas rejoué
+  (un e-mail perdu plutôt qu'un doublon) ; l'adresse n'est ni renvoyée ni journalisée.
+- `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
+- `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
+  seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
+  au-delà du plafond : **429** avec `Retry-After`.
+- `server/utils/anthropic.ts` : `formeCleValide` et `verifierCle` (count_tokens, délai de 10 s, aucun SDK, réponse jamais lue).
+- `server/utils/jury.ts` : `appelerJury`, réveil du jury (dépôt privé) par `POST <NUXT_JURY_URL>`, jamais bloquant.
+- `server/utils/conservation.ts` : `verifierCron`, contrôle de `CRON_SECRET` en temps constant (**404** sinon).
+  `GET /api/cron/conservation`, appelée chaque jour par le planificateur de Vercel (`vercel.json`) : aucune tâche de
+  conservation encore (epic 6) ; elle réveille le jury (`appelerJury`, sans attendre ni échouer avec lui, filet d'AD-7), puis appelle
+  `cloturer_cles_expirees` (story 4.6) : toute clé du Boss de plus de 48 h, ou dont la campagne n'est plus en `deliberation`, est
+  clôturée de force (sans effet sous 48 h, revérifié sous le verrou), une campagne en erreur ne bloquant pas les suivantes ; enfin, il prévient le Boss de chaque campagne `prete` pas encore prévenue (`fins_a_prevenir`, `prevenirFin`). Réponse `{ cles_cloturees, echecs, fins_prevenues }`. Le cron étant quotidien, une clé vit au plus 48 h + 24 h.
+- `server/utils/courriel.ts` : `envoyerCourriel`, envoi d'un e-mail texte signé depuis `code-tank@ybdn.io` ; `courrielFin`, objet et texte de l'e-mail « délibération terminée ».
+- `server/utils/secret.ts` : `SECRET_MIN`, longueur minimale des secrets (32 caractères).
+- `server/utils/session.ts`, `server/utils/publique.ts` : session vérifiée par Auth, lecture anonyme de PostgREST à délai court.
 
 ### Pile locale et tests d'intégration
 
 ```sh
-pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle, boîte mail (http://127.0.0.1:54424, SMTP 54425)
-pnpm test:stack    # construit le site, le lance contre la pile (stockage compris), GitHub simulé ; comptes, dépôt, administration, droits, conservation (les tests antidatent des objets par `docker exec` sur la base locale)
+pnpm stack:start   # base, Auth, PostgREST, stockage, passerelle
+pnpm test:stack    # construit le site et le lance contre la pile (tests/stack/)
 pnpm stack:stop
 ```
 
-La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, etc. ; le stockage est inclus, environ 170 Mo). Ports décalés : API 54421, base
-54422, boîte mail 54424 (web) et 54425 (SMTP, `smtp_port` dans `supabase/config.toml`).
-`pnpm db:types` régénère `app/types/database.types.ts` depuis la base locale. Fournisseur GitHub en local : renseigner
-`SUPABASE_AUTH_EXTERNAL_GITHUB_CLIENT_ID` et `SUPABASE_AUTH_EXTERNAL_GITHUB_SECRET` pour une vraie connexion ; les
-tests créent leurs utilisateurs par l'API d'administration et n'en ont pas besoin.
+La pile est réduite pour tenir dans 3 Go (pas de studio, realtime, boîte mail, etc.). Ports décalés : API 54421, base 54422.
+Les tests de pile créent leurs utilisateurs par l'API d'administration d'Auth, ajoutent l'identité `github` en SQL dans
+`auth.identities` et ouvrent la session par mot de passe (une vraie connexion GitHub est impossible en CI). `pnpm db:types` régénère `app/types/database.types.ts`
+depuis la base locale.
 
 ### Variables d'environnement (noms seulement, aucune valeur dans le dépôt)
 
@@ -206,15 +141,13 @@ sont l'alternative locale (tests, pile locale) et **l'emportent** sur `SUPABASE_
 | `SUPABASE_URL` (ou `NUXT_PUBLIC_SUPABASE_URL`) | URL de Supabase. **Aussi nécessaire au build** : elle entre dans `connect-src` de la CSP. |
 | `SUPABASE_PUBLISHABLE_KEY` (repli `SUPABASE_ANON_KEY` ; ou `NUXT_PUBLIC_SUPABASE_KEY`) | Clé publique (`sb_publishable_…` ou anon) |
 | `SUPABASE_SECRET_KEY` (repli `SUPABASE_SERVICE_ROLE_KEY` ; ou `NUXT_SUPABASE_SECRET_KEY`) | Clé de service, serveur seulement |
-| `NUXT_SECRET_VERIFICATION` | Secret HMAC des liens de vérification, **32 caractères au moins** ; sans lui (ou trop court), aucun e-mail ne part |
 | `CRON_SECRET` | Secret du planificateur (variable de Vercel, **sans préfixe `NUXT_`**), 32 caractères au moins ; sans lui, `/api/cron/conservation` répond 404 |
 | `NUXT_SECRET_DEBIT` | Secret HMAC de l'empreinte des adresses IP (limite de débit), **32 caractères au moins** ; sans lui, les routes limitées répondent 503 |
-| `NUXT_VERSION_CHARTE` | Date de version de la charte (`AAAA-MM-JJ`), fixée par le porteur ; sans elle la création de compte répond 503 |
 | `NUXT_SITE_URL` | URL publique absolue du site (`https://…`), pour les liens des e-mails ; sans elle, aucun e-mail ne part |
-| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo ; en local, la boîte mail sur 54425, sans identifiant) |
-| `NUXT_JURY_URL` | Facultatif : URL complète de `POST /api/jury` du projet Vercel du jury (dépôt privé), `/api/jury` inclus. Sans elle ou sans le secret, le site n'appelle rien (un avertissement au journal) |
+| `NUXT_SMTP_HOST`, `NUXT_SMTP_PORT`, `NUXT_SMTP_USER`, `NUXT_SMTP_PASS` | SMTP (Brevo) |
+| `NUXT_JURY_URL` | Facultatif : URL complète de `POST /api/jury` du projet Vercel du jury (dépôt privé). Sans elle ou sans le secret, le site n'appelle rien |
 | `NUXT_JURY_SECRET` | Le secret de ce jury (`JURY_SECRET` de son projet), **32 caractères au moins** |
-| `NUXT_GITHUB_API` | Facultatif : base de l'API GitHub (`https://api.github.com` par défaut), changée par les tests |
+| `NUXT_ANTHROPIC_URL` | Ne se règle pas en ligne : URL du test `count_tokens` de la clé du Boss (défaut : `https://api.anthropic.com/v1/messages/count_tokens`), que les tests de pile pointent vers un faux serveur |
 
 ## Base de données
 
@@ -223,23 +156,129 @@ la pile réduite avec Auth et API est `stack:start` (voir plus haut). Rien n'est
 
 ```sh
 pnpm db:start     # démarre Postgres (port 54422)
-pnpm db:reset     # rejoue les migrations puis seed.sql
+pnpm db:reset     # rejoue les migrations
 pnpm db:test      # tests pgTAP de supabase/tests/
 pnpm db:stop
 ```
 
 Avec Colima, exporter `DOCKER_HOST=unix://$HOME/.colima/default/docker.sock` avant ces commandes.
 
-- `supabase/migrations/` : tables (SPECS § 13), fonctions et déclencheurs, droits (RLS, privilèges, vues).
-- `supabase/seed.sql` : données fictives pour le local et les tests. Ne jamais l'appliquer à préprod ni à prod :
-  il crée un compte organisateur.
-- Les tests simulent le rôle (`anon`, `authenticated`) et l'identité (`request.jwt.claims`), sans Auth ni API.
-- Refus par défaut : `anon` et `authenticated` n'ont aucun droit sans privilège et politique explicites. Le serveur
-  écrit avec la clé de service, qui contourne la RLS. Lire `classement`, `rapport` et `contact_reutilisation_lisible`
-  par les vues, et lister les colonnes de `depot` (`select *` est refusé : `contact_reutilisation` n'est pas lisible directement).
+Trois migrations datées du même jour (AD-13) :
 
-Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Ils ne contiennent que le texte publiable : la source complète, avec notes de rédaction, reste hors de ce dépôt. Les polices sont auto-hébergées
-(Space Mono et Plus Jakarta Sans, licence OFL) : le site n'appelle aucun service tiers.
+- `…_tables.sql` : `revoke all` par défaut pour `anon` et `authenticated` sur les tables, séquences et fonctions créées
+  ensuite par `postgres`, et retrait de l'`EXECUTE` implicite de `PUBLIC` ; tables `debit` (limite
+  de débit), `verrou` (bail global du jury), `critere` (critères et poids du jury, seule source), `reglage` (ligne unique,
+  `mode_acces`), `compte` (né de GitHub, pseudo unique sans tenir compte de la casse, figé une fois le compte actif) et
+  `participation` (une ligne par compte et par campagne, `inscrit` ou `retire`, prise de connaissance datée ; `compte_id`
+  nul si le compte est supprimé) et `campagne` (statut = actes d'AD-2, bornes de dates et 10 places par contraintes, une campagne active par Boss par index
+  unique partiel, `bloquee_le` et `motif_blocage` posés par la seule modération) ; bucket privé `depots` (20 Mo, zip
+  seulement, aucune politique de stockage), `reception` (une par participation, `en_attente` ou `refusee` avec ses motifs,
+  `tentatives`) et `depot` (un seul actif par participation, colonnes du contrôle et des tokens, AD-6).
+- `…_fonctions.sql` : `consommer_debit` (compte, refuse ou enregistre en une transaction, verrou consultatif par empreinte et
+  action), `prendre_verrou` (atomique : de deux prises simultanées, une seule réussit) et `rendre_verrou` ;
+  gardes `est_admin()` et `compte_actif()` ; `creer_compte` (identité GitHub lue dans `auth.identities`, charte, majorité,
+  pseudo ; compte `actif` en mode `ouvert`, `en_attente` en mode `liste_attente`, refus en mode `ferme`) ;
+  `regler_mode_acces` (garde `est_admin()`, trois modes) ; `changer_pseudo` (compte de l'appelant, `en_attente` seulement) ;
+  gardes `est_boss(campagne)` et `campagne_vivante(campagne)` (non bloquée, échéance non passée) ; déclencheur
+  `garder_transition` (graphe d'AD-2, quel que soit l'écrivain) ; `creer_campagne` (slug tiré du titre),
+  `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` (brouillon dont la clôture des dépôts est à venir), qui
+  prennent d'abord la ligne `for update`, puis la garde `campagne_vivante` ; vue `campagne_phase` (`security_invoker =
+  false`) : ce que le public voit d'une campagne, phase déduite de `now()` et des dates (`a_venir`, `inscriptions` où
+  inscription et dépôt sont ouverts ensemble, `depots_clos` ; hors `ouverte`, le statut), ni brouillon, ni expirée, ni
+  bloquée, et publique, ou dont l'appelant est le Boss, ou à laquelle il est inscrit, avec `places_restantes` calculées,
+  sans `boss_id` ni jeton (elle lit la vue interne `campagne_calculee`) ; `sinscrire` (campagne publique, ou sur
+  invitation avec son jeton exact, pour son Boss ou un inscrit, en phase d'inscription, verrou de la ligne campagne, Boss juge refusé, case cochée, places, limite de débit par compte
+  `consommer_debit` sous l'empreinte SHA-256 de l'id, 20 par 24 h) et `se_desinscrire` (statut `ouverte`, ni dépôt ni réception en attente ; efface une réception refusée) ;
+  `lire_invitation` (campagne d'un jeton, colonnes de `campagne_phase`) et `regenerer_invitation` (Boss, `for update`,
+  `campagne_vivante`, compte actif, campagne sur invitation) ; `jeton_invitation` (256 bits de pgcrypto en hexadécimal)
+  posé par `creer_campagne` et `modifier_campagne` pour une campagne sur invitation, retiré au passage en publique ;
+  `modifier_campagne` refuse moins de places que d'inscrits, un Boss inscrit qui deviendrait juge et tout changement de
+  visibilité dès le premier inscrit ; `peut_deposer` (gardes du dépôt, réception en attente refusée, rend la participation), `deposer` (`for update` sur
+  la campagne, phase de dépôt, Boss juge refusé, case, présentation rognée 1 à 500, demande 80 au plus, chemin de sa
+  participation et objet présent dans le bucket, limite de débit par compte 10 par 24 h,
+  premier dépôt qui pose `regles_figees_le`), `retirer_depot` (`for update`, statut `ouverte` avant la clôture, rend les
+  chemins de `effacer_archives`) et `effacer_archives(depot)` (zip et archive filtrée, seul chemin d'effacement, AD-11) ;
+  pour prive (story 3.4), `noter_tentative_reception` (compte un essai, rend le nombre), `refuser_reception` (motifs
+  `[{ code, message }]`, rend le zip à effacer) et `accepter_depot` (campagne ouverte et vivante, archive filtrée présente
+  à côté du zip ; crée ou remplace le dépôt avec les mesures de prive et la déclaration de la réception, supprime la
+  réception, rend les archives de l'ancien dépôt), toutes trois `for update` sur la campagne ; `estimer_pire_cas`
+  (story 4.2 : pire cas en dollars des audits à envoyer, tarifs par `cout_tokens` ; Boss de la campagne ou
+  rôle de service, **42501** sinon ; refusée au Boss avant la clôture des dépôts, pour ne pas trahir la taille des
+  dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, créé par `lancer_deliberation` et écrit par les
+  fonctions de la story 4.4. Délibération (story 4.3) : colonnes `plafond_usd`, `lancements` (3 au plus) et `cle_fin` (4
+  derniers caractères de la clé) de `campagne`, table `engagement` (version et date de chaque lancement) ;
+  `depense_audits` (somme des `cout_usd`, Boss ou rôle de service) ; `lancer_deliberation(compte, campagne, clé, plafond, version)`
+  (Boss de la campagne, aucune réception en attente, dépôts
+  clos, 48 h au moins avant les résultats, moins de trois lancements, aucune clé rangée, dépensé + pire cas ≤ plafond ; crée
+  ou remet en `a_envoyer` les audits, garde le coût et l'usage payés d'un audit en `echec`, passe en `deliberation`, et ne range la clé
+  dans Vault, secret `cle_boss_<campagne>`, qu'en dernier), `lire_cle_boss` (nulle hors `deliberation`) et `effacer_cle_boss`.
+  Clôture (story 4.6, AD-4 (4), AD-5 (3 à 5)), rôle de service seul : `cloturer_deliberation(campagne, forcer)` (verrou de la
+  campagne ; refuse en `CT409` tant qu'un audit est `en_cours`, sauf `forcer`, le cron, qui l'abandonne ; passe en `echec` les
+  audits `a_envoyer` ; efface la clé ; pose `prete` si tous les audits des dépôts non `trop_gros` sont `termine` et la campagne
+  non bloquée, sinon la campagne reste en `deliberation` sans clé ; hors `deliberation`, elle n'efface que la clé ; rend l'état
+  final), `terminer_deliberation(compte, campagne)` (Boss, compte actif, `deliberation` sans clé : `echec` pour les audits non
+  terminés, puis `prete`) et `cloturer_cles_expirees()` (cron : clés de plus de 48 h ou hors `deliberation`, rend `{ cles_cloturees, echecs }`).
+  Suivi (story 4.7) : `progression_deliberation(campagne)` (Boss seul : audits `termines`, `en_cours`, `echecs`, `a_envoyer` et
+  `cout_usd`, la somme de `depense_audits`), `reserver_envoi(campagne)` (pose `fin_prevenue_le` d'une campagne `prete` pas encore
+  prévenue, non bloquée, dont le Boss a une adresse, et rend `{ slug, titre, email }`, null pour tout autre appelant) et `fins_a_prevenir()` (ids des campagnes `prete` non bloquées dont le Boss a une adresse
+  non prévenues).
+  Le déclencheur `campagne_cle_sortie` efface la clé et `cle_fin` à toute sortie de `deliberation` (`prete`, `expiree`), et
+  `campagne_cle_suppression` à la suppression de la campagne (Vault n'a pas de clé étrangère).
+  Audits écrits par prive (story 4.4, AD-5, AD-6), toutes `for update` sur la campagne et refusées hors `deliberation` :
+  `cout_tokens(entrée, sortie, écriture de cache, lecture de cache, lot)`, seule source des tarifs (Opus 5.5 : 4 $ / 20 $
+  / 8 $ / 0,40 $ le million, lots à moitié prix ; changer de modèle change cette fonction) ;
+  `ecrire_tokens_exacts(dépôt, nb)` (écrit `nb_tokens_exact` ; au-delà de 100 000, `trop_gros` pour de bon et ses audits
+  `a_envoyer` en `echec`, jamais recréés) ; `marquer_envoye(audits, batch_id)` (passe les `a_envoyer` en `en_cours` avec leur
+  lot, ignore les autres, dont ceux d'un dépôt sans compte exact ou `trop_gros`, rend le nombre ; prive appelle donc
+  `ecrire_tokens_exacts` sur chaque dépôt avant `marquer_envoye`) ; `enregistrer_audit(audit, statut, resultat, usage)` (`termine` ou `echec`, rend le
+  reste du plafond). Contrat avec prive : `usage` est le tableau des tentatives payées, `[{ lot, input_tokens,
+  output_tokens, cache_creation_input_tokens, cache_read_input_tokens }]` (entiers ≥ 0, absents ou `null` = 0), ou `null` ; son coût
+  s'ajoute à `cout_usd` (écriture de cache au tarif d'une heure), ses tentatives à `usage` et `tentatives`. Pour `termine`,
+  `resultat` est la sortie du juré (SPECS § 6) plus `modele` et `version_consignes` (rangés rognés dans leurs colonnes, 1 à 80 caractères hors blancs ; prive retire
+  `\u0000` des textes du juré) : `criteres`
+  couvre exactement les critères non calculés du juré dans `critere` (aucune note sur `outillage_doc`), notes entières de 0
+  à 10 avec au moins une preuve `{ fichier, ligne, constat }`, `verdict` `convaincu` ou `pas_convaincu`, `replique` texte.
+  Pour `echec`, `resultat` est ignoré. `termine` est refusé pour un dépôt `trop_gros`. Un refus n'écrit rien, pas même le coût payé : l'appel suivant pour le même audit
+  porte toutes les tentatives payées depuis la dernière écriture réussie. Pas d'idempotence : chaque appel
+  ajoute son usage ; ne pas rejouer un appel dont la réponse est perdue sans relire `audit.tentatives`. Une preuve porte une
+  `ligne` entière ≥ 1.
+- `…_droits.sql` : RLS sur toutes les tables ; fonctions du socle réservées au rôle de service ; `compte` lisible par son
+  propriétaire seul, `creer_compte` exécutable par `service_role` seul ; gardes, `regler_mode_acces` et `changer_pseudo`
+  par `authenticated` seul (leurs règles vivent dans les fonctions) ; `reglage` lisible par l'admin seul (RLS sur
+  `est_admin()`), sans droit du rôle de service ; `critere` en lecture seule pour tous,
+  rôle de service compris,
+  remplie des huit critères (100 points) ; `campagne` lisible par son Boss seul, le rôle de service n'en lit que six
+  colonnes (prive, dont `brief` et `plafond_usd` pour la délibération) ;
+  `creer_campagne`, `modifier_campagne`, `supprimer_brouillon` et `ouvrir_campagne` exécutables par `authenticated` seul
+  (leurs règles vivent dans les fonctions) ; `est_boss`, `campagne_vivante` et le contrôle `verifier_reglages` par aucun
+  client ; `campagne_phase` lisible par `anon` et `authenticated`, sans droit du rôle de service ; `campagne_calculee`
+  lisible par aucun client ; `lire_invitation` et `regenerer_invitation` exécutables par `authenticated` seul (leurs règles
+  vivent dans les fonctions) ; `participation`
+  lisible par son compte seul (RLS), sans écriture directe, le rôle de service n'en lit que deux colonnes (prive) ;
+  `sinscrire` et `se_desinscrire`
+  exécutables par `authenticated` seul (leurs règles, limite de débit comprise, vivent dans les fonctions) ; `reception`
+  et `depot` lisibles par le compte de leur participation seul (RLS, colonnes choisies : ni chemins, ni tentatives, ni
+  faits, note d'outillage et alertes), sans écriture directe ; le rôle de service lit cinq colonnes de `reception`
+  (prive) et six de `depot` (`id`, `participation_id`, `chemin_filtre`, `faits`, `nb_tokens_exact`, `trop_gros` : ce que
+  prive envoie au jury) ; `peut_deposer`, `deposer` et `retirer_depot` exécutables par `authenticated` seul (leurs
+  règles vivent dans les fonctions) ; `effacer_archives`, `noter_tentative_reception`, `refuser_reception` et
+  `accepter_depot` par le rôle de service seul ; `audit` sans politique ni droit client, le rôle de service la lit
+  seulement ; `estimer_pire_cas` et `depense_audits` exécutables par `authenticated` et le rôle de service (garde du Boss dans la fonction) ; `engagement`
+  sans politique ni droit client ni droit direct du rôle de service ; `lancer_deliberation`, `lire_cle_boss` et
+  `effacer_cle_boss` par le rôle de service seul (jamais `authenticated` : la règle `count_tokens` est tenue par la route) ;
+  `cloturer_deliberation`, `terminer_deliberation` et `cloturer_cles_expirees` par le rôle de service seul (la route passe l'id
+  vérifié du Boss), `reserver_envoi` et `fins_a_prevenir` par le rôle de service seul, `progression_deliberation` par `authenticated` seul
+  (garde du Boss dans la fonction), leurs fonctions internes (`effacer_cle_sortie`, `audits_termines`, `abandonner_audits`) par aucun rôle ;
+  `ecrire_tokens_exacts`, `marquer_envoye` et `enregistrer_audit` par le rôle de service seul, `cout_tokens` par aucun
+  rôle ; le schéma `vault` est fermé à `anon` et `authenticated`.
+
+Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
+fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux
+sessions réelles par `dblink`).
+
+Les textes légaux sont les fichiers de `content/`, rendus tels quels (Markdown). Ils ne contiennent que le texte publiable :
+la source complète, avec notes de rédaction, reste hors de ce dépôt. Les polices sont auto-hébergées (Space Mono et Plus
+Jakarta Sans, licence OFL) : le site n'appelle aucun service tiers.
 
 ## Déploiement
 

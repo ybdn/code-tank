@@ -1,19 +1,14 @@
-// Retire le dépôt : la fonction SQL, avec la session de l'utilisateur, décide si c'est permis ; le serveur
-// efface ensuite la réception et les archives. Il peut n'exister qu'une réception, sans dépôt accepté.
-export default defineEventHandler(async (event) => {
-  const { client, campagne, participation, service } = await contexteParticipation(event)
-  // Les chemins se lisent avant la fonction : elle supprime la ligne du dépôt.
-  const { data: depot } = await service.from('depot').select('chemin_stockage').eq('participation_id', participation.id).maybeSingle()
-  const { data: reception } = await service.from('reception').select('chemin_stockage').eq('participation_id', participation.id).maybeSingle()
-  if (!depot && !reception) throw createError({ statusCode: 404, statusMessage: 'Tu n\'as pas de dépôt dans cette campagne.' })
+import { serverSupabaseServiceRole } from '#supabase/server'
 
-  if (depot) {
-    const { error } = await client.rpc('retirer_depot', { p_campagne_id: campagne.id })
-    if (error) throw erreurFonction(error, 'Retrait impossible.')
-  } else if (!STATUTS_DEPOT.includes(campagne.statut)) {
-    // Même règle que retirer_depot : plus de retrait une fois la délibération commencée.
-    throw createError({ statusCode: 409, statusMessage: 'Retrait impossible\u00a0: la délibération a commencé.' })
-  }
-  await solderReception(event, campagne.id, participation.id, [depot?.chemin_stockage, reception?.chemin_stockage])
+// Retrait du dépôt (story 3.3) : retirer_depot, avec le JWT de l'appelant, revérifie tout, supprime la ligne et rend les
+// chemins de effacer_archives (AD-11), que la route efface du bucket avec la clé de service. La ligne est déjà partie : un
+// échec d'effacement est journalisé (code seulement), pas montré au candidat.
+// shortcut: un objet dont l'effacement échoue reste dans le bucket ; objets_abandonnes (AD-11, epic 6) le nettoiera.
+export default defineEventHandler(async (event) => {
+  const { client, id } = await campagneDeLInscrit(event)
+  const { data: chemins, error } = await client.rpc('retirer_depot', { p_campagne: id })
+  if (error) erreurCampagne(error, 'Retrait d\'un dépôt :', 'Le retrait a échoué. Réessaie dans un instant.')
+  const { error: erreurStockage } = await serverSupabaseServiceRole(event).storage.from('depots').remove(chemins ?? [])
+  if (erreurStockage) console.error('Effacement des archives : échec du stockage.')
   return { ok: true }
 })

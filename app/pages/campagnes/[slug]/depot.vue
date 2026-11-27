@@ -1,232 +1,198 @@
 <script setup lang="ts">
-const slug = String(useRoute().params.slug)
-const campagne = await useCampagne(slug)
-useHead({ title: `Dépôt · ${campagne.value.titre}` })
+// Dépôt d'un inscrit (story 3.3) : l'état de sa réception et de son dépôt, le formulaire, le retrait. La page ne propose que
+// l'action que deposer ou retirer_depot accepteront, sinon une phrase qui dit pourquoi ; la base revérifie tout.
+const slug = useRoute().params.slug as string
+const url = `/api/campagnes/${encodeURIComponent(slug)}`
+type Page = CampagnePublique & { connecte: boolean; compte_actif: boolean; est_boss: boolean; inscrit: boolean; reception: ReceptionLue | null; depot: (DepotLu & Required<Pick<DepotLu, 'fichiers_exclus'>>) | null }
+const lecture = `${url}?exclus=1` // avec la liste des fichiers exclus du dépôt
+const { data, error } = await useFetch<Page>(lecture)
+if (error.value?.statusCode === 404) throw createError({ statusCode: 404, statusMessage: 'Page introuvable', fatal: true })
+useHead({ title: () => `Dépôt · ${data.value?.titre ?? 'Campagne'}` })
+
+const enAttente = computed(() => data.value?.reception?.statut === 'en_attente')
+const close = (c: Page) => Date.parse(c.cloture_depot) <= Date.now()
+// Mêmes refus, dans le même ordre, que peut_deposer et deposer.
+const pourquoiPas = computed(() => {
+  const c = data.value
+  if (!c) return ''
+  if (!c.connecte) return 'Connecte-toi avec GitHub pour déposer.'
+  if (!c.compte_actif) return 'Ton compte n\'est pas actif : tu ne peux pas déposer.'
+  if (close(c)) return 'La date limite de dépôt est passée.'
+  if (c.phase !== 'inscriptions') return 'Le dépôt n\'est pas ouvert.'
+  if (c.est_boss && c.role_boss === 'juge') return 'Tu juges cette campagne : tu n\'y déposes pas.'
+  if (!c.inscrit) return 'Inscris-toi à la campagne pour y déposer.'
+  if (enAttente.value) return 'Ton dépôt précédent est en cours de contrôle : attends son résultat pour redéposer.'
+  return ''
+})
+// Mêmes refus que retirer_depot.
+const pasDeRetrait = computed(() => {
+  const c = data.value
+  if (!c?.depot) return ''
+  if (!c.compte_actif) return 'Ton compte n\'est pas actif : tu ne peux pas retirer ton dépôt.'
+  if (c.statut !== 'ouverte' || close(c)) return 'Le dépôt est clos : tu ne peux plus le retirer.'
+  if (enAttente.value) return 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.'
+  return ''
+})
 
 const supabase = useSupabaseClient()
-const user = useSupabaseUser()
-
-type Motif = { code?: string; message?: string }
-type Reception = { contact_reutilisation: boolean; etat: 'en_attente' | 'acceptee' | 'refusee'; motifs_refus: Motif[]; recue_le: string; traitee_le: string | null }
-type Recu = { contact_reutilisation: boolean; sha256: string; taille_octets: number; nb_fichiers: number; fichiers_exclus: unknown[]; nb_tokens: number; depose_le: string }
-
-const pret = ref(false)
-const compteAutorise = ref(false)
-const inscrit = ref(false)
-const reception = ref<Reception | null>(null)
-const recu = ref<Recu | null>(null)
-const etape = ref(0)
 const occupe = ref(false)
+const envoi = ref(false) // un dépôt part : seul cas où le bouton du formulaire dit « Envoi en cours… »
 const confirmer = ref(false)
 const cle = ref(0) // change après un dépôt : le formulaire repart vide
-const erreurs = ref<ErreursDepot>({})
-const message = ref('')
+const annonce = ref('')
 const alerte = ref('')
-// Case de réutilisation : la dernière déclaration (celle de l'envoi en cours, sinon celle du dépôt accepté).
-const accord = computed(() => reception.value?.contact_reutilisation ?? recu.value?.contact_reutilisation ?? false)
-const peutRetirer = computed(() => ['inscriptions', 'depot'].includes(campagne.value.statut) && Boolean(reception.value || recu.value))
-
-async function charger() {
-  if (!user.value) return
-  const id = user.value.sub
-  const { data: compte } = await supabase.from('compte').select('etat').eq('id', id).maybeSingle()
-  compteAutorise.value = compte?.etat === 'autorise'
-  const { data: participation } = await supabase
-    .from('participation').select('id').eq('campagne_id', campagne.value.id).eq('compte_id', id).eq('etat', 'inscrit').maybeSingle()
-  inscrit.value = Boolean(participation)
-  if (!participation) return
-  const [r, d] = await Promise.all([
-    supabase.from('ma_reception').select('etat, motifs_refus, recue_le, traitee_le, contact_reutilisation').eq('participation_id', participation.id).maybeSingle(),
-    supabase.from('mon_depot').select('sha256, taille_octets, nb_fichiers, fichiers_exclus, nb_tokens, depose_le, contact_reutilisation').eq('participation_id', participation.id).maybeSingle(),
-  ])
-  reception.value = r.data as Reception | null
-  recu.value = d.data as Recu | null
-}
-onMounted(async () => {
-  await charger()
-  pret.value = true
-})
-watch(user, async () => {
-  if (pret.value) await charger()
-})
-
-// Après un envoi ou un retrait, le message en haut de page est loin du bouton : on l'amène à l'écran.
-// Pas pour la case de réutilisation : son état coché suffit, et le saut éloignerait de la case.
-const statut = useTemplateRef<HTMLElement>('statut')
-const erreurGlobale = useTemplateRef<HTMLElement>('erreurGlobale')
-async function montrerAvis() {
-  await nextTick()
-  ;(alerte.value ? erreurGlobale.value : message.value ? statut.value : null)?.scrollIntoView({ block: 'nearest' })
-}
-
-const messageServeur = (e: unknown, defaut: string) => (e as { data?: { statusMessage?: string } }).data?.statusMessage ?? defaut
-
-async function deposer(fichier: File, corps: Record<string, unknown>) {
-  erreurs.value = {}
-  message.value = alerte.value = ''
-  try {
-    // 1. Le serveur contrôle qui dépose et la déclaration, puis délivre une URL d'envoi.
-    etape.value = 1
-    const { chemin, token } = await $fetch<{ chemin: string; token: string }>(`/api/campagnes/${slug}/depot/url`, { method: 'POST', body: corps })
-    // 2. L'archive part directement au stockage, sans passer par le serveur. Le type est fixé : certains
-    // systèmes envoient un zip sous un autre type, que le bucket refuserait.
-    etape.value = 2
-    const { error } = await supabase.storage.from('depots')
-      .uploadToSignedUrl(chemin, token, fichier.slice(0, fichier.size, 'application/zip'), { contentType: 'application/zip' })
-    if (error) {
-      alerte.value = 'Le stockage a refusé l\'archive\u00a0: elle dépasse 20 Mo, n\'est pas un zip, ou l\'envoi a été interrompu. Réessaie.'
-      return
-    }
-    // 3. Le serveur enregistre la réception et efface l'ancienne archive.
-    etape.value = 3
-    await $fetch(`/api/campagnes/${slug}/depot`, { method: 'POST', body: { ...corps, chemin } })
-    message.value = 'Archive reçue. Elle est maintenant en cours de contrôle.'
-    await charger()
-    cle.value++
-  } catch (e) {
-    erreurs.value = (e as { data?: { data?: { erreurs?: ErreursDepot } } }).data?.data?.erreurs ?? {}
-    if (!Object.keys(erreurs.value).length) alerte.value = messageServeur(e, 'Le dépôt a échoué. Réessaie dans un instant.')
-  } finally {
-    etape.value = 0
-    await montrerAvis()
-  }
-}
-
-async function regler(e: Event) {
-  const champ = e.target as HTMLInputElement
-  const voulu = champ.checked
-  occupe.value = true
-  message.value = alerte.value = ''
-  const { error } = await supabase.rpc('regler_contact_reutilisation', { p_campagne_id: campagne.value.id, p_accord: voulu })
-  occupe.value = false
-  if (error) {
-    champ.checked = !voulu
-    alerte.value = error.code === 'P0001' ? error.message : 'Le réglage n\'a pas pu être enregistré. Réessaie dans un instant.'
-    return
-  }
-  message.value = voulu ? 'Noté\u00a0: l\'organisateur pourra te contacter au sujet d\'une réutilisation.' : 'Noté\u00a0: l\'organisateur ne te contactera pas au sujet d\'une réutilisation.'
-  await charger()
-}
-
-// Le bouton cliqué disparaît : le focus va à « Annuler » (choix sans risque), puis revient au bouton.
-const boutonRetrait = useTemplateRef<HTMLButtonElement>('boutonRetrait')
+const nonActualisee = ref(false)
+const titreEtat = useTemplateRef<HTMLElement>('titreEtat')
+const zoneAlerte = useTemplateRef<HTMLElement>('zoneAlerte')
 const boutonAnnuler = useTemplateRef<HTMLButtonElement>('boutonAnnuler')
+const boutonRetrait = useTemplateRef<HTMLButtonElement>('boutonRetrait')
+
+// Relit la page sans toucher à ce qui est affiché en cas d'échec : une phrase et un bouton « Actualiser » le disent.
+async function actualiser() {
+  try {
+    data.value = await $fetch<Page>(lecture)
+    nonActualisee.value = false
+  } catch {
+    nonActualisee.value = true
+  }
+}
+
+// « Actualiser » : annonce seulement si la relecture a réussi (sinon la phrase d'échec et son bouton restent).
+async function relire() {
+  if (occupe.value) return
+  occupe.value = true
+  annonce.value = ''
+  await actualiser()
+  occupe.value = false
+  if (nonActualisee.value) return
+  annonce.value = 'État actualisé.'
+  // Le bouton a pu disparaître avec l'état (contrôle terminé) : le focus revient au titre de l'état.
+  await nextTick()
+  titreEtat.value?.focus()
+}
+
+// Action terminée : annonce lue par la zone role="status", focus sur le titre de l'état. Refus : alerte et focus dessus ;
+// une règle a pu changer entre-temps (409) : la page se remet à jour sans démonter le formulaire.
+async function agir(action: () => Promise<void>, fait: string) {
+  if (occupe.value) return
+  occupe.value = true
+  annonce.value = ''
+  alerte.value = ''
+  try {
+    await action()
+    await actualiser()
+    confirmer.value = false
+    annonce.value = fait
+    await nextTick()
+    titreEtat.value?.focus()
+  } catch (e) {
+    const err = e as { statusCode?: number; data?: { message?: string }; message?: string }
+    alerte.value = err.data?.message ?? err.message ?? 'Une erreur est survenue.'
+    if (err.statusCode === 409) await actualiser()
+    await nextTick()
+    zoneAlerte.value?.focus()
+  } finally {
+    occupe.value = false
+  }
+}
+
+const deposer = (fichier: File, corps: { presentation: string; demande: string; droit: boolean }) => agir(async () => {
+  envoi.value = true
+  // 1. Le site vérifie qu'on peut déposer et signe un envoi vers un chemin qu'il choisit.
+  const { chemin, jeton } = await $fetch<{ chemin: string; jeton: string }>(`${url}/depot/url`, { method: 'POST', body: {} })
+  // 2. L'archive part directement au bucket. Type fixé sur le fichier lui-même (l'envoi est un formulaire multipart, qui prend le
+  // type du fichier) : un navigateur donne souvent un type vide ou autre à un zip, que le bucket refuserait.
+  const { error: e } = await supabase.storage.from('depots').uploadToSignedUrl(chemin, jeton, fichier.slice(0, fichier.size, 'application/zip'), { contentType: 'application/zip' })
+  if (e) throw new Error('Le stockage a refusé l\'archive : elle dépasse 20 Mo, n\'est pas un zip, ou l\'envoi a été interrompu. Réessaie.')
+  // 3. deposer enregistre la réception, que le jury contrôlera.
+  await $fetch<unknown>(`${url}/depot`, { method: 'POST', body: { chemin, ...corps } })
+  cle.value++
+}, 'Archive reçue : son contrôle est en cours.').finally(() => { envoi.value = false })
+
+const retirer = () => agir(async () => { await $fetch<unknown>(`${url}/depot`, { method: 'DELETE', body: {} }) }, 'Dépôt retiré. Tu restes inscrit : tu peux redéposer avant la clôture.')
+
+// Le bouton cliqué disparaît : le focus va sur « Annuler », choix sans risque, et revient sur « Retirer » à l'annulation.
 async function demanderRetrait(v: boolean) {
   confirmer.value = v
   await nextTick()
   ;(v ? boutonAnnuler : boutonRetrait).value?.focus()
-}
-
-async function retirer() {
-  occupe.value = true
-  message.value = alerte.value = ''
-  try {
-    await $fetch(`/api/campagnes/${slug}/depot`, { method: 'DELETE' })
-    message.value = 'Dépôt retiré. Tu es toujours inscrit\u00a0: tu peux redéposer avant la clôture.'
-  } catch (e) {
-    alerte.value = messageServeur(e, 'Le retrait a échoué.')
-  }
-  confirmer.value = false
-  occupe.value = false
-  await charger()
-  await montrerAvis()
 }
 </script>
 
 <template>
   <section class="section">
     <div class="wrap texte texte--etroit">
-      <p><NuxtLink class="retour" :to="`/campagnes/${slug}`">← {{ campagne.titre }}</NuxtLink></p>
-      <h1>Mon dépôt</h1>
-      <InvitePrompt v-if="depotOuvert(campagne)" commande="$ code-tank deposer">dépôt ouvert jusqu'au {{ formaterDate(campagne.cloture_depot) }}</InvitePrompt>
+      <p v-if="error && !data" role="alert" class="avis avis--erreur">La campagne ne peut pas être lue pour le moment.</p>
+      <template v-else-if="data">
+        <p><NuxtLink :to="`/campagnes/${data.slug}`">← {{ data.titre }}</NuxtLink></p>
+        <h1>Mon dépôt</h1>
+        <p>Dépôts ouverts jusqu'au {{ dateParis(data.cloture_depot) }} (heure de Paris). Un nouveau dépôt remplace le précédent.</p>
 
-      <div ref="statut" role="status" aria-live="polite"><p v-if="message" class="avis">{{ message }}</p></div>
-      <p v-if="alerte" ref="erreurGlobale" role="alert" class="avis avis--erreur">{{ alerte }}</p>
+        <h2 ref="titreEtat" tabindex="-1">État</h2>
+        <p role="status" aria-live="polite">{{ annonce }}</p>
+        <p v-if="nonActualisee">La page n'a pas pu être actualisée. <button class="btn" type="button" :aria-disabled="occupe" @click="relire">Actualiser</button></p>
+        <div ref="zoneAlerte" tabindex="-1">
+          <p v-if="alerte" role="alert" class="avis avis--erreur">{{ alerte }}</p>
+        </div>
 
-      <p v-if="!pret">Chargement…</p>
-      <template v-else-if="!user">
-        <p>Connecte-toi avec GitHub pour déposer ton code.</p>
-        <p class="btns"><NuxtLink class="btn btn--primary" to="/compte">Se connecter</NuxtLink></p>
-      </template>
-      <template v-else-if="!compteAutorise || !inscrit">
-        <p v-if="!compteAutorise">Ton compte doit être créé et autorisé par l'organisateur pour déposer du code.</p>
-        <p v-else>Tu n'es pas inscrit à cette campagne.</p>
-        <p class="btns"><NuxtLink class="btn btn--primary" :to="compteAutorise ? `/campagnes/${slug}` : '/compte'">{{ compteAutorise ? 'S\'inscrire' : 'Voir mon compte' }}</NuxtLink></p>
-      </template>
-
-      <template v-else>
-        <template v-if="reception">
-          <h2>État de ta réception</h2>
-          <div class="terminal" :data-etat="reception.etat">
-            <p class="terminal__barre" aria-hidden="true"><i /><i /><i /><span>reception.log</span></p>
-            <div class="terminal__corps">
-              <p v-if="reception.etat === 'en_attente'" class="etat" data-etat="en_attente">
-                Reçu, en cours de contrôle (envoyé le {{ formaterDate(reception.recue_le) }}).
-              </p>
-              <template v-else-if="reception.etat === 'refusee'">
-                <p class="etat" data-etat="refusee">Ton archive a été refusée. Corrige ce qui suit, puis redépose.</p>
-                <ul>
-                  <li v-for="(m, i) in reception.motifs_refus" :key="i">{{ m.message }}</li>
-                </ul>
-              </template>
-              <p v-else class="etat" data-etat="acceptee">Ton archive est acceptée. Voici ton reçu.</p>
-            </div>
-          </div>
-        </template>
-
-        <template v-if="recu">
-          <h2>Reçu de ton dépôt accepté</h2>
-          <div class="terminal">
-            <p class="terminal__barre" aria-hidden="true"><i /><i /><i /><span>recu.txt</span></p>
-            <dl class="dates terminal__corps">
-              <div><dt>Fichiers retenus</dt><dd>{{ recu.nb_fichiers }}</dd></div>
-              <div><dt>Fichiers exclus</dt><dd>{{ recu.fichiers_exclus.length }}</dd></div>
-              <div><dt>Taille</dt><dd>{{ recu.nb_tokens.toLocaleString('fr-FR') }} tokens</dd></div>
-              <div><dt>Empreinte SHA-256</dt><dd class="empreinte">{{ recu.sha256 }}</dd></div>
-              <div><dt>Déposé le</dt><dd>{{ formaterDate(recu.depose_le) }}</dd></div>
-            </dl>
-          </div>
-          <p v-if="reception && reception.etat !== 'acceptee'" class="note-claire">Ce reçu reste valable tant que ton nouvel envoi n'est pas accepté.</p>
-        </template>
-
-        <template v-if="reception || recu">
-          <h2>Réutilisation de ton code</h2>
-          <p>
-            Participer ne donne aucun droit sur ton code&nbsp;: toute réutilisation passe par un accord écrit séparé. Cette case dit seulement
-            si l'organisateur peut te contacter pour en parler. Tu peux la modifier à tout moment, même après la clôture&nbsp;; elle n'a aucun effet sur ta note.
+        <template v-if="data.reception">
+          <!-- Le contrôle se termine sans que la page le sache : « Actualiser » relit l'état. -->
+          <p v-if="data.reception.statut === 'en_attente'">
+            Contrôle en cours de ton archive envoyée le {{ dateParis(data.reception.cree_le) }}.
+            <button class="btn" type="button" :aria-disabled="occupe" @click="relire">Actualiser</button>
           </p>
-          <div class="champ champ--case">
-            <input id="reutilisation" type="checkbox" :checked="accord" :disabled="occupe || etape > 0" @change="regler">
-            <label for="reutilisation">D'accord pour être contacté au sujet d'une réutilisation</label>
-          </div>
-        </template>
-
-        <template v-if="depotOuvert(campagne)">
-          <details v-if="reception || recu" class="bloc redepot" :open="etape > 0 || Boolean(alerte) || Object.keys(erreurs).length > 0">
-            <summary>Redéposer une nouvelle version</summary>
-            <div class="bloc__corps">
-              <p>Un nouvel envoi remplace le précédent, jusqu'à la clôture le {{ formaterDate(campagne.cloture_depot) }}.</p>
-              <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" redepot :reutilisation="accord" @envoyer="deposer" />
-            </div>
-          </details>
           <template v-else>
-            <h2>Déposer ton code</h2>
-            <FormulaireDepot :key="cle" :erreurs="erreurs" :etape="etape" :redepot="false" :reutilisation="accord" @envoyer="deposer" />
+            <p>Ton archive envoyée le {{ dateParis(data.reception.cree_le) }} a été refusée{{ pourquoiPas ? '' : '. Corrige ce qui suit, puis redépose' }}&nbsp;:</p>
+            <ul>
+              <li v-for="(m, i) in data.reception.motifs ?? []" :key="i" class="brief">{{ m.message }}</li>
+            </ul>
           </template>
         </template>
-        <p v-else-if="STATUTS_RESULTATS.includes(campagne.statut)" class="btns"><NuxtLink class="btn btn--primary" :to="`/campagnes/${slug}/resultat`">Voir mon entretien et mon rapport</NuxtLink></p>
-        <p v-else>Le dépôt est clos pour cette campagne.</p>
-
-        <template v-if="peutRetirer">
-          <h2>Retirer mon dépôt</h2>
-          <p v-if="!confirmer" class="btns"><button ref="boutonRetrait" class="btn" type="button" :disabled="occupe || etape > 0" @click="demanderRetrait(true)">Retirer mon dépôt</button></p>
+        <template v-if="data.depot">
+          <p>Ton dépôt accepté le {{ dateParis(data.depot.depose_le) }}&nbsp;:</p>
+          <p class="brief">{{ data.depot.presentation }}</p>
+          <p v-if="data.depot.demande">Ta demande&nbsp;: {{ data.depot.demande }}</p>
+          <!-- Ce que le jury lira (SPECS § 4) ; les alertes sont réservées au Boss juge (epic 5). -->
+          <dl class="dates">
+            <dt>Fichiers retenus</dt>
+            <dd>{{ data.depot.nb_fichiers }}</dd>
+            <dt>Fichiers exclus (listés au jury, pas lus)</dt>
+            <dd>
+              {{ data.depot.fichiers_exclus.length }}
+              <details v-if="data.depot.fichiers_exclus.length">
+                <summary>Voir la liste</summary>
+                <ul>
+                  <li v-for="f in data.depot.fichiers_exclus" :key="f.chemin">{{ f.chemin }} ({{ RAISONS_EXCLUSION[f.raison] ?? f.raison }})</li>
+                </ul>
+              </details>
+            </dd>
+            <dt>Taille</dt>
+            <dd>~{{ data.depot.nb_tokens_estime.toLocaleString('fr-FR') }} tokens (estimation)</dd>
+            <dt>Empreinte SHA-256 de l'archive</dt>
+            <dd class="empreinte">{{ data.depot.sha256 }}</dd>
+          </dl>
+          <p v-if="pasDeRetrait">{{ pasDeRetrait }}</p>
+          <p v-else-if="!confirmer" class="btns"><button ref="boutonRetrait" class="btn" type="button" :aria-disabled="occupe" @click="demanderRetrait(true)">Retirer mon dépôt</button></p>
           <div v-else class="avis" role="group" aria-labelledby="retrait-titre">
             <p id="retrait-titre">Ton dépôt et son archive seront supprimés. Tu resteras inscrit.</p>
             <p class="btns">
-              <button class="btn btn--primary" type="button" :disabled="occupe" @click="retirer">Confirmer le retrait</button>
-              <button ref="boutonAnnuler" class="btn" type="button" :disabled="occupe" @click="demanderRetrait(false)">Annuler</button>
+              <button class="btn btn--primary" type="button" :aria-disabled="occupe" @click="retirer">Confirmer le retrait</button>
+              <button ref="boutonAnnuler" class="btn" type="button" :aria-disabled="occupe" @click="demanderRetrait(false)">Annuler</button>
             </p>
           </div>
+        </template>
+        <p v-if="!data.reception && !data.depot && data.inscrit">Tu n'as pas encore déposé.</p>
+
+        <!-- Données périmées (actualisation échouée) : aucun formulaire, qui partirait sur un état faux. -->
+        <template v-if="!nonActualisee">
+          <template v-if="pourquoiPas">
+            <p>{{ pourquoiPas }}</p>
+            <p v-if="!data.connecte" class="btns"><NuxtLink class="btn btn--primary" to="/compte">Me connecter</NuxtLink></p>
+          </template>
+          <template v-else>
+            <h2>{{ data.depot ? 'Redéposer' : 'Déposer' }}</h2>
+            <FormulaireDepot :key="cle" :boss-pseudo="data.boss_pseudo" :occupe="occupe" :envoi="envoi" :redepot="!!data.depot" @envoyer="deposer" />
+          </template>
         </template>
       </template>
     </div>

@@ -1,458 +1,320 @@
-// Inscription, dépôt, reçu, retrait et désinscription contre la pile Supabase locale (stockage compris)
-// et le serveur Nuxt construit. Le contrôle du zip n'existe pas ici : les tests le simulent par la clé de service.
+// Dépôt (story 3.3) contre la pile locale et le serveur construit : URL signée et vrai envoi au bucket depots, deposer et
+// appel du jury (qui échoue ici : le dépôt réussit quand même), refus (415, 401, 404, 409), retrait et effacement des
+// archives, page de dépôt.
+import { createServer, type IncomingHttpHeaders } from 'node:http'
+import { createHash, randomBytes, randomInt } from 'node:crypto'
 import { afterAll, beforeAll, describe, expect, it } from 'vitest'
-import { admin, anon, API, api, campagne, candidat, demarrer, inscrire, nettoyer, utilisateur, zip, type Utilisateur } from './aide'
+import { API, connexion, demarrer, nettoyer, sql, statut, utilisateur } from './aide'
 
-let serveur: { url: string; arreter: () => void }
-const appeler = (m: string, c: string, u?: Utilisateur, corps?: unknown) => api(serveur.url, m, c, u, corps)
-const stockage = () => admin.storage.from('depots')
-const existe = async (chemin: string) => (await stockage().exists(chemin)).data
+let serveur: Awaited<ReturnType<typeof demarrer>>
+const ids: string[] = []
+const jour = 86_400_000
+const marque = randomBytes(4).toString('hex')
+// Faux jury : note chaque appel et répond 500, comme un jury en panne.
+const appelsJury: { headers: IncomingHttpHeaders; corps: string }[] = []
+const jury = createServer((req, res) => {
+  let corps = ''
+  req.on('data', (d) => { corps += d })
+  req.on('end', () => { appelsJury.push({ headers: req.headers, corps }); res.statusCode = 500; res.end() })
+})
+const SECRET_JURY = 'secret-jury-de-test-' + randomBytes(16).toString('hex')
+const SECRET_CRON = 'secret-cron-de-test-' + randomBytes(16).toString('hex')
+
+async function envoyer(methode: string, chemin: string, cookie: string, corps: unknown = {}, type = 'application/json') {
+  const r = await fetch(serveur.url + chemin, {
+    method: methode,
+    headers: { 'x-forwarded-for': `10.${randomInt(256)}.${randomInt(256)}.${randomInt(1, 255)}`, 'content-type': type, cookie },
+    body: JSON.stringify(corps),
+  })
+  return { statut: r.status, json: await r.json() as { message?: string; chemin?: string; jeton?: string } }
+}
+const lire = async (chemin: string, cookie?: string) => {
+  const r = await fetch(serveur.url + chemin, { headers: cookie ? { cookie } : {} })
+  return { statut: r.status, json: r.headers.get('content-type')?.includes('json') ? await r.json() : null, texte: r.headers.get('content-type')?.includes('html') ? await r.text() : '' }
+}
+const ligne = (requete: string) => sql(requete).toString().split('\n')[2]!.trim()
+
+async function membre() {
+  const u = await utilisateur()
+  const s = await connexion(u)
+  const pseudo = 'ada_' + randomBytes(4).toString('hex')
+  expect((await envoyer('POST', '/api/compte', s.cookie, { pseudo, charte: true, majeur: true })).statut).toBe(200)
+  ids.push(u.id)
+  return { ...s, u, pseudo }
+}
+
+async function campagne(role_boss: 'juge' | 'joueur') {
+  const m = await membre()
+  const r = await envoyer('POST', '/api/boss', m.cookie, {
+    titre: `Dépôt ${role_boss} ${marque}`, theme: 'Un minuteur', brief: 'Écris un minuteur de pause.', langages: ['Go'], visibilite: 'publique',
+    role_boss, max_participants: 5,
+    ouverture_inscriptions: new Date(Date.now() - 60_000).toISOString(),
+    cloture_depot: new Date(Date.now() + 10 * jour).toISOString(),
+    date_resultats: new Date(Date.now() + 20 * jour).toISOString(),
+  })
+  expect(r.statut).toBe(200)
+  const slug = r.json.slug as unknown as string
+  expect((await envoyer('POST', `/api/boss/${slug}/ouverture`, m.cookie)).statut).toBe(200)
+  return { ...m, slug }
+}
+
+async function inscrit(slug: string) {
+  const a = await membre()
+  expect((await envoyer('POST', `/api/campagnes/${slug}/inscription`, a.cookie, { connaissance: true })).statut).toBe(200)
+  return a
+}
+
+// Un vrai envoi par l'URL signée, comme uploadToSignedUrl du navigateur (PUT, même point d'accès).
+const ZIP_VIDE = Buffer.from('504b0506' + '00'.repeat(18), 'hex')
+async function televerser(chemin: string, jeton: string, corps: Buffer = ZIP_VIDE, type = 'application/zip') {
+  const r = await fetch(`${API}/storage/v1/object/upload/sign/depots/${chemin}?token=${jeton}`, {
+    method: 'PUT', headers: { apikey: statut.ANON_KEY, 'content-type': type }, body: corps,
+  })
+  await r.body?.cancel()
+  return r.status
+}
+async function envoi(slug: string, cookie: string) {
+  const r = await envoyer('POST', `/api/campagnes/${slug}/depot/url`, cookie)
+  expect(r.statut).toBe(200)
+  expect(await televerser(r.json.chemin!, r.json.jeton!)).toBe(200)
+  return r.json.chemin!
+}
+// Clé de service : ce que fait prive (story 3.4) pour poser l'archive filtrée, et le nettoyage des objets du test.
+const service = { apikey: statut.SERVICE_ROLE_KEY, authorization: `Bearer ${statut.SERVICE_ROLE_KEY}`, 'content-type': 'application/json' }
+async function deposerEnService(chemin: string) {
+  const r = await fetch(`${API}/storage/v1/object/upload/sign/depots/${chemin}`, { method: 'POST', headers: service, body: '{}' })
+  const { url } = await r.json() as { url: string }
+  expect(await televerser(chemin, new URL(url, API).searchParams.get('token')!)).toBe(200)
+}
+const objets = (chemin: string) => Number(ligne(`select count(*) from storage.objects where bucket_id = 'depots' and name = '${chemin}'`))
+
+let juge: Awaited<ReturnType<typeof campagne>>
 
 beforeAll(async () => {
-  serveur = await demarrer(3413)
+  await new Promise<void>((ok) => jury.listen(3998, '127.0.0.1', ok))
+  serveur = await demarrer(3918, {
+    NUXT_SECRET_DEBIT: 'secret-debit-de-test-' + randomBytes(16).toString('hex'),
+    NUXT_JURY_URL: 'http://127.0.0.1:3998/api/jury',
+    NUXT_JURY_SECRET: SECRET_JURY,
+    CRON_SECRET: SECRET_CRON,
+  })
+  sql('update public.reglage set mode_acces = \'ouvert\'')
+  juge = await campagne('juge')
 })
 afterAll(async () => {
   serveur?.arreter()
+  jury.close()
+  // Le stockage interdit l'effacement direct en SQL : par son API, avec la clé de service.
+  const noms = ids.length ? sql(`select name from storage.objects where bucket_id = 'depots' and split_part(name, '/', 1) in (select c.id::text from public.campagne c where c.boss_id in (${ids.map((i) => `'${i}'`).join(', ')}))`)
+    .toString().split('\n').slice(2).map((l) => l.trim()).filter((l) => /\.zip$/.test(l)) : []
+  if (noms.length) await fetch(`${API}/storage/v1/object/depots`, { method: 'DELETE', headers: service, body: JSON.stringify({ prefixes: noms }) })
+  if (ids.length) sql(`delete from public.campagne where boss_id in (${ids.map((i) => `'${i}'`).join(', ')})`)
   await nettoyer()
 })
 
-const declaration = (surcharge: Record<string, unknown> = {}) => ({
-  presentation: 'Un minuteur en Rust, dont je suis fier.',
-  demande: 'Je vise 8/10',
-  type_code: 'open_source',
-  declaration_code: true,
-  aucun_outil: false,
-  outils_ia: ['Claude Code'],
-  contact_reutilisation: true,
-  ...surcharge,
-})
+describe('dépôt', () => {
+  it('envoi signé, deposer, jury appelé sans corps ; réception en attente, règles figées', async () => {
+    const a = await inscrit(juge.slug)
+    let page = (await lire(`/campagnes/${juge.slug}`, a.cookie)).texte
+    expect(page).toContain('Déposer mon projet')
+    page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('Tu n&#39;as pas encore déposé.')
+    expect(page).toContain(`Ton code et ta présentation seront envoyés au compte Anthropic de ${juge.pseudo}`)
+    expect(page).toContain('support@ybdn.io')
+    expect(page).toContain('J&#39;ai le droit de déposer ce code (il est à moi, sous licence libre, ou j&#39;ai l&#39;accord écrit de son propriétaire).')
 
-// Dépôt complet : URL signée, envoi direct au stockage, enregistrement. Renvoie le chemin de l'archive.
-async function deposer(slug: string, u: Utilisateur, surcharge: Record<string, unknown> = {}) {
-  const url = await appeler('POST', `/api/campagnes/${slug}/depot/url`, u, declaration(surcharge))
-  expect(url.statut).toBe(200)
-  const { chemin, token } = url.json as { chemin: string; token: string }
-  const envoi = await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip())
-  expect(envoi.error).toBeNull()
-  const r = await appeler('POST', `/api/campagnes/${slug}/depot`, u, { ...declaration(surcharge), chemin })
-  expect(r.statut).toBe(200)
-  return chemin
-}
+    const url = await envoyer('POST', `/api/campagnes/${juge.slug}/depot/url`, a.cookie)
+    expect(url.statut).toBe(200)
+    const [campagneId, participationId, fichier] = url.json.chemin!.split('/')
+    expect(campagneId).toBe(ligne(`select id from public.campagne where slug = '${juge.slug}'`))
+    expect(participationId).toBe(ligne(`select p.id from public.participation p where p.compte_id = '${a.u.id}'`))
+    expect(fichier).toMatch(/^[0-9a-f-]{36}\.zip$/)
+    // Le bucket refuse un autre type qu'un zip, et un second envoi au même chemin (400 tous deux ; le corps du doublon dit 409, KeyAlreadyExists).
+    expect(await televerser(url.json.chemin!, url.json.jeton!, Buffer.from('bonjour'), 'text/plain')).toBe(400)
+    expect(await televerser(url.json.chemin!, url.json.jeton!)).toBe(200)
+    expect(await televerser(url.json.chemin!, url.json.jeton!)).toBe(400)
 
-const reception = async (participationId: string) =>
-  (await admin.from('reception').select('*').eq('participation_id', participationId).maybeSingle()).data
+    const avant = appelsJury.length
+    const corps = { chemin: url.json.chemin, presentation: '  Un minuteur en Go.  ', demande: 'Je vise 8/10', droit: true }
+    expect((await envoyer('POST', `/api/campagnes/${juge.slug}/depot`, a.cookie, corps)).statut).toBe(200)
+    expect(ligne(`select r.statut || '|' || r.presentation || '|' || r.demande || '|' || (r.droit_declare_le is not null) from public.reception r join public.participation p on p.id = r.participation_id where p.compte_id = '${a.u.id}'`))
+      .toBe('en_attente|Un minuteur en Go.|Je vise 8/10|true')
+    expect(ligne(`select regles_figees_le is not null from public.campagne where slug = '${juge.slug}'`)).toBe('t')
+    await expect.poll(() => appelsJury.length).toBe(avant + 1)
+    expect(appelsJury.at(-1)).toMatchObject({ headers: { authorization: `Bearer ${SECRET_JURY}` }, corps: '' })
 
-describe('inscription et désinscription', () => {
-  it('un compte autorisé s\'inscrit par l\'API, une seule fois ; les places restantes suivent', async () => {
-    const c = await campagne('inscriptions', { max: 2 })
-    const u = await candidat()
-    const places = async () => (await anon().from('places_campagne').select('places_restantes').eq('campagne_id', c.id).single()).data?.places_restantes
-    expect(await places()).toBe(2)
-    expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error).toBeNull()
-    expect(await places()).toBe(1)
-    expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error?.message).toContain('déjà inscrit')
-  })
+    expect((await lire(`/api/campagnes/${juge.slug}`, a.cookie)).json).toMatchObject({ reception: { statut: 'en_attente', presentation: 'Un minuteur en Go.' }, depot: null })
+    page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('Contrôle en cours de ton archive')
+    expect(page).toContain('Ton dépôt précédent est en cours de contrôle : attends son résultat pour redéposer.')
+    expect(page).not.toContain('Déposer</button>')
+    expect((await lire(`/campagnes/${juge.slug}`, a.cookie)).texte).toContain('Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.')
 
-  it('refuse un compte non autorisé', async () => {
-    const c = await campagne('inscriptions')
-    const u = await candidat('verifie')
-    expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error?.message).toContain('pas autorisé')
-    expect((await anon().rpc('sinscrire', { p_campagne_id: c.id })).error).not.toBeNull()
-  })
-
-  it('se désinscrire retire la participation, la réception et l\'archive', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error).toBeNull()
-    const chemin = await deposer(c.slug, u)
-    const { data: p } = await admin.from('participation').select('id').eq('campagne_id', c.id).single()
-    expect(await reception(p!.id)).not.toBeNull()
-
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/inscription`, u)).statut).toBe(200)
-    expect((await admin.from('participation').select('etat').eq('id', p!.id).single()).data?.etat).toBe('retire')
-    expect(await reception(p!.id)).toBeNull()
-    expect(await existe(chemin)).toBe(false)
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/inscription`, u)).statut).toBe(403)
-    // Il peut se réinscrire tant qu'il reste des places.
-    expect((await u.client.rpc('sinscrire', { p_campagne_id: c.id })).error).toBeNull()
-  })
-
-  it('la désinscription supprime aussi le dépôt accepté et son archive ; refusée une fois la délibération commencée', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const chemin = await deposer(c.slug, u)
-    await admin.from('depot').insert({
-      participation_id: pid, chemin_stockage: chemin, sha256: 'a'.repeat(64), taille_octets: 22, nb_fichiers: 3, nb_tokens: 100,
-      presentation: 'x', type_code: 'open_source', licence_presente: true, declaration_code_le: new Date().toISOString(),
-    })
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/inscription`, u)).statut).toBe(200)
-    expect((await admin.from('depot').select('id').eq('participation_id', pid)).data).toEqual([])
-    expect(await existe(chemin)).toBe(false)
-
-    const d = await campagne('deliberation')
-    const v = await candidat()
-    const pv = await inscrire(d, v)
-    const cheminV = `${d.id}/${pv}/${crypto.randomUUID()}.zip`
-    await stockage().upload(cheminV, zip())
-    await admin.from('reception').insert({ participation_id: pv, chemin_stockage: cheminV, presentation: 'x', type_code: 'open_source', declaration_code_le: new Date().toISOString() })
-    const refus = await appeler('DELETE', `/api/campagnes/${d.slug}/inscription`, v)
-    expect(refus.statut).toBe(409)
-    expect(await reception(pv)).not.toBeNull()
-    expect(await existe(cheminV)).toBe(true)
-  })
-})
-
-describe('URL d\'envoi : qui peut déposer', () => {
-  it('refuse sans session', async () => {
-    const c = await campagne('depot')
-    expect((await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, undefined, declaration())).statut).toBe(401)
-    expect((await appeler('POST', `/api/campagnes/${c.slug}/depot`, undefined, { ...declaration(), chemin: 'x' })).statut).toBe(401)
-  })
-
-  it('refuse un compte non inscrit, sans compte, ou non autorisé (même inscrit)', async () => {
-    const c = await campagne('depot')
-    const nonInscrit = await candidat()
-    expect((await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, nonInscrit, declaration())).statut).toBe(403)
-    const sansCompte = await utilisateur()
-    expect((await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, sansCompte, declaration())).statut).toBe(403)
-    const ferme = await candidat()
-    await inscrire(c, ferme)
-    await admin.from('compte').update({ etat: 'ferme' }).eq('id', ferme.id)
-    const r = await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, ferme, declaration())
-    expect(r.statut).toBe(403)
-    expect(r.json.statusMessage).toContain('pas autorisé')
-    expect(r.json.token).toBeUndefined()
-  })
-
-  it('refuse hors statut, après la clôture, et pour une campagne inconnue ou en brouillon', async () => {
-    const u = await candidat()
-    const delib = await campagne('deliberation')
-    await inscrire(delib, u)
-    expect((await appeler('POST', `/api/campagnes/${delib.slug}/depot/url`, u, declaration())).statut).toBe(409)
-
-    const close = await campagne('depot', { cloture: new Date(Date.now() - 3600_000) })
-    await inscrire(close, u)
-    const r = await appeler('POST', `/api/campagnes/${close.slug}/depot/url`, u, declaration())
-    expect(r.statut).toBe(409)
-    expect(r.json.statusMessage).toContain('date limite')
-
-    const brouillon = await campagne('brouillon')
-    expect((await appeler('POST', `/api/campagnes/${brouillon.slug}/depot/url`, u, declaration())).statut).toBe(404)
-    expect((await appeler('POST', '/api/campagnes/inconnue/depot/url', u, declaration())).statut).toBe(404)
-  })
-
-  it('refuse le dépôt enregistré après la clôture, même si l\'archive est partie avant', async () => {
-    const c = await campagne('depot', { cloture: new Date(Date.now() + 4000) })
-    const u = await candidat()
-    await inscrire(c, u)
-    const { chemin, token } = (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
-    await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip())
-    await new Promise((r) => setTimeout(r, 4500))
-    expect((await appeler('POST', `/api/campagnes/${c.slug}/depot`, u, { ...declaration(), chemin })).statut).toBe(409)
-  })
-
-  it('autorise le dépôt pendant la phase inscriptions (elle chevauche le dépôt)', async () => {
-    const c = await campagne('inscriptions')
-    const u = await candidat()
-    await inscrire(c, u)
-    await deposer(c.slug, u)
-  })
-
-  it('refuse une déclaration invalide, sans délivrer d\'URL', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    await inscrire(c, u)
-    const cas: [string, Record<string, unknown>, string][] = [
-      ['présentation vide', { presentation: '  ' }, 'presentation'],
-      ['présentation trop longue', { presentation: 'a'.repeat(501) }, 'presentation'],
-      ['demande trop longue', { demande: 'b'.repeat(81) }, 'demande'],
-      ['licence non cochée', { declaration_code: false }, 'declaration_code'],
-      ['licence absente', { declaration_code: undefined }, 'declaration_code'],
-      ['type de code inconnu', { type_code: 'autre' }, 'type_code'],
-      ['outils d\'IA ni listés ni « aucun »', { outils_ia: [], aucun_outil: false }, 'outils_ia'],
-    ]
-    for (const [nom, surcharge, champ] of cas) {
-      const r = await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration(surcharge))
-      expect(r.statut, nom).toBe(422)
-      expect(r.json.data?.erreurs, nom).toHaveProperty(champ)
-      expect(r.json.token, nom).toBeUndefined()
+    // Ni URL d'envoi (rien ne resterait orphelin dans le bucket), ni dépôt, tant que la réception attend.
+    for (const route of ['depot/url', 'depot']) {
+      expect(await envoyer('POST', `/api/campagnes/${juge.slug}/${route}`, a.cookie, corps))
+        .toMatchObject({ statut: 409, json: { message: 'Ton dépôt précédent est en cours de contrôle.' } })
     }
-    // Un envoi valide mais une déclaration refusée à l'enregistrement : rien n'est enregistré.
-    const { chemin, token } = (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
-    await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip())
-    const r = await appeler('POST', `/api/campagnes/${c.slug}/depot`, u, { ...declaration({ declaration_code: false }), chemin })
-    expect(r.statut).toBe(422)
-    const { data: p } = await admin.from('participation').select('id').eq('campagne_id', c.id).single()
-    expect(await reception(p!.id)).toBeNull()
-  })
-})
-
-describe('envoi au stockage et réception', () => {
-  it('envoie un petit zip par l\'URL signée, puis la réception est en attente avec la déclaration', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const chemin = await deposer(c.slug, u)
-    expect(chemin).toMatch(new RegExp(`^${c.id}/${pid}/[0-9a-f-]{36}\\.zip$`))
-    expect(await existe(chemin)).toBe(true)
-
-    const r = await reception(pid)
-    expect(r).toMatchObject({
-      chemin_stockage: chemin, etat: 'en_attente', presentation: 'Un minuteur en Rust, dont je suis fier.', demande: 'Je vise 8/10',
-      type_code: 'open_source', outils_ia: ['Claude Code'], contact_reutilisation: true, motifs_refus: [], traitee_le: null,
-    })
-    expect(r!.declaration_code_le).toBeTruthy()
-    // Le candidat lit sa réception par la vue, jamais le chemin.
-    const { data } = await u.client.from('ma_reception').select('*').single()
-    expect(data).toMatchObject({ etat: 'en_attente', presentation: 'Un minuteur en Rust, dont je suis fier.' })
-    expect(data).not.toHaveProperty('chemin_stockage')
-    expect((await u.client.from('reception').select('chemin_stockage')).data).toEqual([])
+    expect(await envoyer('DELETE', `/api/campagnes/${juge.slug}/depot`, a.cookie))
+      .toMatchObject({ statut: 409, json: { message: 'Ton dépôt est en cours de contrôle : attends son résultat pour le retirer.' } })
+    expect(await envoyer('DELETE', `/api/campagnes/${juge.slug}/inscription`, a.cookie))
+      .toMatchObject({ statut: 409, json: { message: 'Ton dépôt est en cours de contrôle : attends son résultat pour te désinscrire.' } })
   })
 
-  it('« aucun » outil d\'IA est une déclaration valide', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    await deposer(c.slug, u, { aucun_outil: true, outils_ia: [], demande: '' })
-    expect(await reception(pid)).toMatchObject({ outils_ia: [], demande: null })
-  })
-
-  it('le stockage refuse un fichier trop gros et un fichier d\'un autre type', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    await inscrire(c, u)
-    const url = async () => (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
-
-    const gros = await url()
-    const rGros = await anon().storage.from('depots').uploadToSignedUrl(gros.chemin, gros.token, zip(20 * 1024 * 1024 + 1))
-    expect(rGros.error).not.toBeNull()
-    expect(await existe(gros.chemin)).toBe(false)
-
-    const autre = await url()
-    const rAutre = await anon().storage.from('depots').uploadToSignedUrl(autre.chemin, autre.token, new Blob(['hello'], { type: 'text/plain' }))
-    expect(rAutre.error).not.toBeNull()
-    expect(await existe(autre.chemin)).toBe(false)
-
-    // Exactement 20 Mo passe.
-    const limite = await url()
-    expect((await anon().storage.from('depots').uploadToSignedUrl(limite.chemin, limite.token, zip(20 * 1024 * 1024))).error).toBeNull()
-  })
-
-  it('un jeton d\'envoi ne sert qu\'une fois : un second envoi au même chemin est refusé', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    await inscrire(c, u)
-    const { chemin, token } = (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
-    expect((await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip(30))).error).toBeNull()
-    expect((await anon().storage.from('depots').uploadToSignedUrl(chemin, token, zip(40))).error).not.toBeNull()
-    expect((await stockage().download(chemin)).data?.size).toBe(30)
-  })
-
-  it('refuse d\'enregistrer un envoi inconnu : archive absente, chemin d\'un autre, chemin mal formé', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const autre = await candidat()
-    const pAutre = await inscrire(c, autre)
-    const cheminAutre = await deposer(c.slug, autre)
-
-    const essais = [
-      `${c.id}/${pid}/${crypto.randomUUID()}.zip`, // bien formé, mais rien n'a été envoyé
-      cheminAutre, // l'archive d'un autre candidat
-      `${c.id}/${pid}/../${pAutre}/x.zip`,
-      `${c.id}/${pid}/${crypto.randomUUID()}.txt`,
-      '',
-    ]
-    for (const chemin of essais) {
-      const r = await appeler('POST', `/api/campagnes/${c.slug}/depot`, u, { ...declaration(), chemin })
-      expect(r.statut, chemin).toBe(422)
-    }
-    expect(await reception(pid)).toBeNull()
-    expect((await reception(pAutre))!.chemin_stockage).toBe(cheminAutre)
-  })
-
-  it('un candidat ne peut ni lister, ni lire, ni écraser, ni effacer un objet du bucket, pas même le sien', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const chemin = await deposer(c.slug, u)
-    const bucket = u.client.storage.from('depots')
-
-    const liste = await bucket.list(`${c.id}/${pid}`)
-    expect(liste.data ?? []).toEqual([])
-    expect((await bucket.download(chemin)).error).not.toBeNull()
-    expect((await bucket.createSignedUrl(chemin, 60)).error).not.toBeNull()
-    expect((await bucket.upload(chemin, zip(99), { upsert: true })).error).not.toBeNull()
-    expect((await bucket.upload(`${c.id}/${pid}/nouveau.zip`, zip())).error).not.toBeNull()
-    expect((await bucket.createSignedUploadUrl(`${c.id}/${pid}/autre.zip`)).error).not.toBeNull()
-    expect((await bucket.remove([chemin])).data ?? []).toEqual([])
-    expect((await bucket.move(chemin, `${c.id}/${pid}/deplace.zip`)).error).not.toBeNull()
-    // Le même refus pour un visiteur anonyme.
-    const visiteur = anon().storage.from('depots')
-    expect((await visiteur.download(chemin)).error).not.toBeNull()
-    expect((await visiteur.upload(chemin, zip(99), { upsert: true })).error).not.toBeNull()
-    // Et le bucket n'est pas public.
-    expect((await fetch(`${API}/storage/v1/object/public/depots/${chemin}`)).status).toBeGreaterThanOrEqual(400)
-
-    // L'objet est intact.
-    expect((await stockage().download(chemin)).data?.size).toBe(22)
-  })
-})
-
-describe('remplacement, états et reçu', () => {
-  it('un second dépôt remplace le premier, et l\'ancienne archive (comme un envoi jamais confirmé) n\'existe plus', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const premier = await deposer(c.slug, u)
-
-    // Envoi abandonné : URL délivrée, archive envoyée, jamais enregistrée.
-    const abandon = (await appeler('POST', `/api/campagnes/${c.slug}/depot/url`, u, declaration())).json as { chemin: string; token: string }
-    await anon().storage.from('depots').uploadToSignedUrl(abandon.chemin, abandon.token, zip())
-    expect(await existe(abandon.chemin)).toBe(true)
-
-    const second = await deposer(c.slug, u, { presentation: 'Seconde version.' })
-    expect(second).not.toBe(premier)
-    expect(await existe(premier)).toBe(false)
-    expect(await existe(abandon.chemin)).toBe(false)
-    expect(await existe(second)).toBe(true)
-    const lignes = (await admin.from('reception').select('chemin_stockage, presentation').eq('participation_id', pid)).data
-    expect(lignes).toEqual([{ chemin_stockage: second, presentation: 'Seconde version.' }])
-  })
-
-  it('le candidat voit en_attente, refusee avec ses motifs, puis acceptee avec son reçu ; un nouvel envoi garde le dépôt accepté', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const chemin = await deposer(c.slug, u)
-    const etat = async () => (await u.client.from('ma_reception').select('etat, motifs_refus').single()).data
-
-    expect((await etat())!.etat).toBe('en_attente')
-    const motifs = [{ code: 'licence', message: 'Ajoute ta licence et redépose.' }]
-    await admin.from('reception').update({ etat: 'refusee', motifs_refus: motifs, traitee_le: new Date().toISOString() }).eq('participation_id', pid)
-    expect(await etat()).toEqual({ etat: 'refusee', motifs_refus: motifs })
-
-    // Après un refus, il redépose : retour en attente, motifs effacés, ancienne archive effacée.
-    const deuxieme = await deposer(c.slug, u)
-    expect(await etat()).toEqual({ etat: 'en_attente', motifs_refus: [] })
-    expect(await existe(chemin)).toBe(false)
-
-    // Le contrôle simulé accepte : dépôt et reçu.
-    await admin.from('reception').update({ etat: 'acceptee', traitee_le: new Date().toISOString() }).eq('participation_id', pid)
-    await admin.from('depot').insert({
-      participation_id: pid, chemin_stockage: deuxieme, sha256: 'ab'.repeat(32), taille_octets: 22, nb_fichiers: 12,
-      fichiers_exclus: ['node_modules/x.js'], nb_tokens: 4321, presentation: 'x', type_code: 'open_source',
-      licence_presente: true, declaration_code_le: new Date().toISOString(),
-    })
-    expect((await etat())!.etat).toBe('acceptee')
-    const { data: recu } = await u.client.from('mon_depot').select('sha256, nb_fichiers, fichiers_exclus, nb_tokens, taille_octets').single()
-    expect(recu).toEqual({ sha256: 'ab'.repeat(32), nb_fichiers: 12, fichiers_exclus: ['node_modules/x.js'], nb_tokens: 4321, taille_octets: 22 })
-
-    // Il redépose : le dépôt accepté et son archive restent jusqu'au prochain contrôle.
-    const troisieme = await deposer(c.slug, u)
-    expect(await existe(deuxieme)).toBe(true)
-    expect(await existe(troisieme)).toBe(true)
-    expect((await etat())!.etat).toBe('en_attente')
-    expect((await u.client.from('mon_depot').select('sha256').single()).data?.sha256).toBe('ab'.repeat(32))
-  })
-})
-
-describe('retrait du dépôt', () => {
-  it('efface le dépôt, la réception et les deux archives, et laisse l\'inscription', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const acceptee = await deposer(c.slug, u)
-    await admin.from('reception').update({ etat: 'acceptee', traitee_le: new Date().toISOString() }).eq('participation_id', pid)
-    await admin.from('depot').insert({
-      participation_id: pid, chemin_stockage: acceptee, sha256: 'c'.repeat(64), taille_octets: 22, nb_fichiers: 1, nb_tokens: 1,
-      presentation: 'x', type_code: 'open_source', licence_presente: true, declaration_code_le: new Date().toISOString(),
-    })
-    const enAttente = await deposer(c.slug, u)
-
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, u)).statut).toBe(200)
-    expect((await admin.from('depot').select('id').eq('participation_id', pid)).data).toEqual([])
-    expect(await reception(pid)).toBeNull()
-    expect(await existe(acceptee)).toBe(false)
-    expect(await existe(enAttente)).toBe(false)
-    expect((await admin.from('participation').select('etat').eq('id', pid).single()).data?.etat).toBe('inscrit')
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, u)).statut).toBe(404)
-  })
-
-  it('marche aussi quand il n\'existe qu\'une réception, sans dépôt accepté', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    const pid = await inscrire(c, u)
-    const chemin = await deposer(c.slug, u)
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, u)).statut).toBe(200)
-    expect(await reception(pid)).toBeNull()
-    expect(await existe(chemin)).toBe(false)
-  })
-
-  it('est refusé sans session, pour un non-inscrit, et une fois la délibération commencée (rien n\'est effacé)', async () => {
-    const c = await campagne('depot')
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`)).statut).toBe(401)
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, await candidat())).statut).toBe(403)
-
-    const d = await campagne('deliberation')
-    const u = await candidat()
-    const pid = await inscrire(d, u)
-    const chemin = `${d.id}/${pid}/${crypto.randomUUID()}.zip`
-    await stockage().upload(chemin, zip())
-    await admin.from('reception').insert({ participation_id: pid, chemin_stockage: chemin, presentation: 'x', type_code: 'open_source', declaration_code_le: new Date().toISOString() })
-    expect((await appeler('DELETE', `/api/campagnes/${d.slug}/depot`, u)).statut).toBe(409)
-    expect(await reception(pid)).not.toBeNull()
-    expect(await existe(chemin)).toBe(true)
-  })
-
-  it('ne touche pas au dépôt d\'un autre candidat', async () => {
-    const c = await campagne('depot')
-    const a = await candidat()
-    const b = await candidat()
-    await inscrire(c, a)
-    const pb = await inscrire(c, b)
-    const chemin = await deposer(c.slug, b)
-    expect((await appeler('DELETE', `/api/campagnes/${c.slug}/depot`, a)).statut).toBe(404)
-    expect(await reception(pb)).not.toBeNull()
-    expect(await existe(chemin)).toBe(true)
-  })
-})
-
-describe('pages', () => {
-  it('l\'accueil liste la campagne, la page de campagne rend le brief comme du texte, le brouillon reste caché', async () => {
-    const c = await campagne('depot', { brief: '<script>alert(1)</script> & <b>gras</b>' })
-    const brouillon = await campagne('brouillon')
-    const accueil = await (await fetch(serveur.url + '/')).text()
-    expect(accueil).toContain(`/campagnes/${c.slug}`)
-    expect(accueil).not.toContain(`/campagnes/${brouillon.slug}`)
-
-    const page = await fetch(`${serveur.url}/campagnes/${c.slug}`)
-    expect(page.status).toBe(200)
-    const html = await page.text()
-    expect(html).toContain('Campagne de test')
-    expect(html).toContain('&lt;script&gt;alert(1)&lt;/script&gt;')
-    expect(html).not.toContain('<script>alert(1)')
-    expect(html).not.toContain('<b>gras</b>')
-    expect(html).toContain('Réponse au brief')
-
-    expect((await fetch(`${serveur.url}/campagnes/${brouillon.slug}`)).status).toBe(404)
-    expect((await fetch(`${serveur.url}/campagnes/inconnue`)).status).toBe(404)
-    expect((await fetch(`${serveur.url}/campagnes/${c.slug}/depot`)).status).toBe(200)
-  })
-
-  it('rend les pages, avec et sans session, sans aucune erreur dans la sortie du serveur', async () => {
-    const c = await campagne('depot')
-    const u = await candidat()
-    await inscrire(c, u)
-    const avant = serveur.sortie().length // les refus des tests précédents journalisent des avis h3 : on ne regarde que le rendu
-    for (const chemin of ['/', '/compte', `/campagnes/${c.slug}`, `/campagnes/${c.slug}/depot`]) {
-      for (const cookie of [undefined, u.cookie]) {
-        const r = await fetch(serveur.url + chemin, { headers: cookie ? { cookie } : {} })
-        expect(r.status, chemin).toBe(200)
-        await r.text()
+  it('refus : 415, 401, 404, case, présentation, chemin, non inscrit, Boss juge ; jamais 500', async () => {
+    const a = await inscrit(juge.slug)
+    const depot = `/api/campagnes/${juge.slug}/depot`
+    const chemin = await envoi(juge.slug, a.cookie)
+    const corps = { chemin, presentation: 'Un projet.', demande: '', droit: true }
+    for (const route of [`${depot}/url`, depot]) {
+      expect((await envoyer('POST', route, a.cookie, corps, 'text/plain')).statut, route).toBe(415)
+      expect((await envoyer('POST', route, '', corps)).statut, route).toBe(401)
+      for (const slug of ['%00', '%ED%A0%80', `inconnue-${marque}`]) {
+        expect((await envoyer('POST', route.replace(juge.slug, slug), a.cookie, corps)).statut, slug).toBe(404)
       }
     }
-    expect(serveur.sortie().slice(avant)).not.toMatch(/error|unhandled|TypeError/i)
+    for (const slug of ['%00', '%ED%A0%80', `inconnue-${marque}`]) {
+      expect((await envoyer('DELETE', depot.replace(juge.slug, slug), a.cookie)).statut, slug).toBe(404)
+    }
+    expect((await envoyer('DELETE', depot, a.cookie, {}, 'text/plain')).statut).toBe(415)
+    expect((await envoyer('DELETE', depot, '')).statut).toBe(401)
+    expect(await envoyer('POST', depot, a.cookie, { ...corps, droit: false })).toMatchObject({ statut: 409, json: { message: 'Coche la case : tu dois avoir le droit de déposer ce code.' } })
+    expect(await envoyer('POST', depot, a.cookie, { ...corps, presentation: ' \n ' })).toMatchObject({ statut: 409, json: { message: 'La présentation fait entre 1 et 500 caractères.' } })
+    // Caractère nul et demi-paire UTF-16 : nettoyés par la route, la base répond sur la règle suivante (chemin), pas en 500.
+    expect(await envoyer('POST', depot, a.cookie, { ...corps, chemin: '\u0000', presentation: '\u0000\ud800', demande: '\ud800' }))
+      .toMatchObject({ statut: 409, json: { message: 'Ton archive n\'est pas arrivée : recommence l\'envoi.' } })
+    expect(await envoyer('POST', depot, a.cookie, '\u0000')).toMatchObject({ statut: 409 })
+    expect(await envoyer('POST', depot, a.cookie, { ...corps, chemin: chemin.replace(/[0-9a-f-]{36}\.zip$/, `${crypto.randomUUID()}.zip`) }))
+      .toMatchObject({ statut: 409, json: { message: 'Ton archive n\'est pas arrivée : recommence l\'envoi.' } })
+    expect(await envoyer('DELETE', depot, a.cookie)).toMatchObject({ statut: 404, json: { message: 'Tu n\'as pas de dépôt dans cette campagne.' } })
+
+    const b = await membre()
+    expect(await envoyer('POST', `${depot}/url`, b.cookie)).toMatchObject({ statut: 409, json: { message: 'Tu n\'es pas inscrit à cette campagne.' } })
+    expect(await envoyer('POST', depot, b.cookie, corps)).toMatchObject({ statut: 409, json: { message: 'Tu n\'es pas inscrit à cette campagne.' } })
+    expect((await lire(`/campagnes/${juge.slug}/depot`, b.cookie)).texte).toContain('Inscris-toi à la campagne pour y déposer.')
+    expect(await envoyer('POST', `${depot}/url`, juge.cookie)).toMatchObject({ statut: 409, json: { message: 'Tu juges cette campagne : tu n\'y déposes pas.' } })
+    expect((await lire(`/campagnes/${juge.slug}/depot`, juge.cookie)).texte).toContain('Tu juges cette campagne : tu n&#39;y déposes pas.')
+    expect((await lire(`/campagnes/${juge.slug}/depot`)).texte).toContain('Connecte-toi avec GitHub pour déposer.')
+    for (const slug of ['%00', '%ED%A0%80', `inconnue-${marque}`]) expect((await lire(`/campagnes/${slug}/depot`)).statut, slug).toBe(404)
+  })
+
+  it('limite d\'envois par compte : la 21e URL signée en 24 h répond 429 avec Retry-After', async () => {
+    const a = await inscrit(juge.slug)
+    const empreinte = createHash('sha256').update(`${a.u.id}:compte`).digest('hex')
+    sql(`insert into public.debit (empreinte, action) select '${empreinte}', 'envoi' from generate_series(1, 20)`)
+    const r = await fetch(`${serveur.url}/api/campagnes/${juge.slug}/depot/url`, { method: 'POST', headers: { 'content-type': 'application/json', cookie: a.cookie }, body: '{}' })
+    expect(r.status).toBe(429)
+    expect(Number(r.headers.get('retry-after'))).toBeGreaterThan(0)
+    expect(await r.json()).toMatchObject({ message: 'Trop d\'envois depuis ton compte. Réessaie plus tard.' })
+  })
+
+  it('date limite passée : URL et dépôt refusés, la page dit pourquoi', async () => {
+    const c = await campagne('juge')
+    const a = await inscrit(c.slug)
+    const chemin = await envoi(c.slug, a.cookie)
+    sql(`update public.campagne set ouverture_inscriptions = now() - interval '2 days', cloture_depot = now() - interval '1 minute', date_resultats = now() + interval '5 days' where slug = '${c.slug}'`)
+    expect(await envoyer('POST', `/api/campagnes/${c.slug}/depot/url`, a.cookie)).toMatchObject({ statut: 409, json: { message: 'La date limite de dépôt est passée.' } })
+    expect(await envoyer('POST', `/api/campagnes/${c.slug}/depot`, a.cookie, { chemin, presentation: 'x', droit: true }))
+      .toMatchObject({ statut: 409, json: { message: 'La date limite de dépôt est passée.' } })
+    const page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('La date limite de dépôt est passée.')
+    expect(page).not.toContain('Déposer</button>')
+    // Un dépôt accepté avant la clôture (prive, simulé) : il ne se retire plus, donc pas de désinscription non plus.
+    sql(`insert into public.depot (participation_id, chemin_stockage, sha256, nb_fichiers, nb_tokens_estime, presentation, droit_declare_le)
+      select p.id, '${chemin}', '${'e'.repeat(64)}', 1, 10, 'Clos.', now() from public.participation p where p.compte_id = '${a.u.id}'`)
+    expect(await envoyer('DELETE', `/api/campagnes/${c.slug}/inscription`, a.cookie))
+      .toMatchObject({ statut: 409, json: { message: 'Le dépôt est clos : tu ne peux plus te désinscrire.' } })
+    const fiche = (await lire(`/campagnes/${c.slug}`, a.cookie)).texte
+    expect(fiche).toContain('Le dépôt est clos : tu ne peux plus te désinscrire.')
+    expect(fiche).not.toContain('Me désinscrire</button>')
+  })
+
+  it('retrait : la ligne disparaît et les archives sont effacées du bucket', async () => {
+    const c = await campagne('joueur')
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/inscription`, c.cookie, { connaissance: true })).statut).toBe(200)
+    const zip = await envoi(c.slug, c.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/depot`, c.cookie, { chemin: zip, presentation: 'Le projet du Boss.', droit: true })).statut).toBe(200)
+    // prive (story 3.4) accepte la réception : simulé en SQL, avec une archive filtrée posée par la clé de service.
+    const filtre = zip.replace('.zip', '.filtre.zip')
+    await deposerEnService(filtre)
+    const p = ligne(`select p.id from public.participation p where p.compte_id = '${c.u.id}'`)
+    sql(`delete from public.reception where participation_id = '${p}'`)
+    sql(`insert into public.depot (participation_id, chemin_stockage, chemin_filtre, sha256, nb_fichiers, nb_tokens_estime, presentation, droit_declare_le)
+      values ('${p}', '${zip}', '${filtre}', '${'a'.repeat(64)}', 1, 10, 'Le projet du Boss.', now())`)
+    expect([objets(zip), objets(filtre)]).toEqual([1, 1])
+
+    expect((await lire(`/api/campagnes/${c.slug}`, c.cookie)).json).toMatchObject({ reception: null, depot: { presentation: 'Le projet du Boss.' } })
+    const page = (await lire(`/campagnes/${c.slug}/depot`, c.cookie)).texte
+    expect(page).toContain('Retirer mon dépôt</button>')
+    expect(page).toContain('Redéposer</button>')
+    expect((await lire(`/api/campagnes/${c.slug}`, (await inscrit(c.slug)).cookie)).json).toMatchObject({ reception: null, depot: null })
+
+    expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/depot`, c.cookie)).statut).toBe(200)
+    expect(ligne(`select count(*) from public.depot where participation_id = '${p}'`)).toBe('0')
+    expect(objets(zip)).toBe(0)
+    expect(objets(filtre)).toBe(0)
+    expect((await envoyer('DELETE', `/api/campagnes/${c.slug}/inscription`, c.cookie)).statut).toBe(200)
+  })
+
+  it('dépôt accepté : fichiers retenus et exclus, tokens estimés, empreinte ; jamais les alertes. Refus : le message du motif', async () => {
+    const a = await inscrit(juge.slug)
+    const zip = await envoi(juge.slug, a.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${juge.slug}/depot`, a.cookie, { chemin: zip, presentation: 'Mon minuteur.', droit: true })).statut).toBe(200)
+    const p = ligne(`select p.id from public.participation p where p.compte_id = '${a.u.id}'`)
+    // prive refuse (simulé en SQL, comme refuser_reception l'écrit) : la page montre le message, pas le code.
+    sql(`update public.reception set statut = 'refusee', motifs = '[{"code": "SECRETS", "message": "Ton archive contient ce qui ressemble à des secrets. Retire-les et redépose :\\n- .env (fichier .env)"}]' where participation_id = '${p}'`)
+    let page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('Retire-les et redépose :\n- .env (fichier .env)')
+    expect(page).not.toMatch(/<li[^>]*>SECRETS/)
+    // prive accepte (simulé) : un dépôt avec mesures, faits et alertes.
+    sql(`delete from public.reception where participation_id = '${p}'`)
+    const sha = 'f'.repeat(64)
+    sql(`insert into public.depot (participation_id, chemin_stockage, sha256, nb_fichiers, fichiers_exclus, nb_tokens_estime, faits, note_outillage,
+      alerte_manipulation, alertes_integrite, presentation, droit_declare_le)
+      values ('${p}', '${zip}', '${sha}', 12, '[{"chemin": "assets/logo.png", "raison": "image"}, {"chemin": "package-lock.json", "raison": "verrouillage"}]',
+        1200, '{"secret_des_faits": 1}', 7, true, '[{"type": "alerte-integrite-secrete", "fichier": "a.ts"}]', 'Mon minuteur.', now())`)
+    // La fiche ne transporte pas la liste des exclus ; la page de dépôt la demande (?exclus=1).
+    const fiche = (await lire(`/api/campagnes/${juge.slug}`, a.cookie)).json as { depot: Record<string, unknown> }
+    expect(fiche.depot).toMatchObject({ sha256: sha, nb_fichiers: 12, nb_tokens_estime: 1200 })
+    expect(fiche.depot).not.toHaveProperty('fichiers_exclus')
+    const json = JSON.stringify((await lire(`/api/campagnes/${juge.slug}?exclus=1`, a.cookie)).json)
+    expect(json).toContain('"fichiers_exclus":[{"chemin":"assets/logo.png","raison":"image"}')
+    page = (await lire(`/campagnes/${juge.slug}/depot`, a.cookie)).texte
+    expect(page).toMatch(/<dt>Fichiers retenus<\/dt>\s*<dd>12<\/dd>/)
+    expect(page).toContain('assets/logo.png (image)')
+    expect(page).toContain('package-lock.json (fichier de verrouillage)')
+    expect(page).toMatch(/~1[\u202f\u00a0 ]200 tokens \(estimation\)/)
+    expect(page).toContain(`<dd class="empreinte">${sha}</dd>`)
+    for (const cache of ['alerte-integrite-secrete', 'secret_des_faits', 'alerte_manipulation', 'note_outillage']) {
+      expect(page).not.toContain(cache)
+      expect(json).not.toContain(cache)
+    }
+  })
+
+  it('refus CAMPAGNE_CLOSE : la page n\'invite pas à redéposer quand le dépôt n\'est plus possible', async () => {
+    const c = await campagne('juge')
+    const a = await inscrit(c.slug)
+    const zip = await envoi(c.slug, a.cookie)
+    expect((await envoyer('POST', `/api/campagnes/${c.slug}/depot`, a.cookie, { chemin: zip, presentation: 'x', droit: true })).statut).toBe(200)
+    sql(`update public.reception r set statut = 'refusee', motifs = '[{"code": "CAMPAGNE_CLOSE", "message": "Cette campagne n''accepte plus de dépôt : ton archive n''a pas été retenue."}]'
+      from public.participation p where p.id = r.participation_id and p.compte_id = '${a.u.id}'`)
+    // Dépôt encore ouvert : l'invitation à redéposer reste.
+    let page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toContain('a été refusée. Corrige ce qui suit, puis redépose')
+    sql(`update public.campagne set ouverture_inscriptions = now() - interval '2 days', cloture_depot = now() - interval '1 minute', date_resultats = now() + interval '5 days' where slug = '${c.slug}'`)
+    page = (await lire(`/campagnes/${c.slug}/depot`, a.cookie)).texte
+    expect(page).toMatch(/a été refusée(&nbsp;|\u00a0):/)
+    expect(page).not.toContain('puis redépose')
+    expect(page).toContain('n&#39;a pas été retenue.')
+    expect(page).toContain('La date limite de dépôt est passée.')
+  })
+
+  it('le cron déclenche le jury à chaque passage, sans échouer quand le jury est en panne (filet d\'AD-7)', async () => {
+    const avant = appelsJury.length
+    const r = await fetch(serveur.url + '/api/cron/conservation', { headers: { authorization: `Bearer ${SECRET_CRON}` } })
+    expect(r.status).toBe(200)
+    expect(await r.json()).toEqual({ cles_cloturees: expect.any(Number), echecs: 0, fins_prevenues: expect.any(Number) })
+    for (let i = 0; i < 50 && appelsJury.length === avant; i++) await new Promise((ok) => setTimeout(ok, 100))
+    expect(appelsJury.slice(avant)).toEqual([{ headers: expect.objectContaining({ authorization: `Bearer ${SECRET_JURY}` }), corps: '' }])
   })
 })
