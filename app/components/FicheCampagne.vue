@@ -145,7 +145,7 @@ async function agir(methode: 'POST' | 'DELETE', fait: string) {
         </template>
         <p v-else-if="pourquoiPas">{{ pourquoiPas }}</p>
         <form v-else @submit.prevent="agir('POST', 'Tu es inscrit.')">
-          <p><label><input v-model="connaissance" type="checkbox" required> Ton code sera envoyé à Anthropic avec la clé API de {{ data.boss_pseudo }}, sous son contrat Anthropic.</label></p>
+          <p><label><input v-model="connaissance" type="checkbox" required> Ton code sera envoyé à Anthropic avec la clé API du Boss de la campagne ({{ data.boss_pseudo }}), pour que les agents du jury le notent.</label></p>
           <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">S'inscrire</button></p>
         </form>
 

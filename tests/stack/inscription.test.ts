@@ -71,7 +71,7 @@ describe('inscription', () => {
     const a = await membre()
     const chemin = `/api/campagnes/${juge.slug}/inscription`
     let page = (await lire(`/campagnes/${juge.slug}`, a.cookie)).texte
-    expect(page).toContain(`Ton code sera envoyé à Anthropic avec la clé API de ${juge.pseudo}, sous son contrat Anthropic.`)
+    expect(page).toContain(`Ton code sera envoyé à Anthropic avec la clé API du Boss de la campagne (${juge.pseudo}), pour que les agents du jury le notent.`)
     expect(page).toContain('S&#39;inscrire</button>')
     expect(page).toContain('3 sur 3')
 
