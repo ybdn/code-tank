@@ -1,16 +1,19 @@
 -- Archive filtrée et alertes du Boss juge (story 5.1, AD-9) : droits de telechargement, depots_du_boss et
 -- journaliser_telechargement, par rôle (Boss juge, Boss joueur, candidat, autre compte, visiteur, rôle de service).
--- Boss J (campagne J, juge), Boss K (campagne K, joueur), candidat C (inscrit de J et de K), autre compte A.
+-- Boss J (campagne J, juge), Boss K (campagne K, joueur), candidat C (inscrit de J et de K), autre compte A, compte en attente E,
+-- admin D (pas Boss).
 -- J : dépôt d1 de C (archive filtrée, alertes) et dépôt d2 sans compte ni archive filtrée ; K : dépôt d3 de C.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(39);
+select plan(43);
 
 insert into auth.users (id, email)
-select ('98000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2', 'cc', 'aa']) h;
+select ('98000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2', 'cc', 'aa', 'ee', 'ad']) h;
 insert into public.compte (id, github_id, pseudo, charte_acceptee_le, version_charte, majeur_declare_le, etat)
-select ('98000000-0000-4000-8000-0000000000' || h)::uuid, '98' || h, 'arch_' || h, now(), '2026-11-25', now(), 'actif'
-from unnest(array['b1', 'b2', 'cc', 'aa']) h;
+select ('98000000-0000-4000-8000-0000000000' || h)::uuid, '98' || h, 'arch_' || h, now(), '2026-11-25', now(),
+  case h when 'ee' then 'en_attente' else 'actif' end
+from unnest(array['b1', 'b2', 'cc', 'aa', 'ee', 'ad']) h;
+update public.compte set role = 'admin' where id = '98000000-0000-4000-8000-0000000000ad';
 insert into public.campagne (slug, boss_id, titre, theme, brief, langages, visibilite, role_boss, max_participants,
   ouverture_inscriptions, cloture_depot, date_resultats)
 select s, ('98000000-0000-4000-8000-0000000000' || b)::uuid, 'Titre ' || s, 'Thème', 'Brief', array['Go'], 'publique', r, 10,
@@ -107,6 +110,14 @@ select set_config('request.jwt.claims', '{"sub":"98000000-0000-4000-8000-0000000
 select is_empty($$select * from public.depots_du_boss(current_setting('t.j')::uuid)$$, 'autre compte : aucune ligne');
 select throws_ok($$select public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1')$$,
   'CT404', 'Archive introuvable.', 'autre compte : 404');
+select set_config('request.jwt.claims', '{"sub":"98000000-0000-4000-8000-0000000000ee","role":"authenticated"}', true);
+select is_empty($$select * from public.depots_du_boss(current_setting('t.j')::uuid)$$, 'compte en attente : aucune ligne');
+select throws_ok($$select public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1')$$,
+  'CT404', 'Archive introuvable.', 'compte en attente : 404');
+select set_config('request.jwt.claims', '{"sub":"98000000-0000-4000-8000-0000000000ad","role":"authenticated"}', true);
+select is_empty($$select * from public.depots_du_boss(current_setting('t.j')::uuid)$$, 'admin (pas Boss) : aucune ligne');
+select throws_ok($$select public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1')$$,
+  'CT404', 'Archive introuvable.', 'admin (pas Boss) : 404');
 reset role;
 
 -- Visiteur et rôle de service : pas même l'exécution.
