@@ -5,8 +5,10 @@ import { serverSupabaseServiceRole } from '#supabase/server'
 // tout refus est le même 404. Le site signe ensuite un lien de téléchargement de 60 s avec la clé de service (AD-1) ; la page
 // l'ouvre. Si la signature échoue, la trace reste : un essai compte.
 export default defineEventHandler(async (event) => {
-  // Un GET qui écrit la trace : un lien posé sur un autre site (cookie SameSite=Lax envoyé) ne journalise rien.
-  if (getHeader(event, 'sec-fetch-site') === 'cross-site') throw createError({ statusCode: 404, message: 'Archive introuvable.' })
+  // Un GET qui écrit la trace : seule la page du site (same-origin), une saisie directe (none) ou un client sans l'en-tête
+  // journalisent ; un lien posé sur un autre site ou un sous-domaine frère (cross-site, same-site) ne journalise rien.
+  const origine = getHeader(event, 'sec-fetch-site')
+  if (origine && origine !== 'same-origin' && origine !== 'none') throw createError({ statusCode: 404, message: 'Archive introuvable.' })
   // Paramètre hors de la forme d'un uuid (caractère nul, UTF-8 invalide…) : 404 tout de suite, sans appel à la base.
   const depot = getRouterParam(event, 'depot', { decode: true }) ?? ''
   if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(depot)) throw createError({ statusCode: 404, message: 'Archive introuvable.' })

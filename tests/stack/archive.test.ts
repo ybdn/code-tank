@@ -101,7 +101,7 @@ describe('GET /api/boss/[slug]/archives/[depot]', () => {
     expect(ligne(`select compte_id || ' ' || depot_id from public.telechargement order by telecharge_le desc limit 1`)).toBe(`${bossJuge.u.id} ${juge.depot}`)
   })
 
-  it('404 et rien de journalisé : Boss joueur, candidat, autre compte, visiteur, dépôt d\'une autre campagne, paramètre invalide, requête d\'un autre site', async () => {
+  it('404 et rien de journalisé : Boss joueur, candidat, autre compte, visiteur, dépôt d\'une autre campagne, paramètre invalide, requête d\'un autre site ou d\'un sous-domaine frère', async () => {
     const avant = journal()
     const refus = [
       [`/api/boss/${joueur.slug}/archives/${joueur.depot}`, bossJoueur.cookie],
@@ -115,9 +115,11 @@ describe('GET /api/boss/[slug]/archives/[depot]', () => {
       [`/api/boss/${juge.slug}/archives/%C3%28`, bossJuge.cookie],
     ] as const
     for (const [chemin, cookie] of refus) expect((await lire(chemin, cookie)).statut, chemin).toBe(404)
-    // Lien posé sur un autre site : le navigateur envoie le cookie (SameSite=Lax) et Sec-Fetch-Site: cross-site.
-    const croise = await fetch(serveur.url + `/api/boss/${juge.slug}/archives/${juge.depot}`, { headers: { cookie: bossJuge.cookie, 'sec-fetch-site': 'cross-site' } })
-    expect(croise.status).toBe(404)
+    // Lien posé sur un autre site ou un sous-domaine frère : le navigateur envoie le cookie (SameSite=Lax) et Sec-Fetch-Site.
+    for (const origine of ['cross-site', 'same-site']) {
+      const r = await fetch(serveur.url + `/api/boss/${juge.slug}/archives/${juge.depot}`, { headers: { cookie: bossJuge.cookie, 'sec-fetch-site': origine } })
+      expect(r.status, origine).toBe(404)
+    }
     expect(journal()).toBe(avant)
   })
 

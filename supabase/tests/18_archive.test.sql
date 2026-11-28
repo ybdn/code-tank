@@ -5,7 +5,7 @@
 -- J : dépôt d1 de C (archive filtrée, alertes) et dépôt d2 sans compte ni archive filtrée ; K : dépôt d3 de C.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(45);
+select plan(46);
 
 insert into auth.users (id, email)
 select ('98000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2', 'cc', 'aa', 'ee', 'ad']) h;
@@ -33,7 +33,7 @@ select ('98000000-0000-4000-8000-0000000000d' || n)::uuid, ('98000000-0000-4000-
   case when n <> 2 then 'aaaaaaaa-0000-4000-8000-00000000000' || n || '/bbbbbbbb-0000-4000-8000-000000000000/cccccccc-0000-4000-8000-000000000000.filtre.zip' end,
   repeat('a', 64), 1, 100, n = 1, case n when 1 then '[{"type": "postinstall", "fichier": "package.json", "ligne": 3}]'::jsonb
     when 2 then (select jsonb_agg(jsonb_build_object('type', 'fichier minifié', 'fichier', 'm' || i || '.js')) from generate_series(1, 7) i)
-      || '[{"type": "postinstall", "fichier": "package.json", "ligne": 2}]'::jsonb
+      || '[{"type": "postinstall", "fichier": "package.json", "ligne": 2}, "pas un objet", 3]'::jsonb
     else '[]'::jsonb end,
   'Présentation', now()
 from generate_series(1, 3) n;
@@ -75,7 +75,7 @@ select results_eq($$select participation_id, depot_id, pseudo, alerte_manipulati
     ('98000000-0000-4000-8000-0000000000f2'::uuid, '98000000-0000-4000-8000-0000000000d2'::uuid, null::text, false,
       '[{"type": "fichier minifié", "nb": 7, "exemples": [{"fichier": "m1.js"}, {"fichier": "m2.js"}, {"fichier": "m3.js"}, {"fichier": "m4.js"}, {"fichier": "m5.js"}]},
         {"type": "postinstall", "nb": 1, "exemples": [{"fichier": "package.json", "ligne": 2}]}]'::jsonb, false)$$,
-  'Boss juge : chaque dépôt, ses alertes regroupées par type (nombre, cinq exemples au plus) et la disponibilité de l''archive filtrée');
+  'Boss juge : chaque dépôt, ses alertes regroupées par type (nombre, cinq exemples au plus) et la disponibilité de l''archive filtrée ; un élément qui n''est pas un objet est ignoré');
 select is_empty($$select * from public.depots_du_boss(current_setting('t.k')::uuid)$$, 'Boss juge : rien d''une autre campagne');
 select is(public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1'),
   'aaaaaaaa-0000-4000-8000-000000000001/bbbbbbbb-0000-4000-8000-000000000000/cccccccc-0000-4000-8000-000000000000.filtre.zip',
@@ -188,6 +188,8 @@ select is((select count(*)::integer from public.depots_du_boss(current_setting('
 reset role;
 delete from public.depot where id = '98000000-0000-4000-8000-0000000000d1';
 select is((select count(*)::integer from public.telechargement where depot_id is null), 2, 'dépôt effacé : les traces restent, depot_id nul');
+delete from public.campagne where slug = 'archj';
+select is((select count(*)::integer from public.telechargement), 0, 'campagne supprimée : ses traces partent avec elle (cascade)');
 
 select * from finish();
 rollback;

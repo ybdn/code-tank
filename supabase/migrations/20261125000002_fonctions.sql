@@ -1411,7 +1411,7 @@ $$;
 -- autre compte) : un par dépôt actif d'une participation inscrite. Alertes et disponibilité de l'archive filtrée pour le Boss
 -- juge seul, nulles pour le joueur. Alertes d'intégrité regroupées par type, dans l'ordre de première apparition : nombre de
 -- fichiers et cinq exemples au plus ({ type, nb, exemples: [{ fichier, ligne? }] }), pour qu'un type répété des centaines de fois
--- n'en cache pas un autre ni n'alourdisse la réponse.
+-- n'en cache pas un autre ni n'alourdisse la réponse. Un élément qui n'est pas un objet est ignoré.
 create function public.depots_du_boss(p_campagne uuid)
 returns table (participation_id uuid, depot_id uuid, pseudo text, alerte_manipulation boolean, alertes_integrite jsonb,
   archive_disponible boolean)
@@ -1425,7 +1425,7 @@ as $$
         select e.a->>'type' as type, count(*) as nb, min(e.n) as premier,
           jsonb_agg(e.a - 'type' order by e.n) filter (where e.r <= 5) as exemples
         from (select x.a, x.n, row_number() over (partition by x.a->>'type' order by x.n) as r
-          from jsonb_array_elements(d.alertes_integrite) with ordinality x(a, n)) e
+          from jsonb_array_elements(d.alertes_integrite) with ordinality x(a, n) where jsonb_typeof(x.a) = 'object') e
         group by e.a->>'type'
       ) g) end,
     case when c.role_boss = 'juge' then d.chemin_filtre is not null end
