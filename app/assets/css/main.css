@@ -205,6 +205,8 @@ button.btn--primary { background: var(--accent); color: var(--accent-ink); }
 .dates { display: grid; gap: 12px; margin: 0; max-width: 40rem; }
 .dates dt { color: var(--muted); font-size: .9rem; }
 .dates dd { margin: 0; overflow-wrap: anywhere; }
+/* Alertes d'intégrité (story 5.1) : chemins de fichiers longs, sans espace. */
+.alerte { overflow-wrap: anywhere; }
 .empreinte { font-family: var(--font-display); font-size: .85rem; }
 .groupe { border: 0; padding: 0; margin: 0; min-width: 0; }
 .groupe legend { padding: 0; font-weight: 600; }

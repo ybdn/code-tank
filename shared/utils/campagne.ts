@@ -28,6 +28,14 @@ export type CampagneBoss = {
   plafond_usd: number | null; lancements: number; cle_fin: string | null
   // E-mail « délibération terminée » (story 4.7) : posé à l'envoi, null avant.
   fin_prevenue_le: string | null
+  // Dépôts (story 5.1, depots_du_boss) : en délibération ou prête ; alertes et archive pour le Boss juge seul, nulles pour le joueur.
+  depots: DepotBoss[]
+}
+// Alertes d'intégrité regroupées par type (depots_du_boss) : nombre de fichiers et cinq exemples au plus.
+export type AlerteIntegrite = { type: string; nb: number; exemples: { fichier: string; ligne?: number }[] }
+export type DepotBoss = {
+  participation_id: string; depot_id: string; pseudo: string | null
+  alerte_manipulation: boolean | null; alertes_integrite: AlerteIntegrite[] | null; archive_disponible: boolean | null
 }
 
 // Progression du jury (story 4.7, progression_deliberation) : audits par statut et coût cumulé en dollars.

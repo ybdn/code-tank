@@ -194,3 +194,12 @@ revoke all on function public.progression_deliberation(uuid) from public, anon, 
 grant execute on function public.progression_deliberation(uuid) to authenticated;
 revoke all on function public.reserver_envoi(uuid), public.fins_a_prevenir() from public, anon, authenticated;
 grant execute on function public.reserver_envoi(uuid), public.fins_a_prevenir() to service_role;
+
+-- Archive filtrée et alertes (story 5.1, AD-9) : telechargement sans politique, sans droit client ni droit du rôle de service
+-- (écrite par journaliser_telechargement seule, lue par personne depuis le site). journaliser_telechargement et depots_du_boss :
+-- authenticated seul ; leurs gardes vivent dans les fonctions (Boss, juge, étape, campagne vivante, compte actif, dépôt de la
+-- campagne) : un appel direct par /rest/v1/rpc ne contourne rien.
+alter table public.telechargement enable row level security;
+revoke all on public.telechargement from service_role;
+revoke all on function public.journaliser_telechargement(uuid, uuid), public.depots_du_boss(uuid) from public, anon, service_role;
+grant execute on function public.journaliser_telechargement(uuid, uuid), public.depots_du_boss(uuid) to authenticated;

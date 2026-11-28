@@ -217,6 +217,50 @@ isOneToOne: true
                   Relationships: [
                     
                   ]
+                },"telechargement": {
+                  Row: {
+                    "campagne_id": string,"compte_id": string,"depot_id": string | null,"id": string,"telecharge_le": string
+                  }
+                  ComputedFields: never
+                  Insert: {
+                    "campagne_id": string,"compte_id": string,"depot_id"?: string | null,"id"?: string,"telecharge_le"?: string
+                  }
+                  Update: {
+                    "campagne_id"?: string,"compte_id"?: string,"depot_id"?: string | null,"id"?: string,"telecharge_le"?: string
+                  }
+                  Relationships: [
+                    {
+      foreignKeyName: "telechargement_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "telechargement_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne_calculee"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "telechargement_campagne_id_fkey"
+      columns: ["campagne_id"]
+isOneToOne: false
+      referencedRelation: "campagne_phase"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "telechargement_compte_id_fkey"
+      columns: ["compte_id"]
+isOneToOne: false
+      referencedRelation: "compte"
+      referencedColumns: ["id"]
+    },{
+      foreignKeyName: "telechargement_depot_id_fkey"
+      columns: ["depot_id"]
+isOneToOne: false
+      referencedRelation: "depot"
+      referencedColumns: ["id"]
+    }
+                  ]
                 },"verrou": {
                   Row: {
                     "detenteur": string,"expire_le": string,"nom": string
@@ -301,6 +345,11 @@ isOneToOne: false
 "deposer":
 { Args: { "p_campagne": string,"p_chemin": string,"p_demande": string,"p_droit_declare": boolean,"p_presentation": string }; Returns: undefined
                            },
+"depots_du_boss":
+{ Args: { "p_campagne": string }; Returns: {
+              "alerte_manipulation": boolean,"alertes_integrite": Json,"archive_disponible": boolean,"depot_id": string,"participation_id": string,"pseudo": string
+            }[]
+                           },
 "ecrire_tokens_exacts":
 { Args: { "p_depot": string,"p_nb": number }; Returns: boolean
                            },
@@ -324,6 +373,9 @@ isOneToOne: false
                            },
 "fins_a_prevenir":
 { Args: Record<PropertyKey, never>; Returns: string[]
+                           },
+"journaliser_telechargement":
+{ Args: { "p_campagne": string,"p_depot": string }; Returns: string
                            },
 "lancer_deliberation":
 { Args: { "p_campagne": string,"p_cle": string,"p_compte": string,"p_plafond_usd": number,"p_version_engagements": string }; Returns: Json
