@@ -346,7 +346,7 @@ async function supprimer() {
               <template v-if="d.alertes_integrite?.length">
                 <p><strong>Alertes d'intégrité&nbsp;:</strong></p>
                 <ul>
-                  <li v-for="(a, n) in d.alertes_integrite" :key="n" class="alerte">{{ a.type }}&nbsp;: {{ a.fichier }}{{ a.ligne ? `, ligne ${a.ligne}` : '' }}</li>
+                  <li v-for="(a, n) in d.alertes_integrite" :key="n" class="alerte">{{ a.type }}&nbsp;: {{ a.exemples.map((x) => x.ligne ? `${x.fichier}, ligne ${x.ligne}` : x.fichier).join(' ; ') }}{{ a.nb > a.exemples.length ? `, et ${a.nb - a.exemples.length} autre${a.nb - a.exemples.length > 1 ? 's' : ''}` : '' }}</li>
                 </ul>
               </template>
               <p v-if="!d.alerte_manipulation && !d.alertes_integrite?.length">Aucune alerte.</p>

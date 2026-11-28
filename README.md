@@ -104,7 +104,8 @@ pnpm build
   (un e-mail perdu plutôt qu'un doublon) ; l'adresse n'est ni renvoyée ni journalisée.
 - Dépôts du Boss (story 5.1, AD-9) : en `deliberation` ou `prete`, `GET /api/boss/[slug]` renvoie aussi `depots`
   (`depots_du_boss`, JWT du Boss ; alertes et `archive_disponible` pour le Boss juge seul, nulles pour le joueur ; vide à toute
-  autre étape). `GET /api/boss/[slug]/archives/[depot]` : forme uuid (**404** sinon), Boss (**404**), puis
+  autre étape ; alertes d'intégrité regroupées par type, nombre et cinq exemples au plus). `GET /api/boss/[slug]/archives/[depot]` :
+  requête d'un autre site (`Sec-Fetch-Site: cross-site`, **404**), forme uuid (**404** sinon), Boss (**404**), puis
   `journaliser_telechargement` (JWT du Boss), qui écrit la trace et rend le chemin de l'archive filtrée ; tout refus est le même
   **404**. Le site signe ensuite un lien de 60 s (clé de service, téléchargement) ; réponse `{ url }`. Signature en échec :
   **503**, la trace reste (un essai compte). Sur `/boss/[slug]`, le Boss juge voit chaque dépôt, ses alertes (en texte) et le

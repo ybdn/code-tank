@@ -31,7 +31,10 @@ insert into public.depot (id, participation_id, chemin_stockage, chemin_filtre, 
 select ('98000000-0000-4000-8000-0000000000d' || n)::uuid, ('98000000-0000-4000-8000-0000000000f' || n)::uuid,
   'aaaaaaaa-0000-4000-8000-00000000000' || n || '/bbbbbbbb-0000-4000-8000-000000000000/cccccccc-0000-4000-8000-000000000000.zip',
   case when n <> 2 then 'aaaaaaaa-0000-4000-8000-00000000000' || n || '/bbbbbbbb-0000-4000-8000-000000000000/cccccccc-0000-4000-8000-000000000000.filtre.zip' end,
-  repeat('a', 64), 1, 100, n = 1, case when n = 1 then '[{"type": "postinstall", "fichier": "package.json", "ligne": 3}]'::jsonb else '[]'::jsonb end,
+  repeat('a', 64), 1, 100, n = 1, case n when 1 then '[{"type": "postinstall", "fichier": "package.json", "ligne": 3}]'::jsonb
+    when 2 then (select jsonb_agg(jsonb_build_object('type', 'fichier minifié', 'fichier', 'm' || i || '.js')) from generate_series(1, 7) i)
+      || '[{"type": "postinstall", "fichier": "package.json", "ligne": 2}]'::jsonb
+    else '[]'::jsonb end,
   'Présentation', now()
 from generate_series(1, 3) n;
 
@@ -68,9 +71,11 @@ select set_config('request.jwt.claims', '{"sub":"98000000-0000-4000-8000-0000000
 select results_eq($$select participation_id, depot_id, pseudo, alerte_manipulation, alertes_integrite, archive_disponible
     from public.depots_du_boss(current_setting('t.j')::uuid) order by depot_id$$,
   $$values ('98000000-0000-4000-8000-0000000000f1'::uuid, '98000000-0000-4000-8000-0000000000d1'::uuid, 'arch_cc'::text, true,
-      '[{"type": "postinstall", "fichier": "package.json", "ligne": 3}]'::jsonb, true),
-    ('98000000-0000-4000-8000-0000000000f2'::uuid, '98000000-0000-4000-8000-0000000000d2'::uuid, null::text, false, '[]'::jsonb, false)$$,
-  'Boss juge : chaque dépôt, ses alertes et la disponibilité de l''archive filtrée');
+      '[{"type": "postinstall", "nb": 1, "exemples": [{"fichier": "package.json", "ligne": 3}]}]'::jsonb, true),
+    ('98000000-0000-4000-8000-0000000000f2'::uuid, '98000000-0000-4000-8000-0000000000d2'::uuid, null::text, false,
+      '[{"type": "fichier minifié", "nb": 7, "exemples": [{"fichier": "m1.js"}, {"fichier": "m2.js"}, {"fichier": "m3.js"}, {"fichier": "m4.js"}, {"fichier": "m5.js"}]},
+        {"type": "postinstall", "nb": 1, "exemples": [{"fichier": "package.json", "ligne": 2}]}]'::jsonb, false)$$,
+  'Boss juge : chaque dépôt, ses alertes regroupées par type (nombre, cinq exemples au plus) et la disponibilité de l''archive filtrée');
 select is_empty($$select * from public.depots_du_boss(current_setting('t.k')::uuid)$$, 'Boss juge : rien d''une autre campagne');
 select is(public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1'),
   'aaaaaaaa-0000-4000-8000-000000000001/bbbbbbbb-0000-4000-8000-000000000000/cccccccc-0000-4000-8000-000000000000.filtre.zip',

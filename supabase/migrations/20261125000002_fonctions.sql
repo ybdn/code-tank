@@ -1409,7 +1409,9 @@ $$;
 
 -- Dépôts de la campagne pour son Boss (story 5.1, AD-9), en deliberation ou prete seulement, sinon 0 ligne (comme pour tout
 -- autre compte) : un par dépôt actif d'une participation inscrite. Alertes et disponibilité de l'archive filtrée pour le Boss
--- juge seul, nulles pour le joueur.
+-- juge seul, nulles pour le joueur. Alertes d'intégrité regroupées par type, dans l'ordre de première apparition : nombre de
+-- fichiers et cinq exemples au plus ({ type, nb, exemples: [{ fichier, ligne? }] }), pour qu'un type répété des centaines de fois
+-- n'en cache pas un autre ni n'alourdisse la réponse.
 create function public.depots_du_boss(p_campagne uuid)
 returns table (participation_id uuid, depot_id uuid, pseudo text, alerte_manipulation boolean, alertes_integrite jsonb,
   archive_disponible boolean)
@@ -1417,7 +1419,15 @@ language sql stable security definer set search_path = ''
 as $$
   select p.id, d.id, co.pseudo,
     case when c.role_boss = 'juge' then d.alerte_manipulation end,
-    case when c.role_boss = 'juge' then d.alertes_integrite end,
+    case when c.role_boss = 'juge' then (
+      select coalesce(jsonb_agg(jsonb_build_object('type', g.type, 'nb', g.nb, 'exemples', g.exemples) order by g.premier), '[]')
+      from (
+        select e.a->>'type' as type, count(*) as nb, min(e.n) as premier,
+          jsonb_agg(e.a - 'type' order by e.n) filter (where e.r <= 5) as exemples
+        from (select x.a, x.n, row_number() over (partition by x.a->>'type' order by x.n) as r
+          from jsonb_array_elements(d.alertes_integrite) with ordinality x(a, n)) e
+        group by e.a->>'type'
+      ) g) end,
     case when c.role_boss = 'juge' then d.chemin_filtre is not null end
   from public.campagne c
   join public.participation p on p.campagne_id = c.id and p.etat = 'inscrit'
@@ -1445,7 +1455,7 @@ begin
   join public.participation p on p.campagne_id = c.id and p.etat = 'inscrit'
   join public.depot d on d.participation_id = p.id
   where c.id = p_campagne and d.id = p_depot and c.boss_id = auth.uid() and c.role_boss = 'juge'
-    and c.statut in ('deliberation', 'prete') and c.bloquee_le is null and now() <= c.date_resultats
+    and c.statut in ('deliberation', 'prete') and public.campagne_vivante(c.id)
     and d.chemin_filtre is not null and public.compte_actif()
   for update of c;
   if v_chemin is null then

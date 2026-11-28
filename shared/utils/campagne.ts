@@ -31,7 +31,8 @@ export type CampagneBoss = {
   // Dépôts (story 5.1, depots_du_boss) : en délibération ou prête ; alertes et archive pour le Boss juge seul, nulles pour le joueur.
   depots: DepotBoss[]
 }
-export type AlerteIntegrite = { type: string; fichier: string; ligne?: number }
+// Alertes d'intégrité regroupées par type (depots_du_boss) : nombre de fichiers et cinq exemples au plus.
+export type AlerteIntegrite = { type: string; nb: number; exemples: { fichier: string; ligne?: number }[] }
 export type DepotBoss = {
   participation_id: string; depot_id: string; pseudo: string | null
   alerte_manipulation: boolean | null; alertes_integrite: AlerteIntegrite[] | null; archive_disponible: boolean | null
