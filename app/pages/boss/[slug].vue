@@ -191,7 +191,7 @@ onMounted(() => watch(suivi, (oui) => { if (oui) actualiser(true) }, { immediate
 
 // Archives filtrées (story 5.1, AD-9) : en délibération ou prête, le Boss juge lit les alertes de chaque dépôt (texte seulement)
 // et demande un lien signé de 60 s, ouvert aussitôt (téléchargement : la page reste). Chaque demande est journalisée par le serveur.
-const depotsJuge = computed(() => data.value?.role_boss === 'juge' ? data.value.depots ?? [] : [])
+const depotsJuge = computed(() => data.value?.role_boss === 'juge' ? data.value.depots : [])
 const telechargement = ref('')
 const annonceArchive = ref('')
 async function telecharger(depot: string) {
@@ -203,10 +203,11 @@ async function telecharger(depot: string) {
   try {
     const { url } = await $fetch<{ url: string }>(`/api/boss/${encodeURIComponent(slug)}/archives/${depot}`)
     window.location.assign(url)
-    annonceArchive.value = 'Téléchargement lancé.'
+    annonceArchive.value = 'Lien de téléchargement prêt.'
   } catch (e) {
-    // 404 : la campagne a pu changer (bloquée, échue, étape, compte suspendu) ; la page se relit pour ne plus proposer le bouton.
-    if ((e as { statusCode?: number }).statusCode === 404) await refresh()
+    // 404 : la campagne a pu changer (bloquée, échue, étape, compte suspendu) ; la page se relit pour ne plus proposer le bouton
+    // (relire : un échec de lecture garde la page affichée).
+    if ((e as { statusCode?: number }).statusCode === 404) await relire()
     await echec(e)
   } finally {
     telechargement.value = ''

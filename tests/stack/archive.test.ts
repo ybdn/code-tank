@@ -131,6 +131,52 @@ describe('GET /api/boss/[slug]/archives/[depot]', () => {
   })
 })
 
+describe('refus traduits en 404 et page vouée au refus', () => {
+  const archive = () => lire(`/api/boss/${juge.slug}/archives/${juge.depot}`, bossJuge.cookie)
+  const page = async () => (await lire(`/boss/${juge.slug}`, bossJuge.cookie)).texte
+  const sansDeclencheur = (requete: string) => sql(`alter table public.campagne disable trigger campagne_transition; ${requete}; alter table public.campagne enable trigger campagne_transition`)
+
+  it('ouverte : 404, et la campagne ne porte aucun dépôt', async () => {
+    const avant = journal()
+    try {
+      sansDeclencheur(`update public.campagne set statut = 'ouverte' where id = '${juge.id}'`)
+      expect((await archive()).statut).toBe(404)
+      expect(JSON.parse((await lire(`/api/boss/${juge.slug}`, bossJuge.cookie)).texte).depots).toEqual([])
+      expect(journal()).toBe(avant)
+    } finally {
+      sansDeclencheur(`update public.campagne set statut = 'deliberation' where id = '${juge.id}'`)
+    }
+  })
+
+  it('bloquée, échue, compte suspendu, sans archive filtrée : 404, rien de journalisé, une phrase à la place du bouton', async () => {
+    const avant = journal()
+    const dates = ligne(`select ouverture_inscriptions || '|' || cloture_depot || '|' || date_resultats from public.campagne where id = '${juge.id}'`).split('|')
+    const cas: [string, string, string][] = [
+      [`update public.campagne set bloquee_le = now(), motif_blocage = 'Motif' where id = '${juge.id}'`,
+        `update public.campagne set bloquee_le = null, motif_blocage = null where id = '${juge.id}'`, 'L&#39;archive ne se télécharge plus'],
+      [`update public.campagne set ouverture_inscriptions = now() - interval '3 days', cloture_depot = now() - interval '2 days', date_resultats = now() - interval '1 minute' where id = '${juge.id}'`,
+        `update public.campagne set ouverture_inscriptions = '${dates[0]}', cloture_depot = '${dates[1]}', date_resultats = '${dates[2]}' where id = '${juge.id}'`, 'L&#39;archive ne se télécharge plus'],
+      [`update public.compte set etat = 'suspendu' where id = '${bossJuge.u.id}'`,
+        `update public.compte set etat = 'actif' where id = '${bossJuge.u.id}'`, 'L&#39;archive ne se télécharge plus'],
+      [`update public.depot set chemin_filtre = null where id = '${juge.depot}'`,
+        `update public.depot set chemin_filtre = '${juge.filtre}' where id = '${juge.depot}'`, 'Pas d&#39;archive filtrée pour ce dépôt.'],
+    ]
+    for (const [poser, retirer, phrase] of cas) {
+      try {
+        sql(poser)
+        expect((await archive()).statut, poser).toBe(404)
+        const texte = await page()
+        expect(texte, poser).toContain(phrase)
+        expect(texte, poser).not.toContain('Télécharger l&#39;archive filtrée')
+      } finally {
+        sql(retirer)
+      }
+    }
+    expect(journal()).toBe(avant)
+    expect(await page()).toContain('Télécharger l&#39;archive filtrée')
+  })
+})
+
 describe('page du Boss', () => {
   it('Boss juge : alertes en texte, avertissement et bouton ; Boss joueur : ni alertes ni bouton', async () => {
     const page = (await lire(`/boss/${juge.slug}`, bossJuge.cookie)).texte

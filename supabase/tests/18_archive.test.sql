@@ -4,7 +4,7 @@
 -- J : dépôt d1 de C (archive filtrée, alertes) et dépôt d2 sans compte ni archive filtrée ; K : dépôt d3 de C.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(38);
+select plan(39);
 
 insert into auth.users (id, email)
 select ('98000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2', 'cc', 'aa']) h;
@@ -149,9 +149,15 @@ select throws_ok($$select public.journaliser_telechargement(current_setting('t.j
 reset role;
 select is((select count(*)::integer from public.telechargement), 2, 'deux téléchargements permis, aucune ligne pour les refus');
 
--- La trace survit au retrait du dépôt et à la participation retirée.
+-- La trace survit au retrait du dépôt et à la participation retirée ; une participation retirée ne se télécharge plus.
+update public.campagne set ouverture_inscriptions = now() - interval '2 days', cloture_depot = now() - interval '1 day',
+  date_resultats = now() + interval '5 days' where slug = 'archj';
+update public.depot set chemin_filtre = 'aaaaaaaa-0000-4000-8000-000000000002/bbbbbbbb-0000-4000-8000-000000000000/cccccccc-0000-4000-8000-000000000000.filtre.zip'
+  where id = '98000000-0000-4000-8000-0000000000d2';
 update public.participation set etat = 'retire', retire_le = now() where id = '98000000-0000-4000-8000-0000000000f2';
 set local role authenticated;
+select throws_ok($$select public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d2')$$,
+  'CT404', 'Archive introuvable.', 'participation retirée : 404, même avec une archive filtrée');
 select is((select count(*)::integer from public.depots_du_boss(current_setting('t.j')::uuid)), 1, 'participation retirée : son dépôt n''est plus listé');
 reset role;
 delete from public.depot where id = '98000000-0000-4000-8000-0000000000d1';
