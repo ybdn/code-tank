@@ -1404,3 +1404,54 @@ as $$
   select c.id from public.campagne c where c.statut = 'prete' and c.fin_prevenue_le is null and c.bloquee_le is null
     and exists (select 1 from auth.users u where u.id = c.boss_id and u.email is not null)
 $$;
+
+-- Jugement (epic 5) ------------------------------------------------------------------------------
+
+-- Dépôts de la campagne pour son Boss (story 5.1, AD-9), en deliberation ou prete seulement, sinon 0 ligne (comme pour tout
+-- autre compte) : un par dépôt actif d'une participation inscrite. Alertes et disponibilité de l'archive filtrée pour le Boss
+-- juge seul, nulles pour le joueur.
+create function public.depots_du_boss(p_campagne uuid)
+returns table (participation_id uuid, depot_id uuid, pseudo text, alerte_manipulation boolean, alertes_integrite jsonb,
+  archive_disponible boolean)
+language sql stable security definer set search_path = ''
+as $$
+  select p.id, d.id, co.pseudo,
+    case when c.role_boss = 'juge' then d.alerte_manipulation end,
+    case when c.role_boss = 'juge' then d.alertes_integrite end,
+    case when c.role_boss = 'juge' then d.chemin_filtre is not null end
+  from public.campagne c
+  join public.participation p on p.campagne_id = c.id and p.etat = 'inscrit'
+  join public.depot d on d.participation_id = p.id
+  left join public.compte co on co.id = p.compte_id
+  where c.id = p_campagne and c.boss_id = auth.uid() and c.statut in ('deliberation', 'prete')
+  order by co.pseudo, d.id
+$$;
+
+-- Téléchargement de l'archive filtrée (story 5.1, SPECS § 7, AD-9) : Boss juge de la campagne, compte actif, en deliberation
+-- ou prete, campagne vivante ; dépôt actif de cette campagne, d'une participation inscrite, avec une archive filtrée. Journalise
+-- (qui, quoi, quand) puis rend le chemin, que le site signe 60 s avec la clé de service. Tout refus : la même erreur CT404,
+-- sans rien écrire (pas d'oracle). Verrou de la campagne : pas de trace pour une campagne qui change d'étape au même instant.
+-- shortcut: pas de limite de débit (une ligne par appel du Boss juge, qui n'écrit que sa propre trace) ; ajouter un CT429 si le
+-- journal grossit anormalement en production.
+create function public.journaliser_telechargement(p_campagne uuid, p_depot uuid)
+returns text
+language plpgsql security definer set search_path = ''
+as $$
+declare
+  v_chemin text;
+begin
+  select d.chemin_filtre into v_chemin
+  from public.campagne c
+  join public.participation p on p.campagne_id = c.id and p.etat = 'inscrit'
+  join public.depot d on d.participation_id = p.id
+  where c.id = p_campagne and d.id = p_depot and c.boss_id = auth.uid() and c.role_boss = 'juge'
+    and c.statut in ('deliberation', 'prete') and c.bloquee_le is null and now() <= c.date_resultats
+    and d.chemin_filtre is not null and public.compte_actif()
+  for update of c;
+  if v_chemin is null then
+    raise exception 'Archive introuvable.' using errcode = 'CT404';
+  end if;
+  insert into public.telechargement (campagne_id, depot_id, compte_id) values (p_campagne, p_depot, auth.uid());
+  return v_chemin;
+end
+$$;

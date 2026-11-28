@@ -189,6 +189,30 @@ async function actualiser(silencieux = false) {
 }
 onMounted(() => watch(suivi, (oui) => { if (oui) actualiser(true) }, { immediate: true }))
 
+// Archives filtrées (story 5.1, AD-9) : en délibération ou prête, le Boss juge lit les alertes de chaque dépôt (texte seulement)
+// et demande un lien signé de 60 s, ouvert aussitôt (téléchargement : la page reste). Chaque demande est journalisée par le serveur.
+const depotsJuge = computed(() => data.value?.role_boss === 'juge' ? data.value.depots ?? [] : [])
+const telechargement = ref('')
+const annonceArchive = ref('')
+async function telecharger(depot: string) {
+  // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'appel.
+  if (telechargement.value) return
+  telechargement.value = depot
+  annonceArchive.value = ''
+  alerte.value = ''
+  try {
+    const { url } = await $fetch<{ url: string }>(`/api/boss/${encodeURIComponent(slug)}/archives/${depot}`)
+    window.location.assign(url)
+    annonceArchive.value = 'Téléchargement lancé.'
+  } catch (e) {
+    // 404 : la campagne a pu changer (bloquée, échue, étape, compte suspendu) ; la page se relit pour ne plus proposer le bouton.
+    if ((e as { statusCode?: number }).statusCode === 404) await refresh()
+    await echec(e)
+  } finally {
+    telechargement.value = ''
+  }
+}
+
 // Lien d'invitation (story 2.4) : URL absolue à partir de l'origine de la requête, la même au rendu serveur et dans le navigateur.
 const origine = useRequestURL().origin
 const lien = computed(() => data.value?.jeton_invitation ? `${origine}/invitation/${data.value.jeton_invitation}` : '')
@@ -307,6 +331,30 @@ async function supprimer() {
               <p class="btns"><button class="btn btn--primary" type="submit" :aria-disabled="occupe">Lancer la délibération</button></p>
             </form>
           </template>
+        </template>
+        <template v-if="depotsJuge.length">
+          <h2>Les dépôts à lire</h2>
+          <p>Lis le code avant de voter. Chaque téléchargement est noté&nbsp;: qui, quoi, quand.</p>
+          <ul>
+            <li v-for="d in depotsJuge" :key="d.depot_id">
+              <h3 :id="`depot-${d.depot_id}`">{{ d.pseudo ?? 'Compte supprimé' }}</h3>
+              <p v-if="d.alerte_manipulation"><strong>Alerte&nbsp;:</strong> une tentative de manipulation du jury a été relevée dans le code.</p>
+              <template v-if="d.alertes_integrite?.length">
+                <p><strong>Alertes d'intégrité&nbsp;:</strong></p>
+                <ul>
+                  <li v-for="(a, n) in d.alertes_integrite" :key="n">{{ a.type }}&nbsp;: {{ a.fichier }}{{ a.ligne ? `, ligne ${a.ligne}` : '' }}</li>
+                </ul>
+              </template>
+              <p v-if="!d.alerte_manipulation && !d.alertes_integrite?.length">Aucune alerte.</p>
+              <p v-if="!d.archive_disponible">Pas d'archive filtrée pour ce dépôt.</p>
+              <p v-else-if="!actif">L'archive ne se télécharge plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : 'la date des résultats est passée.' }}</p>
+              <p v-else class="btns">
+                <button class="btn" type="button" :aria-disabled="!!telechargement" :aria-describedby="`depot-${d.depot_id} avertissement-${d.depot_id}`" @click="telecharger(d.depot_id)">Télécharger l'archive filtrée</button>
+                <strong :id="`avertissement-${d.depot_id}`">N'exécute jamais ce code.</strong>
+              </p>
+            </li>
+          </ul>
+          <p role="status" aria-live="polite">{{ annonceArchive }}</p>
         </template>
         <template v-if="data.statut === 'prete'">
           <h2>La délibération est terminée</h2>

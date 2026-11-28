@@ -201,3 +201,13 @@ create table public.engagement (
   version text not null check (char_length(version) between 1 and 40),
   accepte_le timestamptz not null default now()
 );
+
+-- Téléchargement d'une archive filtrée par le Boss juge (story 5.1, SPECS § 7, AD-9) : qui, quoi, quand. Écrite par
+-- journaliser_telechargement seule, lue par personne depuis le site. La trace survit au retrait du dépôt (depot_id nul).
+create table public.telechargement (
+  id uuid primary key default gen_random_uuid(),
+  campagne_id uuid not null references public.campagne on delete cascade,
+  depot_id uuid references public.depot on delete set null,
+  compte_id uuid not null references public.compte,
+  telecharge_le timestamptz not null default now()
+);

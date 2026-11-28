@@ -14,7 +14,7 @@ select is_empty($$
     and not (r = 'authenticated' and p.proname in ('est_admin', 'compte_actif', 'regler_mode_acces', 'changer_pseudo',
       'creer_campagne', 'modifier_campagne', 'supprimer_brouillon', 'ouvrir_campagne', 'sinscrire', 'se_desinscrire',
       'lire_invitation', 'regenerer_invitation', 'peut_deposer', 'deposer', 'retirer_depot', 'estimer_pire_cas', 'depense_audits',
-      'progression_deliberation'))
+      'progression_deliberation', 'depots_du_boss', 'journaliser_telechargement'))
 $$, 'aucune fonction exécutable par anon ni authenticated, hors les gardes est_admin et compte_actif et les RPC gardées pour authenticated');
 select is_empty($$
   select c.relname from pg_class c join pg_namespace n on n.oid = c.relnamespace
