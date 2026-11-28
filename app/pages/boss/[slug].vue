@@ -194,16 +194,19 @@ onMounted(() => watch(suivi, (oui) => { if (oui) actualiser(true) }, { immediate
 const depotsJuge = computed(() => data.value?.role_boss === 'juge' ? data.value.depots : [])
 const telechargement = ref('')
 const annonceArchive = ref('')
-async function telecharger(depot: string) {
+async function telecharger(depot: string, pseudo: string) {
   // aria-disabled plutôt que disabled : le bouton garde le focus pendant l'appel.
-  if (telechargement.value) return
+  if (telechargement.value) {
+    annonceArchive.value = 'Téléchargement en cours…'
+    return
+  }
   telechargement.value = depot
   annonceArchive.value = ''
   alerte.value = ''
   try {
     const { url } = await $fetch<{ url: string }>(`/api/boss/${encodeURIComponent(slug)}/archives/${depot}`)
     window.location.assign(url)
-    annonceArchive.value = 'Lien de téléchargement prêt.'
+    annonceArchive.value = `Lien de téléchargement prêt : ${pseudo}.`
   } catch (e) {
     // 404 : la campagne a pu changer (bloquée, échue, étape, compte suspendu) ; la page se relit pour ne plus proposer le bouton
     // (relire : un échec de lecture garde la page affichée).
@@ -343,14 +346,14 @@ async function supprimer() {
               <template v-if="d.alertes_integrite?.length">
                 <p><strong>Alertes d'intégrité&nbsp;:</strong></p>
                 <ul>
-                  <li v-for="(a, n) in d.alertes_integrite" :key="n">{{ a.type }}&nbsp;: {{ a.fichier }}{{ a.ligne ? `, ligne ${a.ligne}` : '' }}</li>
+                  <li v-for="(a, n) in d.alertes_integrite" :key="n" class="alerte">{{ a.type }}&nbsp;: {{ a.fichier }}{{ a.ligne ? `, ligne ${a.ligne}` : '' }}</li>
                 </ul>
               </template>
               <p v-if="!d.alerte_manipulation && !d.alertes_integrite?.length">Aucune alerte.</p>
               <p v-if="!d.archive_disponible">Pas d'archive filtrée pour ce dépôt.</p>
               <p v-else-if="!actif">L'archive ne se télécharge plus&nbsp;: {{ !data.compte_actif ? 'ton compte n\'est pas actif.' : data.bloquee_le ? 'la campagne est bloquée.' : 'la date des résultats est passée.' }}</p>
               <p v-else class="btns">
-                <button class="btn" type="button" :aria-disabled="!!telechargement" :aria-describedby="`depot-${d.depot_id} avertissement-${d.depot_id}`" @click="telecharger(d.depot_id)">Télécharger l'archive filtrée</button>
+                <button class="btn" type="button" :aria-disabled="!!telechargement" :aria-describedby="`depot-${d.depot_id} avertissement-${d.depot_id}`" @click="telecharger(d.depot_id, d.pseudo ?? 'compte supprimé')">Télécharger l'archive filtrée</button>
                 <strong :id="`avertissement-${d.depot_id}`">N'exécute jamais ce code.</strong>
               </p>
             </li>

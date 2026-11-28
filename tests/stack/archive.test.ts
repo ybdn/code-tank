@@ -177,6 +177,18 @@ describe('refus traduits en 404 et page vouée au refus', () => {
   })
 })
 
+describe('signature en échec', () => {
+  it('objet absent du bucket : 503 avec sa phrase, et la trace reste (un essai compte)', async () => {
+    const avant = journal()
+    const effacer = await fetch(`${API}/storage/v1/object/depots`, { method: 'DELETE', headers: service, body: JSON.stringify({ prefixes: [juge.filtre] }) })
+    expect(effacer.status).toBe(200)
+    const r = await lire(`/api/boss/${juge.slug}/archives/${juge.depot}`, bossJuge.cookie)
+    expect(r.statut).toBe(503)
+    expect(JSON.parse(r.texte).message).toBe('L\'archive ne peut pas être téléchargée pour le moment. Réessaie dans un instant.')
+    expect(journal()).toBe(avant + 1)
+  })
+})
+
 describe('page du Boss', () => {
   it('Boss juge : alertes en texte, avertissement et bouton ; Boss joueur : ni alertes ni bouton', async () => {
     const page = (await lire(`/boss/${juge.slug}`, bossJuge.cookie)).texte

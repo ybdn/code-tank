@@ -86,7 +86,7 @@ pnpm build
   ni renvoyée ni citée par une erreur ; le journal ne porte que le statut de `count_tokens`.
 - `POST /api/boss/[slug]/fin` (story 4.6, AD-5) : Boss (**404**), JSON (**415**), puis `terminer_deliberation` avec la clé de service et
   l'id vérifié du Boss. Campagne en `deliberation` sans clé : elle passe en `prete`, les audits non terminés en `echec` (un
-  dépôt dont un audit est en échec n'a pas de score, ni classé ni noté zéro ; l'affichage vient à l'epic 5). Refus de la base
+  dépôt dont un audit est en échec n'a pas de score, ni classé ni noté zéro ; l'affichage vient à la story 5.4). Refus de la base
   (clé encore rangée : le jury travaille, autre étape, compte non actif, campagne bloquée ; une campagne échue se termine) : **409**. Réponse
   `{ statut: 'prete' }`. Sur `/boss/[slug]`, le bloc « Terminer la délibération » s'affiche en `deliberation` sans clé, à côté du
   formulaire de relance (nouvelle clé, plafond relevable, `lancements < 3`).
@@ -102,6 +102,13 @@ pnpm build
   cron, appellent `prevenirFin` (`server/utils/fin.ts`) : `reserver_envoi` pose `fin_prevenue_le` et rend l'adresse du Boss
   au seul gagnant (rôle de service), qui envoie (`courrielFin`, `envoyerCourriel`). Un envoi en échec n'est pas rejoué
   (un e-mail perdu plutôt qu'un doublon) ; l'adresse n'est ni renvoyée ni journalisée.
+- Dépôts du Boss (story 5.1, AD-9) : en `deliberation` ou `prete`, `GET /api/boss/[slug]` renvoie aussi `depots`
+  (`depots_du_boss`, JWT du Boss ; alertes et `archive_disponible` pour le Boss juge seul, nulles pour le joueur ; vide à toute
+  autre étape). `GET /api/boss/[slug]/archives/[depot]` : forme uuid (**404** sinon), Boss (**404**), puis
+  `journaliser_telechargement` (JWT du Boss), qui écrit la trace et rend le chemin de l'archive filtrée ; tout refus est le même
+  **404**. Le site signe ensuite un lien de 60 s (clé de service, téléchargement) ; réponse `{ url }`. Signature en échec :
+  **503**, la trace reste (un essai compte). Sur `/boss/[slug]`, le Boss juge voit chaque dépôt, ses alertes (en texte) et le
+  bouton « Télécharger l'archive filtrée » à côté de « N'exécute jamais ce code. ».
 - `server/utils/json.ts` : `exigerJson`, **415** pour toute route d'écriture dont le corps n'est pas du JSON.
 - `server/utils/debit.ts` : limite de débit par adresse IP (`limiter`, plafonds dans `PLAFONDS`). L'IP n'est jamais stockée :
   seule son empreinte HMAC-SHA-256 (`NUXT_SECRET_DEBIT`) part à `consommer_debit`. Sans secret ou base injoignable : **503** ;
@@ -206,7 +213,7 @@ Trois migrations datées du même jour (AD-13) :
   rôle de service, **42501** sinon ; refusée au Boss avant la clôture des dépôts, pour ne pas trahir la taille des
   dépôts concurrents). Table `audit` (story 4.2) : un audit par couple dépôt × juré, créé par `lancer_deliberation` et écrit par les
   fonctions de la story 4.4. Délibération (story 4.3) : colonnes `plafond_usd`, `lancements` (3 au plus) et `cle_fin` (4
-  derniers caractères de la clé) de `campagne`, table `engagement` (version et date de chaque lancement) ;
+  derniers caractères de la clé) de `campagne`, table `engagement` (version et date de chaque lancement), table `telechargement` (story 5.1 : qui, quoi, quand pour chaque archive filtrée demandée ; la ligne survit au retrait du dépôt) ;
   `depense_audits` (somme des `cout_usd`, Boss ou rôle de service) ; `lancer_deliberation(compte, campagne, clé, plafond, version)`
   (Boss de la campagne, aucune réception en attente, dépôts
   clos, 48 h au moins avant les résultats, moins de trois lancements, aucune clé rangée, dépensé + pire cas ≤ plafond ; crée
@@ -222,6 +229,11 @@ Trois migrations datées du même jour (AD-13) :
   `cout_usd`, la somme de `depense_audits`), `reserver_envoi(campagne)` (pose `fin_prevenue_le` d'une campagne `prete` pas encore
   prévenue, non bloquée, dont le Boss a une adresse, et rend `{ slug, titre, email }`, null pour tout autre appelant) et `fins_a_prevenir()` (ids des campagnes `prete` non bloquées dont le Boss a une adresse
   non prévenues).
+  Jugement (story 5.1, AD-9), `authenticated` seul, gardes dans les fonctions : `depots_du_boss(campagne)` (Boss de la campagne en
+  `deliberation` ou `prete`, sinon 0 ligne ; un dépôt actif par participation inscrite, alertes pour le Boss juge seul) et
+  `journaliser_telechargement(campagne, dépôt)` (Boss juge, compte actif, `deliberation` ou `prete`, campagne vivante, dépôt de
+  cette campagne d'une participation inscrite avec archive filtrée ; écrit `telechargement`, qui, quoi, quand, et rend le
+  chemin ; tout refus en `CT404`, rien d'écrit).
   Le déclencheur `campagne_cle_sortie` efface la clé et `cle_fin` à toute sortie de `deliberation` (`prete`, `expiree`), et
   `campagne_cle_suppression` à la suppression de la campagne (Vault n'a pas de clé étrangère).
   Audits écrits par prive (story 4.4, AD-5, AD-6), toutes `for update` sur la campagne et refusées hors `deliberation` :
@@ -270,7 +282,9 @@ Trois migrations datées du même jour (AD-13) :
   vérifié du Boss), `reserver_envoi` et `fins_a_prevenir` par le rôle de service seul, `progression_deliberation` par `authenticated` seul
   (garde du Boss dans la fonction), leurs fonctions internes (`effacer_cle_sortie`, `audits_termines`, `abandonner_audits`) par aucun rôle ;
   `ecrire_tokens_exacts`, `marquer_envoye` et `enregistrer_audit` par le rôle de service seul, `cout_tokens` par aucun
-  rôle ; le schéma `vault` est fermé à `anon` et `authenticated`.
+  rôle ; `telechargement` sans politique, ni droit client ni droit du rôle de service (lue par personne depuis le site) ;
+  `depots_du_boss` et `journaliser_telechargement` par `authenticated` seul (gardes dans les fonctions) ; le schéma `vault`
+  est fermé à `anon` et `authenticated`.
 
 Refus par défaut : `anon` et `authenticated` n'écrivent jamais directement dans une table ; les écritures passent par des
 fonctions SQL. Les tests pgTAP (`supabase/tests/`) vérifient ces droits par rôle et l'atomicité de `prendre_verrou` (deux

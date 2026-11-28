@@ -5,7 +5,7 @@
 -- J : dépôt d1 de C (archive filtrée, alertes) et dépôt d2 sans compte ni archive filtrée ; K : dépôt d3 de C.
 begin;
 create extension if not exists pgtap with schema extensions;
-select plan(43);
+select plan(45);
 
 insert into auth.users (id, email)
 select ('98000000-0000-4000-8000-0000000000' || h)::uuid, h || '@example.org' from unnest(array['b1', 'b2', 'cc', 'aa', 'ee', 'ad']) h;
@@ -140,6 +140,16 @@ select set_config('request.jwt.claims', '{"sub":"98000000-0000-4000-8000-0000000
 select isnt(public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1'), null, 'prete : le Boss juge télécharge');
 select is((select count(*)::integer from public.depots_du_boss(current_setting('t.j')::uuid)), 2, 'prete : le Boss juge lit ses dépôts');
 reset role;
+-- publiee : plus rien (déclencheur coupé le temps des allers-retours d'étape).
+alter table public.campagne disable trigger campagne_transition;
+update public.campagne set statut = 'publiee' where slug = 'archj';
+set local role authenticated;
+select is_empty($$select * from public.depots_du_boss(current_setting('t.j')::uuid)$$, 'publiee : le Boss juge ne lit aucun dépôt');
+select throws_ok($$select public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1')$$,
+  'CT404', 'Archive introuvable.', 'publiee : 404');
+reset role;
+update public.campagne set statut = 'prete' where slug = 'archj';
+alter table public.campagne enable trigger campagne_transition;
 update public.campagne set bloquee_le = now(), motif_blocage = 'Motif' where slug = 'archj';
 set local role authenticated;
 select throws_ok($$select public.journaliser_telechargement(current_setting('t.j')::uuid, '98000000-0000-4000-8000-0000000000d1')$$,
